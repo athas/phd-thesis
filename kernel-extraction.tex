@@ -1,0 +1,155 @@
+\chapter{Kernel Extraction}
+
+
+\subsection{Flattening Example and Rules}
+\label{subsec:kernel-extraction}
+
+\begin{figure}
+\begin{subfigure}{0.48\columnwidth}
+\begin{lstlisting}[basicstyle=\sffamily\footnotesize]
+let (asss, bss) =
+!map!
+   (\ps: ([m][m]int,[m]int) ->
+    let ass =
+    !map! (\p: [m]int ->
+        @let cs =@
+        @  scan (+) 0 (iota p)@
+        @let r = reduce (+) 0 cs@
+        let as = !map! (+r) ps
+        in as)
+      ps
+    let bs =
+    @loop (ws=ps) for i < n do@
+        let ws' =
+        !map! (\as w: int ->
+            let d = !reduce! (+) 0 as
+            let e = d + w
+            let w' = 2 * e
+             in w')
+          ass ws
+        in ws'
+    in (ass, bs))
+  pss -- pss : [m][m]int
+\end{lstlisting}
+\caption{Program before distribution.}
+\label{fig:before-distrib}
+\end{subfigure}
+\begin{subfigure}{0.49\columnwidth}
+\begin{lstlisting}[basicstyle=\sffamily\footnotesize]
+let rss =
+!map! (\ps: [m]int ->
+    !map! (\p: int ->
+      @let cs = scan (+) 0 (iota p)@
+      @let r = reduce (+) 0 cs@ in r)
+    ps) pss
+let asss =
+!map! (\ps rs: [m]int ->
+      !map! (\int (r) ->
+         !map! (+r) ps)
+       fs) pss rss
+let bss =
+@loop (wss=pss) for i < n do@
+    let dss =
+      !map!(\ass: [m]int ->
+          !map!(\as: int ->
+              !reduce! (+) 0 as
+        , ass), asss) in
+      !map! (\ws, ds: [m]int ->
+          !map! (\w d: int ->
+              let e = d + w in
+              let w' = 2 * e in w')
+          ws ds) wss dss
+\end{lstlisting}
+\caption{Program after distribution.}
+\label{fig:after-result}
+\end{subfigure}
+\caption{Extracting kernels from a complicated nesting.}
+\end{figure}
+
+
+
+\begin{figure}
+\small
+\begin{align*}
+\inference{
+\Sigma \vd \Map~\Par{\Fn~\overline{x}~\kt{->}~e}~\overline{y} \Rightarrow e'
+}{
+\Sigma, \M~\overline{x}~\overline{y} \vd e \Rightarrow e'
+}
+\tagsc{G1}
+\end{align*}
+
+\begin{align*}
+\inference{
+\Sigma, \M~\overline{x}~\overline{y} \vd e \Rightarrow e'
+}{
+\Sigma \vd \Map~\Par{\Fn~\overline{x}~\kt{->}~e}~\overline{y} \Rightarrow e'
+}
+\tagsc{G2}
+\end{align*}
+
+\begin{align*}
+\inference{
+}{
+\emptyset \vd e \Rightarrow e
+}
+\tagsc{G3}
+\end{align*}
+
+\begin{align*}
+\inference{
+  \Sigma = \Mv{x_p}{y_p},\ldots,\Mv{x_1}{y_1} \\
+  \Sigma' = \M~(\ov{x_p},\ov{a_{p-1}})~(\ov{y_p}, \ov{a_{p}}), \ldots, \M~(\ov{x_1},\ov{a_{0}})~(\ov{y_1},\ov{a_{1}}^{q_1}) \\
+  \overline{a_{p}}, \dots, \overline{a_{1}} ~\mbox{fresh~names} \\
+  \mbox{size~of~each~array~in~}\overline{a_{0}}\mbox{~invariant~to~}\Sigma \\
+  \Sigma \vd e_1 \Rightarrow e_1' ~~~~ \Sigma' \vd e_2 \Rightarrow e_2'
+}{
+\Sigma \vd \Let~\ov{a_0} ~\kt{=}~e_1~\In~e_2 \Rightarrow \Let~\ov{a_p}~\kt{=}~ e_1' ~\In~e_2'
+}
+\tagsc{G4}
+\end{align*}
+
+\begin{align*}
+\inference{
+%  g = \Fn~\ov{x}^p~\kt{=>}~ \Reduce~\Par{\Fn~\ov{y}^{2*p} ~\kt{=>} ~e}~\ov{n}^p ~\ov{x}^p \\
+  g = \Reduce~\Par{\Fn~\ov{y}^{2*p} ~\kt{->} ~e}~\ov{n}^p \\
+  \Sigma \vd \Map~\Par{g} ~\Par{\Transpose~z_0}\ldots\Par{\Transpose~z_{p-1}} \Rightarrow e' \\
+%  f = \Fn~\ov{a}^p~\ov{x}^p ~\kt{=>}~ \Map~\Par{\Fn~\ov{y}^{2*p}~\kt{=>} e}~\ov{a}^p~\ov{x}^p
+  f = \Map~\Par{\Fn~\ov{y}^{2*p}~\kt{->} e}
+}{
+\Sigma \vd \Reduce~\Par{f}~\Par{\ov{\Replicate~k ~n}^p}~\ov{z}^p \Rightarrow e'
+}
+\tagsc{G5}
+\end{align*}
+
+\begin{align*}
+\inference{
+\Sigma \vd \Rearrange~\Par{0,1+k_0,\ldots,1+k_{n-1}}~y \Rightarrow e
+}{
+\Sigma, \M~x~y \vd \Rearrange~\overline{k}^n ~ x \Rightarrow e
+}
+\tagsc{G6}
+\end{align*}
+
+\begin{align*}
+\inference{
+  \Sigma' = \Sigma, \M~(\ov{x},\ov{y})~(\ov{xs},\ov{ys}) \hspace{1.2cm} (\{n\}\cup\ov{q}) \cap (\ov{x},\ov{y}) = \emptyset \\
+  m = \mbox{outer~size~of~each~of~} \ov{xs} \mbox{~and~} \ov{ys}\\
+  \mbox{f~contains~exploitable~(regular)~inner~parallelism}\\
+  \Sigma \vd \Loop~\Par{\ov{zs'}~\kt{=}~\ov{\Replicate~m~z_i}, \ov{ys'}~\kt{=}~\ov{ys}} \\
+    \hspace{1.8cm}\For~ i~\kt{<}~n~ \Do~\Map \Par{f~i~\ov{q}} ~\ov{xs}~\ov{ys}~\ov{ys'}~\ov{zs'} \Rightarrow e
+}{
+  \Sigma' \vd \begin{array}[t]{l} \Loop~\Par{\ov{z'}~\kt{=}~\ov{z},~\ov{y'}~\kt{=}~\ov{y}}~\kt{=}~ \\
+  ~~ \For~i~\kt{<}~n~ \Do~ f~i~\ov{q}~\ov{x}~\ov{y}~\ov{y'}~\ov{z} \Rightarrow e \end{array}
+}
+\tagsc{G7}
+\end{align*}
+\caption{Flattening rules.}
+\label{fig:flattening-rules}
+\end{figure}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "thesis"
+%%% End:

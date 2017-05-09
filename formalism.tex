@@ -1,0 +1,183 @@
+\chapter{An Array Calculus}
+
+The theoretical foundation of Futhark are the list homomorphisms of
+Bird and Meertens~\cite{Bird2}, realised in the form of
+purely functional parallel second-order array combinators (SOACs). Their rich equational theory for semantics-preserving
+transformations are employed in Futhark for fusion, streaming,
+and flattening of parallelism.  We first discuss this theory in
+Section~\ref{sec:arraycombinators}, then we introduce the concrete
+syntax of Futhark's core language in Section~\ref{sec:syntax}, then we
+show the compiler pipeline in Section~\ref{sec:pipeline}, and we
+demonstrate the use of in-place updates and streaming operators on a
+code example in Section~\ref{sec:k-means}.
+
+\subsection{Array Combinator Calculus}
+\label{sec:arraycombinators}
+
+We first describe the basic SOACs and later introduce
+\textit{streaming combinators}. The basic SOACs include (i)
+\lstinline{map}, which constructs an array by applying its function argument to
+each element of the input array, (ii) \lstinline{reduce}, which applies a
+binary-associative operator $\oplus$ to all elements of the input,
+and (iii) \lstinline{scan}, which computes all prefix sums of the
+input array elements.  Their types and semantics are shown below:
+%
+\[ \begin{array}{l}
+\map ~ : ~ (\alpha \to \beta) ~ \to ~ \Pi n. [n]\alpha ~ \to [n]\beta \\
+\map ~ f ~ [a_1, \ldots, a_n] ~ = ~ [f ~ a_1, \ldots, f ~ a_n]\smallskip\\
+\reduce : (\alpha \to \alpha \to \alpha) ~ \to ~ \alpha ~ \to ~ \Pi n.[n]\alpha \to \alpha\\
+\reduce ~ \oplus ~ 0_{\oplus} ~ [a_1, \ldots, a_n] ~ = ~ 0_{\oplus} \oplus a_1 \oplus \ldots \oplus a_n\smallskip\\
+\scan ~ : ~ (\alpha \to \alpha \to \alpha) ~ \to ~ \alpha ~ \to ~ \Pi n.[n]\alpha ~ \to ~ [n]\alpha\\
+\scan ~ \oplus ~ 0_{\oplus} ~ [a_1, \ldots, a_n] ~ = ~ [a_1, \ldots, a_1 \oplus \ldots \oplus a_n]\\
+\end{array} \]
+\noindent Here $[a_1, \ldots, a_n]$ denotes an array literal,
+$[n]\tau$ denotes the type of arrays with $n$ elements of type $\tau$,
+and $0_{\oplus}$ denotes the neutral element of the binary associative
+operator $\oplus$.  The $\Pi n$ notation indicates where the size $n$
+becomes fixed; it indicates, for instance, that we can partially apply
+$\map$ to a function and apply the resulting function to arrays of different sizes.
+
+Tuples and tuple types are denoted by comma-separated values or types,
+enclosed in parentheses. We treat the zip/unzip-isomorphic types
+$[n](\tau_1, \ldots, \tau_k) \cong [n]\tau_1 , \ldots , [n]\tau_k$ as
+interchangeable in any context.  Similarly, we treat the
+curry/uncurry-isomorphic types $[m]([n]\tau) \cong [m \times n]\tau$
+as interchangeable.  This isomorphic treatment is justified because
+both streaming and indexed access to either type can be efficiently
+implemented without explicitly applying the isomorphism and
+materializing (storing) the result first.
+%
+
+%
+%\[ \begin{array}{l}
+%\fold : ((\alpha \times \alpha \to \alpha) \times \alpha) \to (\beta \to \alpha) \to \Pi n. (\beta^n \to \alpha) \\
+%\fold \,(\oplus, 0) \,g\, [b_1, \ldots, b_n] = 0 \oplus g(b_1) \oplus \ldots \oplus g(b_n)
+%\end{array} \]
+%\noindent In addition, {\tt iota n} creates the iteration-space array
+%{\tt[0,$\ldots$,n-1]} and {\tt replicate n a} duplicates the {\tt a}
+%argument {\tt n} times.
+
+The SOAC semantics enables powerful rewrite rules.  For example,
+mapping an array by a function $f$ followed by mapping the result
+with a function $g$ gives the same result as mapping the original
+array with the composition of $f$ and $g$:
+\[ \begin{array}{l}
+(\map ~ f) ~ \circ (\map ~ g) ~ \equiv ~ \map ~ (f ~ \circ ~ g)
+\end{array} \]
+Applied from left-to-right and from right-to-left this
+rule corresponds to producer-consumer (\textit{vertical}) fusion and fission,
+respectively.
+%
+\textit{Horizontal} fusion/fission refers to the case when the two
+\lstinline{map}s are independent (i.e., not in any producer-consumer
+relation), as in the equation below:
+\[ \begin{array}{l}
+(\map ~ f ~ x, \map ~ g ~ y) ~ \equiv\map ~ (\lambda(a,b).(f~a,g~b)) ~ (x,y)
+\end{array} \]
+
+%More complex rewrite rules are used for fusing chains of \lstinline{map} and
+%\lstinline{reduce} operations into a construct named {\tt redomap}~\cite{Futhark:redomap}
+%(and similar for {\tt map $\circ$ scan}).
+
+The rest of this section shows how \lstinline{map} and
+\lstinline{reduce} are special cases of a more general bulk-parallel
+operator named \lstinline{fold}, which (i) can represent (fused)
+compositions of \lstinline{map} and \lstinline{reduce} (and
+\lstinline{filter}) operators and, as such, (ii) can itself be
+decomposed into a \lstinline{map}-\lstinline{reduce} composition.
+Similarly, we introduce the parallel operator \lstinline{sFold}, which
+generalizes Futhark's streaming operators.
+
+
+\paragraph{Notation.}
+
+We denote array concatenation by $\#$ and the empty array by $\epsilon$;
+$\inj(a)$ is the single-element array containing $a$.
+A \emph{partitioning} of an array $v$ is a sequence of arrays $v_1, \ldots, v_k$ such
+that $v_1 \# \ldots \# v_k = v$.
+%
+Given binary operations $f$ and $g$, their \emph{product} $f * g$ is defined by
+component-wise application, i.e., $(f, g) (x) = (f~x, g~x)$.
+%
+%
+
+\paragraph{Parallel Operator fold.}
+
+Many arrays operations are \emph{monoid homomorphisms}, which
+conceptually allows for splitting an array into two parts, applying
+the operation recursively, and combining the results using an
+associative operation $\oplus$.
+%
+Every monoid homomorphism is uniquely determined by
+$(\oplus,0_{\oplus})$ and a function $g$ for mapping singleton
+arrays. The combinator $\fold$ thus expresses all such homomorphisms:
+\[ \begin{array}{l}
+\fold : (\alpha \to \alpha, \alpha) \to (\beta \to \alpha) \to \Pi n. ([n]\beta \to \alpha) \\
+\fold \,(\oplus, 0_{\oplus}) \,g\, [b_1, \ldots, b_n] = 0_{\oplus} \oplus (g~b_1) \oplus \ldots \oplus (g~b_n)
+\end{array} \]
+The $\fold$ combinator can decompose previously seen SOACs:
+\[ \begin{array}{l}
+\map \, g = \fold\, (\#, \epsilon)\, (\inj \circ g) \\
+\reduce\, (\oplus, 0_{\oplus}) = \fold\, (\oplus, 0_{\oplus})\, \Id
+\end{array} \]
+and $\fold$ can itself be decomposed by the equation
+\[
+  \fold ~ (\oplus,0_{\oplus}) ~ g ~ = ~ \reduce ~ (\oplus,0_{\oplus}) \circ \map ~ g.
+\]
+
+%\paragraph{Streaming combinators.}
+
+\paragraph{Parallel Operator sFold.}
+A key aspect of Futhark is to \emph{partition} implementations of $\fold$,
+which partitions a vector into \emph{chunks} before applying the operation
+on the chunks individually and eventually combining them:
+\[ \begin{array}{l}
+\streamFold : (\alpha \to \alpha) \to (\Pi m. ([m]\beta \to \alpha)) \to \Pi n. [n]\beta \to \alpha \\
+\streamFold \, (\oplus) \, f \, (v_1 \# \ldots \# v_k) = (f~\epsilon) \oplus (f~v_1) \oplus \ldots \oplus (f~v_k) \\[1em]
+\end{array} \]
+%
+Because a vector can have multiple partitions, $\streamFold$ is well-defined---it
+gives the same result for all partitions---if and only if $f$ is itself a $\fold$
+with $\oplus$ as combining operator.
+%and $\oslash$ must be compatible with $\#$:
+%$a \oslash (v \# w) = a \oslash v \oslash w$.
+%
+Futhark assumes such properties to hold; they are not checked at run-time,
+but a programmer responsibility.   The streaming combinators
+permit Futhark to choose freely \emph{any} suitable partition of the input vector.
+Futhark uses specialized versions of $\streamFold$: %and $\StreamSeq$:
+\[ \begin{array}{lcl}
+\StreamMap\, f & = &  \streamFold \, (\#) \, f \\
+\StreamRed\, (\oplus) \, f & = & \streamFold \, ((\oplus) * (\#)) \, f
+\end{array} \]
+
+Fusion and fission transformations are based on the universal
+properties of $\fold$; for example, horizontal (parallel) fusion is
+expressed by the ``banana split theorem'' \cite{mfp91}, read as a
+transformation from right to left:
+\[
+   \begin{array}{l}
+  \fold\, ((\oplus, 0_{\oplus}) * (\otimes, 0_{\otimes})) ~ (f, g) \\=(\fold\, (\oplus, 0_{\oplus})\, f, \fold\, (\otimes,
+     0_{\otimes})\, g )
+   \end{array}
+\]
+
+The $\map$-$\map$ rule $\map ~ (g \circ f) = \map ~ g ~ \circ ~ \map ~ f$
+is the functorial property of arrays; it is used for fusion from right
+to left and eventually, as a fission rule, from left to right as part
+of flattening nested parallelism (see Section~\ref{sec:low-lev-opt}).
+%
+The flattening rule
+$ \map (\map f) \cong \map \,f$
+eliminates nested parallel maps by mapping the argument function over
+the product index space (an isomorphism modulo the
+curry/uncurry isomorphism).
+Finally, sequential (de)composition of the discussed SOACs
+can be similarly reasoned in terms of more general iterative operators
+(known as foldl and sfoldl).
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "thesis"
+%%% End:

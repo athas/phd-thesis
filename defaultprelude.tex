@@ -1,0 +1,159 @@
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[british]{isodate}
+
+% Layout Fixes
+\usepackage{booktabs} % nicer spacing between table rulers
+\usepackage{microtype}
+\usepackage{fixltx2e} % To prevent the figures from being placed
+                      % out-of-order with respect to their
+                      % "non-starred" counterparts
+
+
+\usepackage{amsmath,amssymb, amsbsy}
+\usepackage[amsmath,amsthm,thmmarks]{ntheorem}
+\usepackage{graphicx}
+\usepackage[export]{adjustbox}
+\usepackage{float}
+\usepackage{pdfpages}
+\usepackage{color}
+\usepackage{fancyvrb}
+\usepackage{semantic}
+\usepackage[final]{listings}
+
+
+\renewcommand{\ttdefault}{pcr} % Courier instead of Computer Modern
+% Fix dashes in listings (from
+% https://tex.stackexchange.com/questions/33185/listings-package-changes-hyphens-to-minus-signs
+% )
+
+\usepackage{enumitem} % Allows \begin{description}[style=nextline]
+
+\usepackage{fixme}
+\fxsetup{
+    author=,
+    layout=margin,
+    theme=color
+}
+
+\makeatletter
+\newcommand*\idstyle{%
+        \expandafter\id@style\the\lst@token\relax
+}
+\def\id@style#1#2\relax{%
+        \ifcat#1\relax\else
+                \ifnum`#1=\uccode`#1%
+                        \color{blue}
+                \fi
+        \fi
+}
+\makeatother
+
+% Bibliography
+%\usepackage[style=alphabetic,natbib=true]{biblatex}
+\usepackage[
+hyperref=auto,
+backend=biber,
+style=numeric,
+defernumbers=true
+]{biblatex}
+
+\usepackage[hyperindex,hidelinks]{hyperref}
+\usepackage[capitalise,noabbrev]{cleveref}
+
+% Fonts
+\usepackage{palatino}
+\linespread{1.05}
+\usepackage[scaled]{beramono}
+
+% customize chapter pages
+\makepagestyle{myheadings}
+\makepagestyle{myheadingschapterpage}
+\makeevenfoot{myheadingschapterpage}{}{\thepage}{}
+\makeoddfoot{myheadingschapterpage}{}{\thepage}{}
+\aliaspagestyle{chapter}{myheadingschapterpage}
+\aliaspagestyle{title}{myheadingschapterpage}
+\makeevenhead{myheadings}{\hskip.5cm\leftmark}{}{}
+\makeoddhead{myheadings}{}{}{\rightmark\hskip.5cm}
+\makeevenfoot{myheadings}{}{\thepage}{}
+\makeoddfoot{myheadings}{}{\thepage}{}
+\pagestyle{myheadings}
+
+\def\thefigure{\arabic{figure}}
+\setcounter{tocdepth}{0}
+
+
+\setsecnumdepth{subsection}
+\setcounter{chapter}{0}
+\setsecheadstyle{\large\bfseries\raggedright}
+\setsubsecheadstyle{\bfseries}
+
+% BIBLIOGRAPHY styling
+% Print the DOI url out
+%\newcommand*{\doi}[1]{DOI: \url{http://dx.doi.org/#1}}
+
+\DeclareFieldFormat{doi}{\textsc{doi}: \url{http://dx.doi.org/#1}}
+\DeclareNameAlias{default}{last-first/first-last}
+%\DeclareFieldFormat{title}{\emph{#1}}
+\renewcommand\mkbibnamefirst[1]{\textsc{#1}}
+\renewcommand\mkbibnamelast[1]{\textsc{#1}}
+\renewcommand*{\bibfont}{\footnotesize}
+
+% No page numbers for parts in TOC
+\cftpagenumbersoff{part}
+% Footnote symbols
+%\renewcommand*{\thefootnote}{\fnsymbol{footnote}}
+
+% Figures
+% \newsubfloat{figure}
+
+\usepackage{sidecap}
+\usepackage{caption}
+\captionsetup{margin=0pt, font=small, labelfont=bf, format=hang}
+% \setlength{\abovecaptionskip}{0pt}
+% \setlength{\belowcaptionskip}{0pt}
+\usepackage{subcaption}
+
+% Default commands
+\newcommand{\subimgwidth}{.48\textwidth}
+\newcommand{\imgwidth}{.85\textwidth}
+
+
+\newtheorem{example}{Example}
+%
+\theoremstyle{plain}
+\theoremsymbol{\tiny $\Box$}
+\newtheorem{definition}[equation]{Definition}
+
+
+% Bitwise and and or operators
+% http://tex.stackexchange.com/questions/39313/double-nested-logical-and-and-logical-or-symbols
+\DeclareFontFamily{U}{matha}{\hyphenchar\font45}
+\DeclareFontShape{U}{matha}{m}{n}{
+      <5> <6> <7> <8> <9> <10> gen * matha
+      <10.95> matha10 <12> <14.4> <17.28> <20.74> <24.88> matha12
+      }{}
+
+\newcommand{\bland}{\mathbin{
+  \raisebox{.1ex}{%
+    \rotatebox[origin=c]{-90}{\usefont{U}{matha}{m}{n}\symbol{\string"CE}}}}}
+\newcommand{\blor}{\mathbin{
+  \raisebox{.1ex}{%
+    \rotatebox[origin=c]{90}{\usefont{U}{matha}{m}{n}\symbol{\string"CE}}}}}
+
+% The colorcode environment lets us use colour markup inside verbatim blocks.
+\DefineVerbatimEnvironment{colorcode}%
+        {Verbatim}{fontsize=\small,commandchars=\\\{\}}
+
+\DefineVerbatimEnvironment{bcolorcode}%
+        {BVerbatim}{fontsize=\small,commandchars=\\\{\}}
+
+% Visually Separate figures from text using a line.
+\def\topfigrule{\vskip1ex\noindent\dotfill}
+\def\botfigrule{\noindent\dotfill\vskip1ex}
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "thesis.tex"
+%%% End: 

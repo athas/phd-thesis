@@ -1,0 +1,144 @@
+% Define Language
+\lstdefinelanguage{futhark}
+{
+  % list of keywords
+  morekeywords={
+    do,
+    else,
+    fn,
+    for,
+    fun,
+    if,
+    in,
+    include,
+    let,
+    loop,
+    struct,
+    then,
+    type,
+    val,
+    while,
+    with,
+    module,
+  },
+  sensitive=true, % keywords are not case-sensitive
+  morecomment=[l]{--}, % l is for line comment
+  morecomment=[s]{\{-}{-\}}, % s is for start and end delimiter
+%  otherkeywords={>,<,=,<=,>=,!,*,/,-,+,|,&,||,&&,==,=>},
+  morestring=[b]" % defines that strings are enclosed in double quotes
+}
+
+% Define Colors
+\usepackage{xcolor}
+\definecolor{eclipseBlue}{RGB}{42,0.0,255}
+\definecolor{eclipseGreen}{RGB}{63,127,95}
+\definecolor{eclipsePurple}{RGB}{127,0,85}
+
+\newcommand{\fop}[1]{\mbox{\ttfamily\color{eclipseBlue}#1}}
+\newcommand{\fw}[1]{\mbox{\ttfamily\bfseries\color{eclipsePurple}#1}}
+
+% Set Language
+\lstset{
+  language={futhark},
+  basicstyle=\ttfamily, % Global Code Style
+  captionpos=b, % Position of the Caption (t for top, b for bottom)
+  extendedchars=true, % Allows 256 instead of 128 ASCII characters
+  tabsize=2, % number of spaces indented when discovering a tab
+  columns=fixed, % make all characters equal width
+  keepspaces=true, % does not ignore spaces to fit width, convert tabs to spaces
+  showstringspaces=false, % lets spaces in strings appear as real spaces
+  breaklines=true, % wrap lines if they don't fit
+  frame=trbl, % draw a frame at the top, right, left and bottom of the listing
+  frameround=tttt, % make the frame round at all four corners
+  framesep=4pt, % quarter circle size of the round corners
+  numbers=left, % show line numbers at the left
+  numberstyle=\small\ttfamily, % style of the line numbers
+  commentstyle=\slshape\bfseries\color{eclipseGreen}, % style of comments
+  keywordstyle=\bfseries\color{eclipsePurple}, % style of keywords
+  stringstyle=\color{eclipseBlue}, % style of strings
+  emph=[1] {
+    abs,
+    copy,
+    concat,
+    empty,
+    false,
+    filter,
+    iota,
+    map,
+    partition,
+    rearrange,
+    reduce,
+    reduceComm,
+    replicate,
+    reshape,
+    rotate,
+    shape,
+    signum,
+    scan,
+    split,
+    transpose,
+    true,
+    unzip,
+    write,
+    zip,
+    zipWith,
+  },
+  emphstyle=[1]{\color{eclipseBlue}},
+  moredelim=**[is][\color{red}]{@@}{@@}
+}
+
+\newcommand{\kt}[1]{\textsf{#1}}
+\newcommand{\kw}[1]{\mbox{\textsf{\bfseries{#1}}}}
+\newcommand{\id}[1]{\mbox{\it{#1}}}
+\newcommand{\Fn}{\ensuremath{\lambda}}
+\newcommand{\M}{\kw{M}}
+\newcommand{\Mv}[2]{\M~\overline{#1}~\overline{#2}}
+\newcommand{\Loop}{\kw{loop}}
+\newcommand{\Do}{\kw{do}}
+\newcommand{\For}{\kw{for}}
+\newcommand{\Map}{\kw{map}}
+\newcommand{\Reduce}{\kw{reduce}}
+\newcommand{\Scan}{\kw{scan}}
+\newcommand{\Transpose}{\kw{transpose}}
+\newcommand{\Let}{\kw{let}}
+\newcommand{\In}{\kw{in}}
+\newcommand{\vd}{\vdash}
+\newcommand{\Rearrange}{\kw{rearrange}}
+\newcommand{\Replicate}{\kw{replicate}}
+\newcommand{\Par}[1]{\mathtt{(}#1\mathtt{)}}
+\newcommand{\StreamMap}{\kw{stream\_map}}
+\newcommand{\StreamRed}{\kw{stream\_red}}
+\newcommand{\StreamSeq}{\kw{stream\_seq}}
+\newcommand{\ov}[1]{\overline{#1}}
+\newcommand{\G}[1]{G#1}
+\newcommand{\nseq}[2]{\overline{#1}^{(#2)}}
+\newcommand{\tagsc}[1]{\tag{\textsc{#1}}} % Fake Small Caps tagging
+\newcommand*{\bfrac}[2]{\genfrac{}{}{0pt}{}{#1}{#2}}
+
+\newcommand{\arr}[2]{{#1}^{\mathbf{#2}}}
+\newcommand{\seq}[2]{{#1}^{#2}}
+\newcommand{\zip}{\mathrm{zip}}
+\newcommand{\unzip}{\mathrm{unzip}}
+\newcommand{\map}{\mathrm{map}}
+\newcommand{\reduce}{\mathrm{reduce}}
+\newcommand{\scan}{\mathrm{scan}}
+\newcommand{\ascan}{\mathrm{ascan}}
+\newcommand{\sscan}{\mathrm{sscan}}
+\newcommand{\inj}{\mathrm{inj}}
+\newcommand{\rep}{\mathrm{rep}}
+\newcommand{\streamFold}{\mathrm{sFold}}
+\newcommand{\fold}{\mathrm{fold}}
+\newcommand{\seg}[1]{\mathbf{#1}}
+\newcommand{\tto}{\,\Rightarrow\,}
+\newcommand{\iso}{\,\Leftrightarrow\,}
+\newcommand{\nat}{\mathbf{N}}
+\newcommand{\concat}{\#}
+\newcommand{\idd}{\mathrm{id}}
+\newcommand{\Id}{\mathrm{id}}
+\newcommand{\foldl}{\mathrm{foldl}}
+
+
+%%% Local Variables:
+%%% mode: plain-tex
+%%% TeX-master: "thesis"
+%%% End:

@@ -1,0 +1,497 @@
+\chapter{Parallelism and Hardware Constraints}
+
+There exists a large diversity of parallel machines.  Far too many to
+list exhaustively, and far too different in capability and performance
+characteristics for one set of program transformations and
+optimisations to apply universally.  In this theses, we will focus our
+discussion on one type of architecture: the modern \textit{Graphics
+  Processing Unit} (GPU), which can be used for non-graphics
+computation under the term \textit{General-Purpose GPU compting}
+(GPGPU).  Specifically, we will focus on the
+\textit{Single-Instruction Multiple-Thread} (SIMT) model used by
+NVIDIA, and also seen in recent AMD and Intel chips.  This chapter
+presents an simplified abstract GPU machine model that we will use to
+justify the design of the Futhark compiler.  In particular, a machine
+model is needed to argue for the optimising transformations that we
+perform.  The model defined here serves this purpose.
+
+When we use the term ``GPU'', we will refer to this model.  Our chosen
+terminology is primarily taken from OpenCL, an open standard for
+programming \textit{accelerator devices}, of which GPUs are one
+example.  Unfortunately, NVIDIAs API for GPGPU computing, CUDA, uses
+the same terms in some cases, but with different definitions.
+Section~\ref{sec:gpu-model-real-world} describes how our GPU model
+maps to CUDA terms, and how our simplifications map to real hardware.
+
+\section{Kernels and the Thread Space}
+
+A GPU is an accelerator device attached to a conventional CPU-based
+computer, which is called the \textit{host} system.  A GPU program is
+called a \textit{kernel}, and is launched by the host.  A running
+kernel comprises some quantity of independent threads, each of which
+is executing the same sequential program.  When a kernel is launched,
+the host system dictates how many threads are to be used, and how they
+are to be organised.  These parameters can vary from one launch of the
+same kernel to the next.  Furthermore, each thread may also be passed
+some parameters containing values or memory addresses -- the same for
+every thread.
+
+The threads are organised into equally sized
+\textit{workgroups} (or just \textit{groups}), within which
+communication between threads is possible.  The total number of
+threads launched is thus always a multiple of the group size.  The
+hardware limits both the maximum group size (typically $1024$ or
+less), as well as the maximum number of groups, although the latter is
+rarely relevant in practice.  For kernels in which each thread is
+fully independent (what we call $map$-parallelism), the group size is
+mostly irrelevant.
+
+As each thread runs a sequential program, the number of threads
+launched for a kernel is the sole way that we can express parallelism.
+Nested parallelism is not supported in this model.
+
+Each thread in a running kernel can be uniquely identified by its
+\textit{global thread ID} ($gtid$).  Futhermore, each thread belongs to
+a group, identified by a \textit{group id} ($gid$) that is shared by
+all threads in the group.  Within a group, each thread has a \textit{local thread ID} ($ltid$) that is unique only within the workgroup.  If the group size is $gsize$, then
+
+\[
+gtid = gtid \cdot gsize + ltid
+\]
+
+holds for every thread.  The thread index space is single-dimensional,
+and each ID is a single integer.  An example in imperative pseudocode
+is shown on Figure~\ref{fig:gpu-map}, which demonstrates how threads
+use their identifiers to read input and write output.  The \texttt{in}
+and \texttt{out} parameters to the thread are addresses of arrays in
+memory.
+
+\begin{figure}
+  \centering
+\begin{lstlisting}[language={}]
+thread(in, out):
+  gtid      <- get_global_id()
+  x         <- in[gtid]
+  y         <- x + 2
+  out[gtid] <- y
+\end{lstlisting}
+  \caption{Each thread reads an integer, adds two, and writes the
+    result back to some other location memory}
+  \label{fig:gpu-map}
+\end{figure}
+
+\section{The GPU Model}
+
+When we launch a kernel on the GPU, we specify a group size and the
+desired number of groups.  This does not mean that every thread is
+actually running concurrently.  The GPU hardware has some quantity of
+resources available -- for this discussion, most notably registers and
+local memory space.  A group requires some kernel-dependent amount of
+registers for each of its threads, as well as some (potentially zero)
+amount of local memory.  The GPU may be able to fit anywhere from zero
+to all groups concurrently.  Every thread in a group must be able to
+fit on a GPU simultaneously - fractional groups are not permitted.
+
+If not all groups fit at the same time, then as many as possible will
+be launched, with remaining groups being launched once earlier ones
+finish (the order in which groups are launched is undefined).  This is
+another reason why communication between groups is difficult: unless
+we have detailed low-level information about both GPU and kernel, we
+cannot know whether the group we wish to communicate with has even
+been launched yet!  In principle, the GPU may even be runnin groups
+from different kernel launches concurrently, perhaps even belonging to
+different users on the host system.  Due to these difficulties, we
+generally take the view that communication is only possible within a
+workgroup.
+
+GPUs execute neighbouring threads in lockstep.  The threads within a
+group are divided into \textit{warp}s, the size of which is
+hardware-dependent.  These warps form the basis of execution and
+scheduling.  All threads in a warp execute the same instruction in the
+same clock cycle.  Branches are handled via \textit{masking}.  All
+threads in a warp follow every conditional branch for which the
+condition is true for at least a single thread in the warp.  For those
+threads where the condition is false, a flag is set that makes the GPU
+ignore the instructions being executed.  This means that we cannot
+hide expensive but infrequent computation behind branches, the way we
+typically to on CPUs: if just one thread has to enter the expensive
+region, then we pay the cost for every thread in the warp.  An example
+of a kernel that contains branches is shown on
+Figure~\ref{fig:gpu-branch}.  Even if the condition on line 4 is false
+for a given thread, it may still execute line 5.  But if so, the mask
+bit will be set, and the write to \texttt{x} will be ignored.
+
+\begin{figure}
+  \centering
+
+\begin{lstlisting}[language={}]
+thread(arr):
+  gtid <- get_global_id()
+  x    <- arr[gtid]
+  if (x < 0):
+    x <- -x
+  arr[gtid] <- x
+\end{lstlisting}
+
+  \caption{A kernel that computes the absolute value in-place on the elements of an array.}
+  \label{fig:gpu-branch}
+\end{figure}
+
+\section{Memory Spaces}
+\label{sec:gpu-memory-spaces}
+
+The GPU has several kinds of memory, each with its own properties and
+performance considerations.  As the limiting factor in GPU performance
+is typically memory access times, proper use of the various kinds of
+memory is important.  The following kinds of memory are used in our
+GPU model:
+
+\begin{description}
+\item[Registers,] which are private to each thread.  Registers are
+  scarce but fast, and while they can be used to hold small arrays,
+  they are typically used to hold scalar values.  Overuse of registers
+  can lead to fewer threads being able to run concurrently, or perhaps
+  to the kernel being unable to run at all.  The number of registers
+  used by a thread is a function solely of its code, and cannot depend
+  on kernel-launch parameters.
+
+\item[Shared memory,] which is fast but size-constrained on-chip
+  memory, which is shared by all threads in a group.  When a kernel is
+  launched, some quantity of local memory can be requested per group
+  (same amount for each).  The contents of a local memory buffer
+  becomes invalidated once its associated group terminates, and hence
+  cannot be used for passing results back to the CPU, or to store data
+  from one kernel launch to the next.
+
+\item[Global memory,] which is large off-chip memory, typically
+  several GiB in size.  Although much slower than registers or shared
+  memory, global memory is typically still much faster than CPU RAM.
+  The contents of global memory are visible to all groups, and
+  persists across kernel launches.  Thus, global memory is the only
+  way to pass initial data to a kernel, and for a kernel to return a
+  result.  Global memory can be read from or written to from the CPU,
+  although at much lower speeds than the GPU itself is able to.
+
+  Global memory does not have the many layers of caching that we are
+  used to from the CPU.  Instead, we must make sure to only access
+  global memory with efficient access patterns (see
+  Section~\ref{sec:gpu-coalesced}).
+
+  Global memory must be allocated by the host prior to kernel
+  execution.  Memory allocation is not possible from within a running
+  kernel.
+\end{description}
+
+Threads communicate with each other by reading and writing values to
+memory (typically, shared memory).  Since GPUs use a weakly consistent
+memory model, we must use \textit{barrier intructions} to ensure that
+the memory location we wish to read from has already been written to
+by the responsible thread.  When a thread executes a barrier
+instruction, it will wait until every other thread in the group has
+also reached the barrier instruction, at which point they will
+continue execution.  The fact that barriers have an effect only within
+a group is why we say that communication can only happen between
+threads in the same group.
+
+\subsection{Coalesced Memory Accesses}
+\label{sec:gpu-coalesced}
+
+The connection from GPU to global memory is via a fast and wide bus
+that is able to fetch several words in a single transaction.  As an
+example, many NVIDIA hardware GPus uses a 512-bit bus that can fetch
+16 32-bit words in one transaction, but only if the words are stored
+adjacent in memory and do not cross a cache line.  We will ignore the
+cache line concern in the following, as it is a secondary effect.
+
+This memory bus behaviour has important performance implications.
+Fetching 16 neighbouring words can be done in one memory transaction,
+whilst fetching 16 widely spaced words will require a transaction per
+word, thus utilising only a sixteenth of available memory bandwidth.
+As the performance of many GPU programs depends on how quickly they
+can access memory (they are \textit{bandwidth-bound}), making
+efficient use of the memory bus has high priority.
+
+When a warp issues a memory operation such that adjacent threads
+access adjacent locations in memory, we say that we have a
+\textit{coalesced memory access}.  This term comes from the notion
+that several memory operations \textit{coalesce} into one.  On some
+GPUs, the addresses accessed by the threads in a warp must be
+ascending by one word per thread, but on newer GPUs, it can be any
+permutation we wish, as long as every address falls within the same
+512-bit memory block.  On an NVIDIA GPU, in the best case, a 32-thread
+warp can store 32 32-bit words using two memory transactions.
+
+The optimal access pattern is thus a bit counter-intuitive compared to
+what we are used to from CPU programming.  On the GPU, a single thread
+should access global memory with a stride--something that is known to
+exhibit bad cache behaviour on a CPU.  An example is shown on
+\cref{fig:gpu-mem-access}.  In both of the kernels shown, each
+thread sums \texttt{n} elements of some array.  The difference lies in
+the access pattern.  On \cref{fig:gpu-mem-access-uncoalesced},
+when $j$ accesses the element at index $j\cdot{}n+i$, thread $j+1$
+will be accessing the element at index $(j+1)\cdot{}n+i$.  Unless $n$
+is small, these two addresses are far from each other, and will
+require a memory transaction each.  In contrast,
+\cref{fig:gpu-mem-access-coalesced} shows a program where
+thread $j$ accesses index $i\cdot{}n + j$ while thread $j+1$ accesses
+index $i\cdot{}n + j + 1$.  These are adjacent locations in memory and
+can likely be fetched in just one memory operation.  In practice, the
+latter program will run significantly faster -- a factor $10$
+difference is not at all unlikely.
+
+\begin{figure}
+  \centering
+\begin{subfigure}{0.8\textwidth}
+\begin{lstlisting}[language={}]
+thread(in, out, n):
+  gtid <- get_global_id()
+  sum <- 0
+  for i < n:
+    sum <- sum + in[gtid*n + i]
+  out[gtid] <- sum
+\end{lstlisting}
+
+  \caption{Uncoalesced access.}
+  \label{fig:gpu-mem-access-uncoalesced}
+  \end{subfigure}
+
+\vspace{2ex}
+
+  \begin{subfigure}{0.8\columnwidth}
+\begin{lstlisting}[language={}]
+thread(in, out, n):
+  gtid <- get_global_id()
+  sum <- 0
+  for i < n:
+    sum <- sum + in[i*n + gtid]
+  out[gtid] <- sum
+\end{lstlisting}
+
+  \caption{Coalesced access.}
+  \label{fig:gpu-mem-access-coalesced}
+  \end{subfigure}
+
+  \caption{Examples of programs with uncoalesced and coalesced memory accesses.}
+  \label{fig:gpu-mem-access}
+\end{figure}
+
+GPUs have little cache in the way we know from CPUs.  While we can use
+local and private memory as a manually managed cache, most of our
+memory performance will come from rapidly reading and writing from
+global memory via coalesced memory operations.
+
+\section{The Model in the Real World}
+\label{sec:gpu-model-real-world}
+
+The model presented in this chapter is intended as a tool for
+justifying the transformations performed by the Futhark compiler.  But
+as our eventual goal is efficient execution on real silicon, the model
+is useless if it does not permit an efficient mapping to reality.  In
+this section, I will explain how the GPU model maps to the popular
+CUDA~\cite{cuda} model supplied by NVIDIA.  One issue is that of
+terminology.  This thesis uses terms from the OpenCL standard, which
+overlaps in incompatible way with terms defined by CUDA.
+\Cref{tab:cuda-terms} summarises the differences.  In this section we
+will continue using the same terms as in the rest of the thesis, even
+when talking about CUDA.
+
+\begin{table}
+  \centering
+  \begin{tabular}{l|r}
+    \textbf{Our term} & \textbf{CUDA term} \\\hline
+    Workgroup & Block \\
+    Private memory & Local memory \\
+    Local memory & Shared memory
+  \end{tabular}
+  \caption{Thesis terms to CUDA terms}
+  \label{tab:cuda-terms}
+\end{table}
+
+The most significant difference between the GPU model and CUDA is the
+dimensionality.  In CUDA, groups and threads are organised into a
+three-dimensional \textit{grid} ($x,y,z$), while our model contains
+only a single dimension.  This is primarily a programming convenience
+for problems that can be decomposed spatially.  However, the grid has
+hardware-specific size constraints: on recent NVIDIA hardware, the
+maximum number of threads in a workgroup in the $x$ and $y$ dimensions
+can be at most 1024, and in the $z$ dimension at most 64.  Also, the
+total number of threads in a workgroup may not exceed 1024.
+
+The one-dimensional space of our GPU model can be mapped to CUDA by
+only using the $x$ dimension, and leaving the $y$ and $z$ dimensions
+of size $1$.  However, CUDA imposes more restrictions: we can have at
+most $2^{16}=65535$ workgroups in one dimension.  Usually this will
+not be a problem, as no GPU needs anywhere this many threads to
+saturate its computational resources.  If it were to become a problem
+in the future, we could simply map the flat group ID space onto CUDAs
+three-dimensional space by computing, for any $gid$:
+
+\[
+x = \frac{gid}{2^{16}},\quad y = gid\ \text{mod}\ 2^{16}, \quad z = 0
+\]
+
+In general, flat and nested spaces can be mapped to each other at the
+cost of a modest number of division and remainder operations.  The
+only place where the layout of the thread space has semantic or
+performance consequences is within workgroups.  As the size limit for
+these ($1024$) is the same as the maximum number of threads along the
+$x$ dimension, we can always treat them as one-dimensional.
+
+In the extreme case, we can also virtualise workgroups by adding a
+loop to each physical workgroup.  This loop runs the body multiple
+times with different values for $gid$ and $gtid$.  This works because
+we assume communication between workgroups to be impossible, and hence
+the order of evaluation to be irrelevant.
+
+\subsection{Excluded Facilities}
+
+Real GPU hardware possesses some capabiities that are not represented
+in our model.  Some of these are unimportant, but others do offer
+performance opportunities that are for this work lost to us.
+
+\subsubsection{Atomic Operations}
+
+One important missing facility is atomic global memory operations, by
+which a thread can modify a location in memory in a race-free manner.
+The hardware supports a fixed number of atomic operators, such as
+addition, subtraction, exchange, or taking minimum and maximum.
+Crucially, there is also an atomic compare-and-swap instruction, on
+top of which other synchronisation primitives could be
+built~\cite{fraser2004practical}.
+
+Using atomic addition, we could represent a summation kernel that
+needs only one kernel launch instead of two.  The reason we do not
+exploit these atomic operations is due to their lack of generality.
+To the Futhark compiler, there is nothing special about a summation:
+it is treated like any other commutative reduction.  Could the code
+generator, or some intermediate optimisation pass, employ pattern
+matching to recognise known patterns that have particularly efficient
+realisations?  Certainly, and perhaps we will do so in the future, but
+for the present work we have chosen to focus on the general case, in
+the interest of simplicity.  Using compare-and-swap, it is feasible to
+implement single-state reduction for arbitrary operators, but it is
+unclear whether it is worth the cost in complexity, as the memory
+traffic would not be smaller than for the two-stage
+kernel.\fixme{Write a small benchmark for testing this.}  The primary
+savings would be in avoiding the overhead of launching the second
+(single-group) kernel, which by itself is not all that expensive.
+
+Atomic operations are most useful when used to implement communication
+between workgroups.  An implementation of prefix sum (scan) in CUDA
+has been developed which performs just one full pass over the
+input~\cite{Maleki:2016:HTM:2980983.2908089}.  In contrast, the best
+version available to us requires two.  However, the single-stage scan
+implementation depends on intimate knowledge about the target
+hardware---in particular, launching no more groups than will fit
+concurrently.  This is not just a question of knowing the hardware,
+but also its users.  If some other program is also using the GPU, we
+will have room for fewer concurrent groups than expected, potentially
+resulting in deadlock.  We have judged the fragility of such code
+unacceptable for the output of a compiler, especially since the
+compiler is intended to shield its users from having to possess deep
+hardware knowledge.  In contrast to language that employ full
+flattening (such as NESL~\cite{BlellochCACM96NESL}), Futhark
+performance is also less dependent on scan performance.
+
+\subsubsection{More Memory Spaces}
+
+Real GPUs support more kinds of memory than we have included in our
+GPU model:
+
+\begin{description}
+\item[Constant memory] is a size-limited read-only on-chip cache.
+  When we declare an array input to a kernel function, we can mark it
+  as \textit{constant}, which will cause it to be copied to the cache
+  just before the kernel begins execution.
+
+  Accessing memory in the constant cache is significantly faster than
+  accessing global memory.  Unfortunately, this facility is difficult
+  to exploit for a compiler.  The reason is that the constant size is
+  quite small---usually not more than $64KiB$---and kernel launch will
+  fail if the arrays we pass for constant parameters do not fit.  In
+  general, the specific sizes of arrays is not known until runtime.
+  The choice of whether to use constant memory is thus a compile-time
+  decision, while the validity of the choice can only be known at
+  run-time.
+
+\item[Texture memory] is physically global memory, but marked as
+  read-only, and \textit{spatially cached}, and, in contrast to other
+  memories, multi-dimensional and with assumptions on the type of
+  elements stored.  Texture memory is useful for access patterns that
+  exhibit spatial locality in a multi-dimensional space.  For example,
+  for a two-dimensional array \texttt{a}, the elements \texttt{a[i,j]}
+  and \texttt{a[i+1,j+1]} are distant from each other no matter
+  whether \texttt{a} is represented in row- or column-major form, but
+  they are spatially close in a two-dimensional space.
+
+  Texture memory is cached in such a way that elements are stored
+  together with spatially nearby elements.  When texture memory is
+  allocated, we must specify its dimensionality, which in extant
+  hardware must be of $1$, $2$, or $3$ dimensions.  There are also
+  restrictions on the size of individual dimensions.  On an NVIDIA
+  GTX780, $1D$ buffers are limited to $2^{27}$ elements, $2D$ buffers
+  to $2^{16}\cdot{}2^{16}$ elements, and $3D$ buffers to
+  $2^{12}\cdot{}2^{12}\cdot{}2^{12}$.
+
+  Texture memory also supports other convenient operations with full
+  hardware-acceleration.  For example, out-of-bounds accesses can be
+  handled transparently via index-wraparound, or by yielding a
+  specified ``border'' value.  Linear interpolation between
+  neighbouring values is also provided.  However, for non-graphics
+  workloads, the spatial locality caching model is the most
+  interesting feature.  Unfortunately, it is difficult for a compiler
+  to exploit.  The size limitations are particularly inconvenient for
+  ``skinny'' arrays that are much larger in one dimension than in the
+  others.
+
+  As with constant memory, the use of texture memory is thus a
+  compile-time decision whose validity depends on run-time properties
+  of the program input.
+\end{description}
+
+\subsubsection{Dynamic Parallelism}
+
+Another core assumption of our GPU model is that there are only two
+levels of parallelism: we launch a number of groups, and each group
+contains a number of threads.  Recent GPUs support \textit{dynamic
+  parallelism}, in which new kernels may be launched by any thread in
+a running kernel, after whcih the thread may wait for completion of
+the new kernel instance.  This is an instance of the well-known
+fork-join model of parallelism.
+
+Dynamic parallelism has interesting use cases.  One can imagine a
+search algorithm that starts by performing a coarse analysis of
+regions of the input data, then launching new kernels for those parts
+that appear interesting.  Very irregular algorithms, such as graph
+processing, may also be convenient to implement in this fashion.
+
+Unfortunately, dynamic parallelism often suffers from performance
+problems in practise\fixme{cite for this}, and fruitful applications
+are not as prevalent as might have been expected.  Efficient usage of
+dynamic parallelism centers around collecting the desired new kernel
+launches and merging them together into one launch.  From a functional
+programming point of view, it seems a better strategy to implement
+irregular problems via flattening (either manual or automatic), rather
+than using dynamic parallelism.  For these reasons, dynamic
+parallelism is not part of our GPU model, and is not employed by the
+Futharak compiler.\footnote{Another, more pragmatic reason, is that
+  dynamic parallelism is not supported by the OpenCL implementation
+  provided by NVIDIA.}
+
+\subsubsection{Intra-Group Communication}
+
+Most GPUs have support for efficient ``swizzle'' operations for
+exchanging values between threads in a warp.  However, despite the
+hardware supporting this as a general capability, current programming
+interfaces provide only specialised variants, for example for
+summation inside a warp, with each thread providing an integer.  In
+our GPU model, we thus require all cross-thread communication to be
+done through local memory.  This is not a restriction with deep
+ramifications--should more efficient intra-group communication
+primitives become available, it would have no great overall impact on
+our compilation strategy.
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "thesis"
+%%% End:

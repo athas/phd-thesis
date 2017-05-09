@@ -1,0 +1,104 @@
+\documentclass[11pt,a4paper,draft,oneside,openany]{memoir}
+
+\input{defaultprelude.tex}
+\input{futhark.tex}
+
+\lstset{
+  language=Futhark,
+  basicstyle=\ttfamily\small,
+  keywordstyle=\bfseries,
+  showlines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  numbers=left,
+  stepnumber=1,
+}
+
+\usepackage[titelside, en, nat]{ku-forside}
+
+\titel{My Thesis}
+\undertitel{And its Subtitle}
+\forfatter{Troels Henriksen -- \texttt{athas@sigkill.dk}}
+\forfatterET{}
+\forfatterTO{}
+\opgave{PhD thesis} % Findes kun under 'titelside'
+\dato{2017}
+\vejleder{Supervisors: Cosmin Eugen Oancea and Fritz Henglein}
+
+% Write "Part II" etc. in TOC instead of just "II"
+\renewcommand*{\cftpartname}{Part\space}
+
+\bibliography{thesis}
+
+\begin{document}
+\frontmatter
+
+ \clearpage
+
+\maketitle
+~
+\vspace{3cm}
+  \begin{abstract}
+\input{abstract.tex}
+  \end{abstract}
+
+\setlength{\cftpartnumwidth}{4em}
+
+% \clearpage
+%  ~\thispagestyle{empty}
+\clearpage
+\tableofcontents*
+%\openany
+\newpage
+\input{preface.tex}
+%\openright
+\mainmatter
+\counterwithout{table}{chapter}
+\counterwithout{figure}{chapter}
+\input{intro.tex}
+
+\part{Land, Logic, and Language}
+
+\input{hardware.tex}
+
+\input{formalism.tex}
+
+\input{futhark-language.tex}
+
+\part{An Optimising Compiler}
+
+\input{size-analysis.tex}
+
+\input{fusion.tex}
+
+\input{kernel-extraction.tex}
+
+\input{tiling.tex}
+
+\input{multi-versioned-code.tex}
+
+\input{empirical-validation.tex}
+
+\input{interoperability.tex}
+
+\clearpage
+
+\part{Closing Credits}
+
+% We want the bibliography in the ToC, but it shouldn't have a chapter
+% number.
+\phantomsection
+\addcontentsline{toc}{chapter}{Bibliography}
+\defbibheading{bibliography}{\chapter*{Bibliography}}
+\printbibliography
+
+\backmatter
+\appendix
+\input{appendix.tex}
+
+\end{document}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:
