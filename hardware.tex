@@ -6,7 +6,7 @@ characteristics for one set of program transformations and
 optimisations to apply universally.  In this theses, we will focus our
 discussion on one type of architecture: the modern \textit{Graphics
   Processing Unit} (GPU), which can be used for non-graphics
-computation under the term \textit{General-Purpose GPU compting}
+computation under the term \textit{General-Purpose GPU computing}
 (GPGPU).  Specifically, we will focus on the
 \textit{Single-Instruction Multiple-Thread} (SIMT) model used by
 NVIDIA, and also seen in recent AMD and Intel chips.  This chapter
@@ -98,7 +98,7 @@ finish (the order in which groups are launched is undefined).  This is
 another reason why communication between groups is difficult: unless
 we have detailed low-level information about both GPU and kernel, we
 cannot know whether the group we wish to communicate with has even
-been launched yet!  In principle, the GPU may even be runnin groups
+been launched yet!  In principle, the GPU may even be running groups
 from different kernel launches concurrently, perhaps even belonging to
 different users on the host system.  Due to these difficulties, we
 generally take the view that communication is only possible within a

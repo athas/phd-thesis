@@ -1,18 +1,107 @@
+\newcommand{\zip}{\mathrm{zip}}
+\newcommand{\unzip}{\mathrm{unzip}}
+\newcommand{\map}{\mathrm{map}}
+\newcommand{\reduce}{\mathrm{reduce}}
+\newcommand{\scan}{\mathrm{scan}}
+\newcommand{\ascan}{\mathrm{ascan}}
+\newcommand{\sscan}{\mathrm{sscan}}
+\newcommand{\inj}{\mathrm{inj}}
+\newcommand{\rep}{\mathrm{rep}}
+\newcommand{\streamFold}{\mathrm{sFold}}
+\newcommand{\fold}{\mathrm{fold}}
+\newcommand{\seg}[1]{\mathbf{#1}}
+\newcommand{\tto}{\,\Rightarrow\,}
+\newcommand{\iso}{\,\Leftrightarrow\,}
+\newcommand{\nat}{\mathbf{N}}
+\newcommand{\concat}{\#}
+\newcommand{\idd}{\mathrm{id}}
+\newcommand{\Id}{\mathrm{id}}
+\newcommand{\foldl}{\mathrm{foldl}}
+
 \chapter{An Array Calculus}
 
 The theoretical foundation of Futhark are the list homomorphisms of
-Bird and Meertens~\cite{Bird2}, realised in the form of
-purely functional parallel second-order array combinators (SOACs). Their rich equational theory for semantics-preserving
-transformations are employed in Futhark for fusion, streaming,
-and flattening of parallelism.  We first discuss this theory in
-Section~\ref{sec:arraycombinators}, then we introduce the concrete
-syntax of Futhark's core language in Section~\ref{sec:syntax}, then we
-show the compiler pipeline in Section~\ref{sec:pipeline}, and we
-demonstrate the use of in-place updates and streaming operators on a
-code example in Section~\ref{sec:k-means}.
+Bird and Meertens~\cite{Bird2}, realised in the form of purely
+functional parallel second-order array combinators (SOACs). Their rich
+equational theory for semantics-preserving transformations are
+employed in Futhark for fusion, streaming, and flattening of
+parallelism.  This chapter discusses a simple array combinator
+calculus that I will use to convey the intuition behind certain useful
+transformations on arrays and, more importantly, functions that
+operate on arrays.  The calculus presented here is simpler than the
+full Futhark programming language, yet also more flexible.
 
-\subsection{Array Combinator Calculus}
+\section{Array Combinator Calculus}
 \label{sec:arraycombinators}
+
+\begin{figure}
+  \centering
+$$
+\begin{array}{lrr}
+  \alpha,\beta,\tau & ::= & \mbox{\texttt{t}}\ |\ (\tau_1, \ldots, \tau_n)\ |\ [n]\tau \\
+
+  v & ::= & \mbox{\texttt{v}}\ |\ (v_{1}, \ldots, v_{n})\ |\ [v_{1}, \ldots, v_{n}] \\
+
+  \hat{\alpha},\hat{\beta},\hat{\tau} &::=& \tau\ |\ \hat{\alpha}\rightarrow\hat{\beta}\ |\ \Pi n.\hat{\tau} \\
+
+  e &::=& \mbox{\texttt{v}}\ |\ (e_{1}, \ldots, e_{n})\ |\ [e_{1}, \ldots, e_{n}]\ |\ e_1~e_2\ |\ \lambda x.e
+\end{array}
+$$
+  \caption{Syntax of the Array Combinator Calculus.}
+  \label{fig:arraycalculus_syntax}
+\end{figure}
+
+The array combinator calculus, a modified lambda calculus, describes
+terms that operate on array values.  The syntax is summarised on
+Figure~\ref{fig:arraycalculus_syntax}.  We make a distinction between
+\textit{ground values}
+$v$, which cannot contain functionals, and \textit{terms}
+$e$, which can.  An array value is written as a comma-separated
+sequence of values enclosed in square brackets, as in $[v_{1}, v_{2},
+v_{3}]$.  Arrays may contain scalar values written as \texttt{t}
+(which are not important for the calculus), other arrays, or tuples of
+values.  A tuple is written as a comma-separated sequence of values
+enclosed in parentheses.
+
+Array values are classified by array types.  We write $[n]\tau$ to
+denote the type of arrays with $n$ elements of type $\tau$.  The tuple
+of a tuple is written as the types of its components separated by
+commas and enclosed in parentheses.  Primitive (non-array) types are
+written as $t$.  In contrast to previously published parallel array
+formalisms such as MOA~\cite{moa}, singleton dimensions of arrays are
+significant: $[1][n]\tau$ and $[n][1]\tau$ are distinct types.
+Likewise, a singleton array $[1]\tau$ is distinct from a scalar of
+type $\tau$.  Higher-order types for classifying functions are
+described later.
+
+\newcommand{\convV}[1]{\mathcal{C}_{\mathcal{V}}(#1)}
+\newcommand{\convT}[1]{\mathcal{C}_{\mathcal{T}}(#1)}
+
+We treat the zip/unzip-isomorphic types
+$[n](\tau_1, \ldots, \tau_k) \cong [n]\tau_1 , \ldots , [n]\tau_k$ as
+interchangeable in any context.  This is justified as any array of
+tuples can be converted into a corresponding tuple of arrays, as shown
+on Figure~\ref{fig:calc-tuple-transform}.  The function $\convV{v}$
+rewrites a value $v$ such that no arrays of tuples appear.  Likewise,
+the function $\convT{\tau}$ rewrites a type.  Intuitively, the
+rewriting considers an array of tuples as an augmented array with an
+extra dimension, followed by transposing out that extra dimension.
+Actually constructing this array would not be well-typed, as all
+elements of an array must have the same type, whereas tuples can
+contain elements of differing types.
+
+\begin{figure}
+  \centering
+  \begin{align*}
+    &\convV{[(v_{(1,1)}, \ldots, v_{(1,m)}),\ldots,(v_{(n,1)}, \ldots, v_{(n,m)})]} =\\
+    &\quad (\convV{[v_{(1,1)},\ldots,v_{(n,1)}]},\ldots,\convV{[v_{(1,m)},\ldots,v_{(n,m)}]})\\
+    \\
+    &\convT{[n](\tau_{1},\ldots,\tau_{n})} =\\
+    &\quad(\convT{[n]\tau_{1}},\ldots,\convT{[n]\tau_{n}}) \\
+  \end{align*}
+  \caption{Converting arrays of tuples to tuples of arrays.}
+  \label{fig:calc-tuple-transform}
+\end{figure}
 
 We first describe the basic SOACs and later introduce
 \textit{streaming combinators}. The basic SOACs include (i)
@@ -35,7 +124,8 @@ $[n]\tau$ denotes the type of arrays with $n$ elements of type $\tau$,
 and $0_{\oplus}$ denotes the neutral element of the binary associative
 operator $\oplus$.  The $\Pi n$ notation indicates where the size $n$
 becomes fixed; it indicates, for instance, that we can partially apply
-$\map$ to a function and apply the resulting function to arrays of different sizes.
+$\map$ to a function and apply the resulting function to arrays of
+different sizes.
 
 Tuples and tuple types are denoted by comma-separated values or types,
 enclosed in parentheses. We treat the zip/unzip-isomorphic types

@@ -1,3 +1,238 @@
 \chapter{Introduction}
 
+\begin{itemize}
+\item scope and philosophical level of how our approach is placed compared to imperative approaches
 
+\item show the vision
+
+\item futhark source language examples and introduction
+
+\item show how techniques from imperative compilers become easier in a functional setting
+
+\item talk about all kinds of promising techniques, followed by a compiler that can actually do some of them.
+\end{itemize}
+
+In physics, the speed of light, denoted $c$, is the ultimate speed
+limit of the universe.  Likewise in programming, ``as fast as C'' is
+often been used as an indication that some programming language is as
+fast as it can possibly be.  In theory it makes no sense to say that a
+given programming language is ``slow'' or ``fast'', as these are
+merely properties of a particular implementation of the programming
+language running on a specific computer.  But in practise, it is clear
+that the design of a programming language has an overwhelming
+influence on the ease with which a performant implementation can be
+constructed.
+
+For decades, the design of languages such as C has permitted the
+implementation of compilers that generate efficient code.  One
+important reason is that the abstract machine model underlying C, a
+sequential random-access register machine, can be mapped easily to
+mainstream computers with little overhead.  This means that a
+programmer can write code in C and have a reasonable idea of the
+performance of the resulting code.  It also means that even a naive
+non-optimising C compiler can generate code with good performance,
+although it may require somewhat more care from the C programmer.
+Indeed, C has often been described as ``portable assembly
+code''.\footnote{I will using C as the main point of reference in the
+  following sections, but the problems I point out are common to any
+  sequential language.}
+
+In contrast, languages whose abstract model is more different from
+physical machines, so-called ``high-level languages'', cannot be as
+easily mapped to real machines.  Compilers must invest considerable
+effort in mapping e.g. the call-by-need lambda calculus of Haskell to
+the sequential register machine~\cite{jones1992implementing}.  Even
+after decades of work, high-level languages struggle to catch up to
+the performance of C on the sequential random-accesss register
+machine.
+
+Of course, a cursory study of modern hardware designs show that the
+sequential random-access register machine is a lie.  The abstract
+model of C may match a 70s minicomputer reasonably well, but it is
+increasingly diverging from how modern computers are constructed.
+This is not despite lack of effort on behalf of the hardware
+designers: due to the massive popularity (and therefore economic
+significance) of C-like languages, manufacturers have attempted to
+prolong the lie of the sequential random-access machine for as long as
+possible.
+
+\section{Physical Challenges in Improving CPU Performance}
+
+Unfortunately, while C may be exceeded (as I hope to show in this
+thesis), $c$ is a harder nut to crack.  The machine on which I am
+typing contains a CPU with a clock frequency of $2.3GHz$,
+corresponding to a clock cycle taking $0.43ns$.  Given that $c$ is
+approximately $3\cdot10^{8}m/s$, light moves approximately $13cm$ in
+the the time the CPU takes to perform a clock cycle, thus physically
+limiting the distance a single piece of information can travel in a
+single cycle.
+
+Another physical limitation is power dissipation: roughly, the power
+usage of the transistors in a processor is roughly proportional to the
+square of its clock frequency.  This prevents an increase in clock
+frequency unless we can compensate with an increase in the efficiency
+of the transistors.  For a sequential machine that executes
+instructions in exactly the order they are given, the only way to
+speed up execution of a program is to increase the rate at which
+instructions are executed.  If we can double the rate at which
+instructions are processed, we in effect halve the time it takes to
+execute some program (assuming no memory bottlenecks, which I will
+discuss later).
+
+In the popular vernacular, \textit{Moore's Law} is typically rendered
+as ``computers double in speed every two years''.  But actually, the
+law states that \textit{transistor density} doubles every two years
+(implying that transistors become smaller).  Moore's Law does not
+state that the enlargened transistor budget translates
+straightforwardly to improved performance, although that was indeed
+the case for several decades.  This is due to another law,
+\textit{Dennard scaling}, which roughly states that as transistors get
+smaller, their power density stays constant.  Taken together, Moore's
+Law and Dennard scaling rougly say that we can put ever more
+transistors into the same physical size, and with the same power usage
+(and thus heat generation).
+
+The reduction in power usage per transistor granted by Dennard scaling
+permitted a straightforward increase in CPU clock frequency.  Roughly,
+every time we cut the power consumption of a transistor in half via
+shrinkage, we can increase the clock frequency by 50\%.  For a
+sequential computer, this translates into a 50\% performance increase.
+We can partially circumvent the limits of $c$ by using techniques such
+as \textit{pipelining}.  While it is clear that Moore's Law will
+eventually stop, or else transistors would eventually be smaller than
+a single atom, this is not the issue that has hindered the lie of the
+sequential machine.
+
+The problem is that Dennard scaling began to break down around 2006.
+Physical properties of the circuit material leads to increased current
+leakage at small sizes, causing the chip to heat up.  Simply pushing
+up the clock frequency is no longer viable.  Instead, chip
+manufacturers use the transistor budget on increasing the amount of
+work that can be done in a clock cycle through various means:
+
+\begin{description}
+\item[Increasing the size of caches.] One significant problem with
+  modern computer designs is that processors are significantly faster
+  than the memory from which they get their data.  As a rule of thumb,
+  accessing main memory incurs a latency of $100ns$ - likely hundreds
+  of clock cycles on a modern CPU.  This so-called \textit{memory
+    wall} can be circumvented by the addition of caches that store
+  small subsets of the larger memory.  Heuristics, usually based on
+  temporal locality, are useed to determine which parts of the larger
+  memory are stored in the caches.  High-performance CPUs can use
+  several layers caches, each layer being larger and slower than the
+  former.
+\item[Inferring instruction-level parallelism.]  While the semantics
+  of a sequential CPU is that instructions are executed one after
+  another, it is often the case that two instructions to not have
+  dependencies on one another, and thus can be executed in parallel.
+  CPUs even perform \textit{out-of-order} execution where later
+  instructions are executed before earlier ones, if the latter
+  instruction has no dependence on the latter.
+\item[Explicit parallelism at the hardware level.]  The two former
+  techniques try to masquerade the fact that the sequential machine
+  model is increasingly physically untenable.  Another approach is to
+  explicitly provide programmers with hardware support for parallel
+  execution.  This most famously takes the form of adding additional
+  CPU cores, each of which processes a sequential stream of
+  instructions, but an equally important technique is to add
+  \textit{vector instructions} that operate on entire vectors of data,
+  rather than single values.  As an example, the newest Intel AVX-512
+  vector instruction set provides instructions that operate on entire
+  512-bit vectors (for example, 16 single precision floating point
+  values).  Such instructions dramatically increase the amount of work
+  that is done in a single clock cycle.
+\end{description}
+
+These techniques are all based on merely extending and improving the
+classic CPU design.  While code may have to be re-written to take
+advantage of certain new hardware features (such as multiple cores or
+vector instructions), the programming experience is not too dissimilar
+from programming sequential machines.  This is not necessarily a bad
+thing: sequential machines are easy to reason about, generous in their
+support of complex control flow, and have a significant existing base
+of programmer experience.
+
+However, the notion that C is ``portable assembly'' begins to crack
+noticeably even at this point.  C itself has no built-in notion of
+multi-threaded programming, nor of vector operations, and thus vendors
+have to provide new programming APIs (or language extensions) for
+programmers to take advantage of the new (performance-critical)
+machine features.  Alternatively, C compilers must perform significant
+static analysis of the sequential C code to find opportunities for
+vectorisation or multithreading.  In essence, the compiler must
+reverse engineer the sequential statements written by the programmer
+to reconstruct whatever parallelism may be present in the original
+algorithm.
+
+The problem is that C was carefully designed for a particularly class
+of machines; a machine no longer resembled by modern high-performance
+computers.  Thus, the impedance mismatch between C and hardware
+continues to grow, with little sign of stopping.  This mismatch
+becomes acute when we move away from the comparatively benign world of
+multicore CPUs and into the realm of massively parallel processors.
+
+\section{Massively Parallel Machines}
+
+To a large extent, mainstream CPUs favour programming convenience,
+familiarity, and backwards compatibility over raw performance.  We
+must look elsewhere for examples of the kind of hardware that could be
+built if we were willing to sacrifice traditional sequential notions
+of sequential programming.
+
+For as long as there has been computers, there have been parallel
+computers.  Indeed, if we think back to the very earliest computers,
+the human ones made of flesh and blood, parallelism was the
+\textit{only} way to speed up a computation.  You were unlikely to
+make a single human computer much faster through training, but you
+could always pack more of them into a room.  However, with the rise of
+electrical computers, and in particular the speed with which
+sequential performance improved, parallelism dwindled into the
+background.  Certainly, you could have two computers cooperate on
+solving some problem, but the programming difficulties involved made
+it more palatable to simply wait for a faster computer to enter the
+market.  Only the largest computational problems were worth the pain
+of parallel programming.\footnote{\textit{Concurrency} was alive and
+  well, however, due to its significant importance in operating
+  systems and multiprocessing.  But most concurrent programs were
+  executed on sequential machines, with the illusion of concurrency
+  formed through multiplexing.  Many of the techniques developed for
+  concurrent programming are also applicable to parallel programming,
+  although concurrency tends to implicitly focus on correctness over
+  performance on some specific machine.}
+
+Several interesting parallel computers were designed for
+\textit{high-performance computing} (HPC) applications.  One of the
+earliest and most influential was the Cray-1 from 1976, which was the
+first vector processor.  Only about 100 were sold, but this is a large
+number for a high-end supercomputer.  A different design was the CM-1
+from 1985, which was based on a computer containing a large number of
+simple 1-bit microprocessors.  The CM-1 proved difficult to program
+and was not a success in the market, but was the first example of a
+\textit{massively parallel machine}.
+
+In the 90s, consumer demand for increasing visual fidelity in video
+games led to the rise of the \textit{graphics processing unit} (GPU),
+for accelerating graphical operations that would be too slow if
+executed on the CPU.  Initially, GPUs were special-purpose
+non-programmable processors that could only perform fixed graphical
+operations.  Over time, the need for more flexibility in graphical
+effects lead to the development of programmable \textit{pixel
+  shaders}, first seen in the NVIDIA GeForce 3 in 2000.  Roughly,
+pixel shaders allowed an effect to be applied to every pixel of an
+image - for example, looking at every pixel and add a reflection
+effect to those that represent water.  Graphical operations such as
+these tend to be inherently parallel, and as a result, GPU hardware
+evolved to support efficient execution of programs with very simple
+control flow, but a massive amount of fine-grained parallelism.
+Eventually, GPU manufacturers started providing APIs that allowed
+programmers to exploit the parallel computational power of the
+now-mainstream GPUs even for non-graphics workloads, so-called
+\textit{general-purpose GPU programming} (GPGPU).  The most popular
+such APIs are CUDA~\cite{cuda} from NVIDIA, and
+OpenCL~\cite{Stone:2010:OPP:622179.1803953}.
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "thesis"
+%%% End:
