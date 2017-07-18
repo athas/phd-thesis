@@ -1,0 +1,25 @@
+dist: trusty
+sudo: false
+
+matrix:
+  include:
+    - env: BUILD=stack STACK_YAML=stack.yaml
+
+addons:
+  apt:
+    packages:
+    - wget
+    - libgmp-dev
+    - libffi6
+    - libc6:i386
+    - texlive-full
+
+cache:
+  apt:
+  directories:
+    - $HOME/.ghc
+    - $HOME/.cabal
+    - $HOME/.stack
+
+install:
+ - make
