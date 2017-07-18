@@ -1,4 +1,5 @@
 \chapter{Parallelism and Hardware Constraints}
+\label{chap:hardware}
 
 There exists a large diversity of parallel machines.  Far too many to
 list exhaustively, and far too different in capability and performance
@@ -379,7 +380,7 @@ savings would be in avoiding the overhead of launching the second
 Atomic operations are most useful when used to implement communication
 between workgroups.  An implementation of prefix sum (scan) in CUDA
 has been developed which performs just one full pass over the
-input~\cite{Maleki:2016:HTM:2980983.2908089}.  In contrast, the best
+input~\cite{Maleki:2016:HTM:2908080.2908089}.  In contrast, the best
 version available to us requires two.  However, the single-stage scan
 implementation depends on intimate knowledge about the target
 hardware---in particular, launching no more groups than will fit
