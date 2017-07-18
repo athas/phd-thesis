@@ -13,6 +13,7 @@ addons:
     - libffi6
     - libc6:i386
     - texlive-full
+    - biber
 
 cache:
   apt:
