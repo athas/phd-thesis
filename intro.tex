@@ -327,7 +327,12 @@ things like iteration order and sequencing, unless we really
 program, everything is required to execute in exactly the order
 written by the programmer, and the C compiler must perform significant
 work to figure out which of the sequencing restrictions are essential
-and which are accidental.
+and which are accidental.  In the following, I will introduce the
+\textit{Futhark programming language}, a purely functional array
+language that has been developed as part of my PhD
+work\footnote{Futhark has its roots in an earlier language,
+  $\mathcal{L}_0$, which I helped develop during my master's
+  studies.}.
 
 A more reasonable programming model is one based on \textit{bulk
   operations}, where we program in terms of large-scale
@@ -483,13 +488,20 @@ sequentially reduces a chunk of the input consisting of $\frac{n}{k}$
 elements, producing one intermediate result per thread.  We then
 launch a second reduction over all these intermediate results.  This
 second reduction can also be done in parallel, or can be sequential if
-$k$ is sufficiently small.
+$k$ is sufficiently small.  On a sequential machine, we can simply set
+$k=1$, and not exploit any parallelism at all.
 
 Efficient sequentialisation is not a single implementation technique,
 but a general implementation philosophy, which gives rise to various
 techniques and design choices.  It is a principle that I shall often
 return to during this thesis, as it has proven critical for executing
-Futhark efficiently on real hardware.
+Futhark efficiently on real hardware.  In essence, efficient
+sequentialisation is used to bridge the impedance mismatch between the
+``perfectly parallel'' abstract machine assumed by Futhark, and real
+machines that all have only limited parallelism.  As we shall see,
+using efficient sequentialisation to move from perfect parallelism to
+limited parallelism is much easier, than the the efforts parallelising
+compilers go to when converting sequential code to parallel code.
 
 \subsection{Modular Programming}
 
@@ -527,17 +539,17 @@ let arr_abs (xs: []i32) = map i32.abs xs
 let arr_incr (xs: []i32) = map (+1) xs
 \end{lstlisting}
 
-In Futhark, both functions and local bindings are defined using the
-\lstinline{let} keyword.  These functions both take a single
-parameter, \lstinline{xs} of type \lstinline{[]i32}.  We write the
-type of arrays containing elements of type \lstinline{t} as
+In Futhark, both functions and local bindings (introduced later) are
+defined using the \lstinline{let} keyword.  These functions both take
+a single parameter, \lstinline{xs} of type \lstinline{[]i32}.  We
+write the type of arrays containing elements of type \lstinline{t} as
 \lstinline{[]t}.  The function \lstinline{arr_abs} applies the
 function \lstinline{i32.abs} (absolute value of a 32-bit integer) to
 every element of the input array.  The function \lstinline{arr_scale}
 increases every element of the input by \lstinline{1}.  We use a
 shorthand for the function: \lstinline{(+1)} is equivalent to
-\lstinline{\x -> x + 1}, similarly to the \textit{operator sections} of
-Haskell.
+\lstinline{\x -> x + 1}, similarly to the \textit{operator sections}
+of Haskell.
 
 %%% Local Variables:
 %%% mode: latex
