@@ -14,7 +14,62 @@ TODO:
 \item talk about all kinds of promising techniques, followed by a compiler that can actually do some of them.
 \end{itemize}
 
-\textit{Ahem...}
+This thesis describes the design and implementation of
+\textit{Futhark}, a data parallel functional programming language.
+Futhark is a small programming language that is superficially similar
+to known functional languages such as OCaml and Haskell, but with
+restrictions and extensions meant to permit compilation into efficient
+parallel code.  While my research has produced techniques that could
+be applied in other settings, Futhark has been the overarching context
+for my work.  Apart from serving as a vehicle for compiler research,
+Futhark is also a programming language that is useful in practice for
+high-performance parallel programming.
+
+The remainder of this introductory chapter introduces the challenges
+posed by modern high-performance parallel computers.  I will discuss
+that while conventional imperative languages once benefited greatly
+from their relatively close similarity to the hardware, the divide
+behind their conceptual model and the realities of hardware is now
+ever widening.  I will show the advantages of a high-level explicitly
+parallel programming model, both for expressing parallel algorithms,
+as well as for compilation to efficient low-level code.  I will
+discuss how techniques considered \textit{heroic effort} in a compiler
+for an imperative language become tractable when applied in the
+functional setting.
+
+Chapter~\ref{chap:calculus} introduces a formal array calculus that
+serves as inspiration for Futhark.  Various rewrite rules are shown
+and justified.  Chapter~\ref{chap:hardware} discusses a simplified but
+performance-faithful design of contemporary GPU hardware, and shows
+how the primitive combinators of the previous chapter can be mapped
+efficiently to low-level code.
+
+The second part of the thesis discusses various analyses,
+transformations, and optimisations carried out by the Futhark
+compiler.  These constitute my main contributions.
+Chapter~\ref{chap:size-analysis} shows a technique for array shape
+analysis based on slicing and existential types (previously published
+at FHPC 2014~\cite{henriksen2014size}).  Chapter~\ref{chap:fusion}
+presents the fusion algorithm employed by the fusion compiler ---
+parts have been published in FHPC 2013~\cite{henriksen2013t2}, my
+master's thesis~\cite{henriksen2014exploiting}, FHPC
+2016~\cite{Futhark:redomap}, and PLDI
+2017~\cite{henriksen2017futhark}.
+Chapter~\ref{chap:kernel-extraction} shows an algorithm that uses
+primarily loop distribution to transforming regular nested parallelism
+into flat parallelism.  The main novelty is that information (such as
+access patterns) is not destroyed to the degree seen in previous
+techniques.  Chapter~\ref{chap:tiling} shows an implementation of
+automatic \textit{loop tiling} that exploits just this information.
+These two chapters are based on work previously published at PLDI
+2017~\cite{henriksen2017futhark}.
+Chapter~\ref{chap:empirical-validation} contains a performance
+analysis of Futhark on more than a dozen established benchmarks.
+Finally, Chapter~\ref{chap:interoperability} discusses how to call
+Futhark code from programs written in other languages, with Python
+used as the case study.
+
+\section{Physical Challenges to Improving CPU Performance}
 
 In physics, the speed of light, denoted $c$, is the ultimate speed
 limit of the universe.  Likewise in programming, ``as fast as C'' is
@@ -59,8 +114,6 @@ designers: due to the massive popularity (and therefore economic
 significance) of C-like languages, manufacturers have attempted to
 prolong the lie of the sequential random-access machine for as long as
 possible.
-
-\section{Physical Challenges to Improving CPU Performance}
 
 Unfortunately, while C may be exceeded (as I hope to show in this
 thesis), $c$ is a harder nut to crack.  The machine on which I am
@@ -320,27 +373,27 @@ to saturate the hardware---a tall order, and the compiler cannot help.
 
 We need a better programming model; one that does not have as
 fundamental a mismatch between its execution model and parallel
-hardware.  This does not mean we need a low-level GPU-specific model.
-Rather, we should go the other way and stop \textit{overspecifying}
-things like iteration order and sequencing, unless we really
-\textit{need} something to execute in some specific order.  In a C
-program, everything is required to execute in exactly the order
-written by the programmer, and the C compiler must perform significant
-work to figure out which of the sequencing restrictions are essential
-and which are accidental.  In the following, I will introduce the
-\textit{Futhark programming language}, a purely functional array
-language that has been developed as part of my PhD
-work\footnote{Futhark has its roots in an earlier language,
-  $\mathcal{L}_0$, which I helped develop during my master's
-  studies.}.
+hardware.  This does not mean we need a low-level language, or a
+specialised GPU language.  Rather, we should \textit{increase} the
+level of abstraction, and stop overspecifying details like iteration
+order and sequencing, unless we really \textit{need} something to
+execute in some specific order.  In a C program, everything is
+required to execute in exactly the order written by the programmer,
+and the C compiler must perform significant work to figure out which
+of the sequencing restrictions are essential, and which are
+accidental.  In the following, I will introduce the \textit{Futhark
+  programming language}, a purely functional array language that has
+been developed as part of my PhD work\footnote{Futhark has its roots
+  in an earlier language, $\mathcal{L}_0$, which I helped develop
+  during my master's studies.}.
 
-A more reasonable programming model is one based on \textit{bulk
-  operations}, where we program in terms of large-scale
-transformations of collections of data.  Suppose we wish to increment
-every element in a vector by $2$.  The functional programming
-tradition comes with an established vocabulary of such bulk operations
-which we can use as inspiration.  For this task, we can use the
-\lstinline{map} construct, which takes a function
+A reasonable high-level programming model for modern computers is one
+based on \textit{bulk operations}, where we program in terms of
+large-scale transformations of collections of data.  Suppose we wish
+to increment every element in a vector by $2$.  The functional
+programming tradition comes with an established vocabulary of such
+bulk operations which we can use as inspiration.  For this task, we
+can use the \lstinline{map} construct, which takes a function
 $\alpha~\rightarrow\beta$ and a collection of values of type $\alpha$,
 and produces a collection of values of type $\beta$:
 
@@ -405,7 +458,7 @@ operationally parallel can be described through parallel cost models.
 One such cost model was described and subsequently proven
 implementable for the data parallel language
 NESL~\cite{Blelloch:1996:PTS:232627.232650}.  While a formal cost
-model for Futhark it outside the scope of this thesis, the similarity
+model for Futhark is outside the scope of this thesis, the similarity
 of Futhark to NESL suggests that a similar approach would be viable.
 Instead, we use the intuitive notion that certain constructs (such as
 \lstinline{map}) may be executed in parallel.  However, it is not
@@ -503,7 +556,7 @@ using efficient sequentialisation to move from perfect parallelism to
 limited parallelism is much easier, than the the efforts parallelising
 compilers go to when converting sequential code to parallel code.
 
-\subsection{Modular Programming}
+\section{Fusion for Modular Programming}
 
 One of the most important goals for most programming languages is to
 support modular and abstract programming.  A modular program is
@@ -522,16 +575,21 @@ writing of small, reusable components, it is important that there is
 little run-time overhead to the use of functions.  Function inlining
 is a well established technique to remove the overhead of function
 calls, although at the cost of an increase in code size.  Another
-useful property of inlining is that it enables further optimisation,
-as a opaque function call is replaced with the body of the function,
-which may be subject to simplification in the context of the caller.
-While wide-spread techniques such as copy propagation, constant
-folding, and dead code removal remain useful in a data-parallel such
-as Futhark, other, more sophisticated, transformations are also
-important.
+useful property of inlining is that it enables further optimisation.,
+When an opaque function call is replaced with the function body,
+further simplification may be possible.  While wide-spread techniques
+such as copy propagation, constant folding, and dead code removal
+remain useful in a data-parallel such as Futhark, other, more
+sophisticated, transformations are also important.  One such
+transformation is \textit{loop fusion}, which removes intermediate
+results by combining several loops into one.  The mechanisms behind
+fusion the Futhark compiler are discussed in detail in
+Chapter~\ref{chap:fusion}. The remainder of this section discusses the
+intuition and motivation behind loop fusion, as well as showing how
+fusion is significantly easier in the functional setting than for
+imperative languages.
 
-One such transformation is \textit{loop fusion}.  Let us consider two
-Futhark functions on arrays:
+Let us consider two Futhark functions on arrays:
 
 \begin{lstlisting}
 let arr_abs (xs: []i32) = map i32.abs xs
@@ -547,9 +605,63 @@ write the type of arrays containing elements of type \lstinline{t} as
 function \lstinline{i32.abs} (absolute value of a 32-bit integer) to
 every element of the input array.  The function \lstinline{arr_scale}
 increases every element of the input by \lstinline{1}.  We use a
-shorthand for the function: \lstinline{(+1)} is equivalent to
-\lstinline{\x -> x + 1}, similarly to the \textit{operator sections}
-of Haskell.
+shorthand for the functional argument: \lstinline{(+1)} is equivalent
+to \lstinline{\x -> x + 1}, similarly to the \textit{operator
+  sections} of Haskell.
+
+Consider now the following expression:
+
+\begin{lstlisting}
+  let ys = arr_abs xs
+  in arr_incr ys
+\end{lstlisting}
+
+If we inline \lstinline{arr_abs} and \lstinline{arr_incr} we obtain:
+
+\begin{lstlisting}
+  let ys = map i32.abs xs
+  in map (+1) ys
+\end{lstlisting}
+
+If we suppose a straightforward execution, the first \lstinline{map}
+will read each element of \lstinline{xs} from memory, compute its
+absolute value, then write the results back to memory as the array
+\lstinline{ys}.  The second \lstinline{map} will then read back the
+elements \lstinline{ys} array, perform the \lstinline{(+1)} operation,
+and place the result somewhere else in memory.  If \lstinline{xs} has
+$n$ elements, the result is a total of $4n$ memory operations.  Given
+that memory access is often the bottleneck in current computer
+systems, this is wasteful.  Instead, we should read each element of
+the array \lstinline{xs}, apply the combined function \lstinline{(\x -> i32.abs x + 1)}, then write the final result, for a total of $2n$
+memory operations.  We could write such a \lstinline{map} manually,
+but we would lose modularity, as the program is no longer structured
+as a composition of re-usable functions.  For such simple functions as
+are used in this example, the loss is not great, but the issue remains
+for more complicated functions.
+
+It is the job of the compiler to employ \textit{loop fusion} to
+combine the two \lstinline{map} operations into one.  The validity of
+fusion is in this case justified by the algebraic rule
+\[
+  \text{map}~f~\circ~\text{map}~g=\text{map}~(f~\circ~g)
+\]
+This permits the Futhark compiler to automatically combine the two
+\lstinline{map}s and produce the following program:
+
+\begin{lstlisting}
+  map (\x -> let y = i32.abs x in y + 1) xs
+\end{lstlisting}
+
+While the Futhark programming language does not correspond directly to
+any specific calculus, it is heavily based on the array combinator
+calculus discussed in Chapter~\ref{chap:calculus}.  This calculus
+serves as inspiration and justification for rewrite rules that are
+exploited to transform user-written programs into forms that are more
+efficient.
+
+\fixme{More stuff - map-reduce and such.}
+
+\section{Nested Parallelism}
 
 %%% Local Variables:
 %%% mode: latex
