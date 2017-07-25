@@ -525,8 +525,99 @@ that, while expressible in an asymptotically optimal form using
 \lstinline{map} and sequential loops, can be mapped by the compiler to
 far superior low-level code.  We still wish to keep the number of
 constructs small, because each requires significant effort to
-implement and integrate in optimisations, particularly with respect to
-fusion (Chapter~\ref{chap:fusion}).  
+implement and integrate in the compiler, particularly with respect to
+optimisations such as fusion (Chapter~\ref{chap:fusion}).  The main
+constructs we have chosen to include are the following, which closely
+resemble higher-order functions found in most functional languages:
+
+\begin{itemize}
+\item \lstinline{map} : $(\alpha\rightarrow\beta)\rightarrow\texttt{[]}\alpha\rightarrow\texttt{[]}\beta$\hfill\\
+  \lstinline{map f xs} applies the function \lstinline{f} to every
+  element of the array \lstinline{xs}, producing a new array.
+\item \lstinline{reduce} : $(\alpha\rightarrow\alpha)\rightarrow\alpha\rightarrow\texttt{[]}\alpha\rightarrow\alpha$\hfill\\
+  \lstinline{reduce f v xs} Reduce the array \lstinline{xs} with the function \lstinline{f}.
+  The function must take two arguments and be associative, with
+  \lstinline{v} as the neutral element.
+\item \lstinline{scan} : $(\alpha\rightarrow\alpha)\rightarrow\alpha\rightarrow\texttt{[]}\alpha\rightarrow\texttt{[]}\alpha$\hfill\\
+  \lstinline{scan f v xs} computes an \textit{inclusive scan}
+  (sometimes called \textit{generalised prefix sum}) of the array
+  \lstinline{xs}.  As with reduction, the function must be associative
+  and have \lstinline{v} as its neutral element.
+\item \lstinline{filter} : $(\alpha\rightarrow\texttt{bool})\rightarrow\texttt{[]}\alpha\rightarrow\texttt{[]}\alpha$\hfill\\
+  \lstinline{filter f xs} produces an array consisting of those
+  elements in \lstinline{xs} for which the function \lstinline{f}
+  returns \lstinline{true}.
+\end{itemize}
+
+Together, constructs such as these are called \textit{second-order
+  array combinators} (or \textit{SOAC}s).  Futhark does not presently
+permit the programmer to write their own higher-order functions, so
+new ones cannot be defined (this can be worked around via higher-order
+modules; see Section~\ref{sec:new-language}).  Futhark also contains
+two more exotic SOACs, \lstinline{stream_red} and
+\lstinline{stream_map}, which will be discussed later.\fixme{when?}
+
+Requiring associativity and neutral elements for the functional
+arguments in \lstinline{reduce} and \lstinline{scan} is what enables a
+parallel implementation.  For reductions, performance can be improved
+further if the operator is also commutative\fixme{add reference}.  For
+simple functions, the Futhark compiler can detect commutativity, but
+otherwise the programmer can use a special \lstinline{reduce_comm}
+SOAC that behaves exactly like \lstinline{reduce}, but carries the
+promise that the function is commutative.  There is no such variant
+for \lstinline{scan}, because scans do not benefit from commutative
+operators.
+
+In all cases, it is the programmers responsibility to ensure that the
+functions have the required properties - the compiler will not check.
+Indeed, checking such properties in general is undecidable.  If an
+invalid function is provided (e.g. subtraction, which is not
+associative), the program may produce nondeterministic results.
+
+In some parallel languages or libraries, reductions and scans are
+restricted to a small collection of standard operators, like addition
+or maximum.  This makes the language safer, but we have found many
+examples of problems that can be solved efficiently with nonstandard
+reductions.  For example, consider the problem of finding the index of
+the largest element in an array of floating-point numbers.  In many
+parallel libraries, this is a primitive operation.  In Futhark, we can
+express this as:
+
+\begin{lstlisting}
+let index_of_max [n] (xs: [n]f32): i32 =
+  let (_, i) =
+    reduce_comm
+      (\(x,xi) (y,yi) ->
+        if      xi <  0 then (y, yi)
+        else if yi <  0 then (x, xi)
+        else if  x <  y then (y, yi)
+        else if  y <  x then (x, xi)
+        else if xi < yi then (y, yi)
+        else                 (x, xi))
+      (0.0, -1)
+      (zip xs [0...n-1])
+  in i
+\end{lstlisting}
+
+First, another note on syntax.  The \textit{size parameter}
+\lstinline{[n]} indicates that the function is polymorphic in some
+size \lstinline{n}.  This parameter is in scope as a variable of type
+\lstinline{i32} in the remaining parameters and body of the function.
+We use this to indicate that the array parameter \lstinline{xs} has
+\lstinline{n} elements, and to construct an array of the integers from
+0 to \lstinline{n-1} in the expression \lstinline{[0...n-1]}.  We will
+return to size parameters in Section~\ref{sec:new-language}.
+
+The \lstinline{index_of_max} function functions by pairing each
+element in \lstinline{xs} with its index, then performing a reduction
+over the resulting array of pairs.  As a result, the two taken
+parameters by the reduction function themselves consist of two values.
+We consider the neutral element to be any pair where the index is
+negative.  To make the operator commutative, we use the indices as a
+tie-breaker in cases where multiple elements of \lstinline{xs} have
+the same value (the element with the greater index is chosen).  We use
+\lstinline{reduce_comm} instead of plain \lstinline{reduce} to inform
+the compiler that the operator is indeed commutative.
 
 \subsection{Efficient Sequentialisation}
 \label{sec:efficient-sequentialisation}

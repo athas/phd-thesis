@@ -4,7 +4,7 @@ all: $(PAPERPDF)
 PDFLATEX        = pdflatex -halt-on-error
 #latex
 
-%.pdf: %.tex Makefile
+%.pdf: %.tex Makefile *.tex
 	$(PDFLATEX) $<
 	biber $*
 	$(PDFLATEX) $<

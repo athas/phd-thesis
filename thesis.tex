@@ -1,20 +1,14 @@
 \documentclass[11pt,draft,a4paper,oneside,openany]{memoir}
 
+\usepackage[final]{graphicx}
+
+% The ku-forside package breaks lots of things, so define it first
+% such that my prelude can fix it.
+\usepackage[titelside,en,nat]{ku-forside}
+
 \input{defaultprelude.tex}
 \input{futhark.tex}
-
-\lstset{
-  language=Futhark,
-  basicstyle=\ttfamily\small,
-  keywordstyle=\bfseries,
-  showlines=true,
-  columns=fullflexible,
-  keepspaces=true,
-  numbers=left,
-  stepnumber=1,
-}
-
-\usepackage[titelside,en,nat]{ku-forside}
+\renewcommand{\ttdefault}{pcr}
 
 \titel{Design and Implementation of the}
 \undertitel{Futhark Programming Language}

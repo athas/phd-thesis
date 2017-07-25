@@ -20,13 +20,14 @@
 \usepackage{color}
 \usepackage{fancyvrb}
 \usepackage{semantic}
+
+
 \usepackage[final]{listings}
-
-
-\renewcommand{\ttdefault}{pcr} % Courier instead of Computer Modern
 % Fix dashes in listings (from
 % https://tex.stackexchange.com/questions/33185/listings-package-changes-hyphens-to-minus-signs
 % )
+
+\renewcommand{\ttdefault}{pcr} % Courier instead of Computer Modern
 
 \usepackage{enumitem} % Allows \begin{description}[style=nextline]
 
@@ -92,7 +93,6 @@ defernumbers=true
 
 % BIBLIOGRAPHY styling
 % Print the DOI url out
-%\newcommand*{\doi}[1]{DOI: \url{http://dx.doi.org/#1}}
 
 \DeclareFieldFormat{doi}{\textsc{doi}: \url{http://dx.doi.org/#1}}
 \DeclareNameAlias{default}{last-first/first-last}
@@ -103,11 +103,8 @@ defernumbers=true
 
 % No page numbers for parts in TOC
 \cftpagenumbersoff{part}
-% Footnote symbols
-%\renewcommand*{\thefootnote}{\fnsymbol{footnote}}
 
 % Figures
-% \newsubfloat{figure}
 
 \usepackage{sidecap}
 \usepackage{caption}
@@ -142,13 +139,6 @@ defernumbers=true
 \newcommand{\blor}{\mathbin{
   \raisebox{.1ex}{%
     \rotatebox[origin=c]{90}{\usefont{U}{matha}{m}{n}\symbol{\string"CE}}}}}
-
-% The colorcode environment lets us use colour markup inside verbatim blocks.
-\DefineVerbatimEnvironment{colorcode}%
-        {Verbatim}{fontsize=\small,commandchars=\\\{\}}
-
-\DefineVerbatimEnvironment{bcolorcode}%
-        {BVerbatim}{fontsize=\small,commandchars=\\\{\}}
 
 % Visually Separate figures from text using a line.
 \def\topfigrule{\vskip1ex\noindent\dotfill}
