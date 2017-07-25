@@ -340,7 +340,7 @@ can also be optimised for very high bandwidth at the expense of
 latency, and it is not unusual for GPU memory buses to support
 bandwidth in excess of $300GiB/s$ (although as we shall discuss in
 Chapter~\ref{chap:hardware}, specific access patterns must be followed
-to obtain peak performance).
+to reach this performance).
 
 GPUs have many limitations that hinder traditional programming
 techniques and languages:
@@ -394,7 +394,7 @@ to increment every element in a vector by $2$.  The functional
 programming tradition comes with an established vocabulary of such
 bulk operations which we can use as inspiration.  For this task, we
 can use the \lstinline{map} construct, which takes a function
-$\alpha~\rightarrow\beta$ and a collection of values of type $\alpha$,
+$\alpha~\rightarrow~\beta$ and an array of values of type $\alpha$,
 and produces a collection of values of type $\beta$:
 
 \begin{lstlisting}
@@ -424,7 +424,9 @@ functional languages.  The main contributions of this thesis are the
 Futhark---its efficient mapping to GPU hardware---as well as those
 bits of its language design that enable said implementation.  It seems
 likely that the implementation techniques could be applied to other
-functional languages of roughly the same design.
+functional languages of roughly the same design.  For more on why I
+chose to construct a new programming language rather than use an
+existing design, see Section~\ref{sec:new-language}.
 
 Let us return to the \lstinline{map} expression:
 
@@ -463,9 +465,71 @@ of Futhark to NESL suggests that a similar approach would be viable.
 Instead, we use the intuitive notion that certain constructs (such as
 \lstinline{map}) may be executed in parallel.  However, it is not
 always efficient to translate all \textit{potential} parallelism into
-\textit{realised parallelism} on a concrete machine.
+\textit{realised parallelism} on a concrete machine (see
+Section~\ref{sec:efficient-sequentialisation}).
+
+\subsection{Choice of Parallel Combinators}
+
+A persistent question when designing a programming language is which
+constructs to build in, and which to derive from more primitive forms.
+In functional languages, we usually prefer to include just a few
+powerful foundational constructs, on which the rest of the language
+can be built.  In principle, \lstinline{map} can be used to express
+(almost) all other data-parallel constructs.  For example, we can
+write a summation as follows:
+
+\begin{lstlisting}
+let sum (xs: []i32): i32 =
+  let ys' =
+    loop ys=xs while length ys > 1 do
+      let n = length ys / 2
+      in map (+) (zip ys[0:n] ys[n:2*n])
+  in ys'[0]
+\end{lstlisting}
+
+An explanation of the syntax is necessary.  In Futhark, both functions
+and local bindings are defined using the \lstinline{let} keyword.
+These functions both take a single parameter, \lstinline{xs} of type
+\lstinline{[]i32}.  We write the type of arrays containing elements of
+type \lstinline{t} as \lstinline{[]t}.  The \lstinline{loop} construct
+is specialised syntax for expressing sequential loops.  Here,
+\lstinline{ys} is the \textit{variant parameter}, which initialised
+with the value \lstinline{xs}, and receives a new value after every
+iteration of the loop body.  The array slicing syntax
+\lstinline{ys[n:2*n]} takes elements starting at index \lstinline{n}
+and up to (but exclusive) \lstinline{2*n}.
+
+The summation proceeds by repeatedly cutting the array in twain,
+adding each half to the other until only a single element is left.
+For simplicity, we assume that the size of the input array
+\lstinline{xs} is a power of two.  We can characterise the performance
+of \lstinline{sum} with with a work/depth parallel cost
+model~\cite{Blelloch:1995:PSF:224164.224210}.  If we suppose that
+\lstinline{map} runs in work $O(n)$ and depth $O(1)$, the function
+\lstinline{sum} runs in work $O(n)$ and depth $O(\log n)$.  This is
+asymptotically optimal for physically reasonable machine models.
+However, if executed straightforwardly on a GPU, this function will be
+far from reaching peak potential performance.  One reason is that it
+is very expensive to create the intermediate \lstinline{ys} arrays,
+compared to the time taken to add the numbers.  While a ``sufficiently
+smart'' compiler may be able to rewrite the program to avoid some of
+this overhead (and perhaps even take advantage of hardware-specific
+features for performing summations), this is contrary to the
+philosophy behind Futhark.  Although we do not mind aggressive
+optimisation, the transformations we perform should arise naturally
+out of the constructs used by the programmer, and not depend on subtle
+and fragile analyses.
+
+As a consequence, we provide several parallel constructs in Futhark
+that, while expressible in an asymptotically optimal form using
+\lstinline{map} and sequential loops, can be mapped by the compiler to
+far superior low-level code.  We still wish to keep the number of
+constructs small, because each requires significant effort to
+implement and integrate in optimisations, particularly with respect to
+fusion (Chapter~\ref{chap:fusion}).  
 
 \subsection{Efficient Sequentialisation}
+\label{sec:efficient-sequentialisation}
 
 In the literature, a \textit{parallelising compiler} is a compiler
 that takes as input a program written in some sequential language,
@@ -542,7 +606,10 @@ elements, producing one intermediate result per thread.  We then
 launch a second reduction over all these intermediate results.  This
 second reduction can also be done in parallel, or can be sequential if
 $k$ is sufficiently small.  On a sequential machine, we can simply set
-$k=1$, and not exploit any parallelism at all.
+$k=1$, and not exploit any parallelism at all.  Efficient
+sequentialisation is particularly important (and also more difficult)
+when it comes to handling nested parallelism, as we shall see in
+Section~\ref{sec:nested-parallelism}.
 
 Efficient sequentialisation is not a single implementation technique,
 but a general implementation philosophy, which gives rise to various
@@ -597,13 +664,9 @@ let arr_abs (xs: []i32) = map i32.abs xs
 let arr_incr (xs: []i32) = map (+1) xs
 \end{lstlisting}
 
-In Futhark, both functions and local bindings (introduced later) are
-defined using the \lstinline{let} keyword.  These functions both take
-a single parameter, \lstinline{xs} of type \lstinline{[]i32}.  We
-write the type of arrays containing elements of type \lstinline{t} as
-\lstinline{[]t}.  The function \lstinline{arr_abs} applies the
-function \lstinline{i32.abs} (absolute value of a 32-bit integer) to
-every element of the input array.  The function \lstinline{arr_scale}
+The function \lstinline{arr_abs} applies the function
+\lstinline{i32.abs} (absolute value of a 32-bit integer) to every
+element of the input array.  The function \lstinline{arr_scale}
 increases every element of the input by \lstinline{1}.  We use a
 shorthand for the functional argument: \lstinline{(+1)} is equivalent
 to \lstinline{\x -> x + 1}, similarly to the \textit{operator
@@ -639,9 +702,9 @@ as a composition of re-usable functions.  For such simple functions as
 are used in this example, the loss is not great, but the issue remains
 for more complicated functions.
 
-It is the job of the compiler to employ \textit{loop fusion} to
-combine the two \lstinline{map} operations into one.  The validity of
-fusion is in this case justified by the algebraic rule
+The compiler employs producer-consumer \textit{loop fusion} to combine
+the two \lstinline{map} operations into one.  The validity of fusion
+is in this case justified by the algebraic rule
 \[
   \text{map}~f~\circ~\text{map}~g=\text{map}~(f~\circ~g)
 \]
@@ -652,6 +715,16 @@ This permits the Futhark compiler to automatically combine the two
   map (\x -> let y = i32.abs x in y + 1) xs
 \end{lstlisting}
 
+Fusion is \textit{the} core implementation technique that permits code
+to be written as a composition of simple parallel operations, without
+having to actually manifest most of the intermediate results.  It is
+worth noting that the fusion algorithm used by the Futhark compiler
+will never change the asymptotic behaviour of programs.  Thus, a
+program that is fully fused will only be a constant amount faster than
+one that is not fused at all.  This is in fact a \textit{feature}, as
+it means the tractability of a program does not depend on a compiler
+optimisation.  Chapter~\ref{chap:fusion} goes into more detail.
+
 While the Futhark programming language does not correspond directly to
 any specific calculus, it is heavily based on the array combinator
 calculus discussed in Chapter~\ref{chap:calculus}.  This calculus
@@ -661,7 +734,170 @@ efficient.
 
 \fixme{More stuff - map-reduce and such.}
 
+While loop fusion is not an unknown technique in compilers for
+imperative languages, it is significantly more complicated to
+implement.  One major problem is that imperative languages do not have
+\lstinline{map} as a fundamental construct.  Hence, index analysis is
+first needed to determine that some loop in fact encodes a
+\lstinline{map} operation, as the following imperative pseudocode
+demonstrates:
+
+\begin{lstlisting}
+for i < n:
+  ys[i] <- f(xs[i])
+for i < n:
+  zs[i] <- g(ys[i])
+\end{lstlisting}
+
+While index analysis can easily become undecidable, it is feasible for
+simple cases, such as this one.  A bigger problem is that there is no
+guarantee that the loops can be executed parallel.  For example, the
+functions \lstinline{f} and \lstinline{g} may have arbitrary side
+effects, which means that they must be executed in order.  Many
+functions written in an imperative language, even those that are
+externally pure, use side-effects internally, for example for storage
+management or accumulator variables in loops.  It can be difficult for
+a compiler to automatically determine that a function is indeed pure.
+A solution is to have the programmer manually add a purity annotation
+to the function, which is then trusted by the compiler.  There are two
+problems with this technique: first, the programmer may be wrong,
+which may result in unpredictably wrong code, depending on how the
+optimiser exploits the information.  Second, optimising compilers are
+notoriously bad at providing feedback about when insufficient
+information inhibits an information, and how the programmer can
+rectify the problem.  A performance-conscious programmer may end up
+liberally sprinkling purity annotations on most of their functions in
+the hope of helping the optimiser, thus exacerbating the first
+problem.
+
+Even if we can somehow determine \lstinline{f} and \lstinline{g} to be
+pure, the in-place assignment to \lstinline{y} may have an effect if
+\lstinline{xs} and \lstinline{ys} are aliases of each other
+(i.e. overlap in memory).  Alias analysis is one of the great
+challenges for compiler optimisation in imperative
+languages~\cite{hendren1992designing}---indeed, the guarantee that two
+arrays cannot alias each other are one of the performance benefits
+Fortran has over languages such as C.  Modern languages tend to
+support annotations by which the programmer can indicate that some
+array has no aliases in scope\footnote{The \texttt{restrict} keyword in C99.}.
+These annotations, while useful, have the same issues as the purity
+annotations discussed above.
+
+In a purely functional language, we avoid these issues by
+construction.  This allows the compiler (and the compiler writer!) to
+focus on exploiting parallel properties, rather than proving them.
+
 \section{Nested Parallelism}
+\label{sec:nested-parallelism}
+
+In a parallel expression \lstinline{map f xs}, the function
+\lstinline{f} can in principle be anything.  In particular,
+\lstinline{f} can contain more parallelism.  When one parallel
+construct can be nested inside of another, we call it \textit{nested
+  parallelism}.
+
+The need for nested parallelism arises naturally out of our desire to
+support modular programming.  We should be able to map any function
+\lstinline{f}, even if \lstinline{f} is parallel itself.  Furthermore,
+the parallelism inside of \lstinline{f} should also be utilised---it's
+not enough to exploit only the outermost level of parallelism, as that
+may not be enough to saturate the hardware.  Unfortunately, it turns
+out that nested parallelism is difficult to implement efficiently in
+its full generality.  The reason is that it is hard to map arbitrary
+nested parallelism to current parallel hardware, which supports only a
+fixed level of parallelism efficiently (and typically with harsh
+restrictions on the size of each level beyond the first; see
+Chapter~\ref{chap:hardware}).
+
+Guy Blelloch's seminal work on NESL demonstrated how to handle
+arbitrary nested parallelism via \textit{full
+  flattening}~\cite{blelloch1994implementation}.  The flattening
+algorithm transforms arbitrary nested data parallelism into flat data
+parallelism, which can be easily mapped on to most machines.  The key
+technique is \textit{vectorisation}, by which each function $f$ is
+lifted to a vectorised version $\hat{f}$, that applies to
+\textit{segments} of some larger array.  While flattening is useful
+for its universal applicability, it has three main problems:
+
+\begin{enumerate}
+\item \textit{All} parallelism is exploited, even that which is
+  expensive to exploit (perhaps hidden behind branches) and not
+  necessary to take full advantage of the hardware.
+\item The vectorisation transformation forces all sequential loops to
+  the outermost level, thus preventing low-overhead sequential loops
+  inside threads.  This is particularly harmful for programs that are
+  ``almost flat'', such as a \lstinline{map} whose function simply
+  performs a sequential loop.  Flattening would transform this into a
+  sequential loop that contains a \lstinline{map}, thus forcing an
+  array of intermediate results to be written after every
+  \lstinline{map}.  In contrast, the original loop may have been able
+  to run using just registers.
+\item The structure of the original program is heavily modified,
+  destroying much information and rendering optimisations based on
+  access pattern information (such as loop tiling) infeasible.
+\end{enumerate}
+
+Work is still progressing on adapting and improving the flattening
+transformation.  For example, \cite{Keller:2012:VA:2364506.2364512}
+shows how to avoid vectorisation in places where it produces only
+overhead with little gain in parallelism, particularly addressing
+problem (2) above.
+
+Flattening remains the only technique to have demonstrated universal
+applicability, and is thus useful as a ``last resort'' for awkward
+programs that admit no other solution.  However, many interesting
+programs only exhibit limited nested parallelism.  Specifically, only
+\textit{regular} nested parallelism, which is significantly easier to
+map to hardware.
+
+Nested parallelism is regular if the amount of parallelism in its
+inner parallel loops is invariant to its outer parallel loops, and
+otherwise \textit{irregular}.  For example, the following Futhark
+expression contains irregular parallelism:
+
+\begin{lstlisting}
+map (\i -> reduce (+) 0 [1...i]) [1...n]
+\end{lstlisting}
+
+While this one does not:
+
+\begin{lstlisting}
+map (\i -> reduce (+) 0 (map (+i) [1...n])) [1...n]
+\end{lstlisting}
+
+In the former program, the inner parallel \lstinline{reduce} operates
+on an array containing \lstinline{i} elements, where \lstinline{i} is
+bound by the function of the \lstinline{map}.  In the latter case, the
+\lstinline{reduce} operates on an array of size \lstinline{n}, where
+\lstinline{n} is bound outside the expression.  The parameter
+\lstinline{i} is still used, but it does not contribute to the size of
+any array, only to their values.  While the Futhark language does
+support irregular nested parallelism, as demonstrated above, the
+current implementation is not able to exploit it.  Should it prove
+necessary, the Futhark compiler could be modified to incorporate the
+flattening algorithm as well, but for this thesis, I have focused on
+developing implementation techniques that are more limited in scope,
+but produce faster code.
+
+The limitation to regular nested parallelism is not as onerous as it
+may seem.  First, many interesting problems are naturally regular.
+Second, we can always \textit{manually} apply the flattening algorithm
+to our program to the degree necessary to remove irregular nested
+parallelism.  This may require manual inlining and thus breaking
+modularity.  Third, many irregular programs can be modified in an
+ad-hoc fashion to become regular.  For example, the irregular program
+shown above can be rewritten to
+
+\begin{lstlisting}
+map (\i -> reduce (+) 0
+           (map (\x -> if x > n then 0 else x) [1...n]))
+    [1...n]
+\end{lstlisting}
+
+
+
+\section{Why a New Language?}
+\label{sec:new-language}
 
 %%% Local Variables:
 %%% mode: latex

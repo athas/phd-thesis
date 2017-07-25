@@ -456,7 +456,7 @@ Another core assumption of our GPU model is that there are only two
 levels of parallelism: we launch a number of groups, and each group
 contains a number of threads.  Recent GPUs support \textit{dynamic
   parallelism}, in which new kernels may be launched by any thread in
-a running kernel, after whcih the thread may wait for completion of
+a running kernel, after which the thread may wait for completion of
 the new kernel instance.  This is an instance of the well-known
 fork-join model of parallelism.
 
@@ -467,7 +467,7 @@ that appear interesting.  Very irregular algorithms, such as graph
 processing, may also be convenient to implement in this fashion.
 
 Unfortunately, dynamic parallelism often suffers from performance
-problems in practise\fixme{cite for this}, and fruitful applications
+problems in practice\fixme{cite for this}, and fruitful applications
 are not as prevalent as might have been expected.  Efficient usage of
 dynamic parallelism centers around collecting the desired new kernel
 launches and merging them together into one launch.  From a functional
@@ -475,7 +475,7 @@ programming point of view, it seems a better strategy to implement
 irregular problems via flattening (either manual or automatic), rather
 than using dynamic parallelism.  For these reasons, dynamic
 parallelism is not part of our GPU model, and is not employed by the
-Futharak compiler.\footnote{Another, more pragmatic reason, is that
+Futhrak compiler.\footnote{Another, more pragmatic, reason is that
   dynamic parallelism is not supported by the OpenCL implementation
   provided by NVIDIA.}
 
@@ -491,6 +491,8 @@ done through local memory.  This is not a restriction with deep
 ramifications--should more efficient intra-group communication
 primitives become available, it would have no great overall impact on
 our compilation strategy.
+
+\section{GPU Implementation of Array Calculus}
 
 %%% Local Variables:
 %%% mode: latex
