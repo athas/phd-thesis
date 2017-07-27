@@ -224,10 +224,11 @@ algorithm.
 
 The problem is that C was carefully designed for a particularly class
 of machines; a machine no longer resembled by modern high-performance
-computers.  Thus, the impedance mismatch between C and hardware
-continues to grow, with little sign of stopping.  This mismatch
-becomes acute when we move away from the comparatively benign world of
-multicore CPUs and into the realm of massively parallel processors.
+computers.  Thus, the \textit{impedance mismatch} between C and
+hardware continues to grow, with little sign of stopping.  This
+mismatch becomes acute when we move away from the comparatively benign
+world of multicore CPUs and into the realm of massively parallel
+processors.
 
 \section{Massively Parallel Machines}
 
@@ -898,7 +899,12 @@ its full generality.  The reason is that it is hard to map arbitrary
 nested parallelism to current parallel hardware, which supports only a
 fixed level of parallelism efficiently (and typically with harsh
 restrictions on the size of each level beyond the first; see
-Chapter~\ref{chap:hardware}).
+Chapter~\ref{chap:hardware}).  This is an example of an impedance
+mismatch between free-form nested parallel program and the real
+hardware we have available to us.  Fortunately, there are ways to
+bridge the divide that follow straightforwardly from the construction
+of data-parallel functional programs in general, and Futhark programs
+in particular.
 
 Guy Blelloch's seminal work on NESL demonstrated how to handle
 arbitrary nested parallelism via \textit{full
@@ -937,9 +943,9 @@ problem (2) above.
 Flattening remains the only technique to have demonstrated universal
 applicability, and is thus useful as a ``last resort'' for awkward
 programs that admit no other solution.  However, many interesting
-programs only exhibit limited nested parallelism.  Specifically, only
-\textit{regular} nested parallelism, which is significantly easier to
-map to hardware.
+programs only exhibit limited nested parallelism.  Specifically, they
+exhibit only \textit{regular} nested parallelism, which is
+significantly easier to map to hardware.
 
 Nested parallelism is regular if the amount of parallelism in its
 inner parallel loops is invariant to its outer parallel loops, and
@@ -971,13 +977,14 @@ developing implementation techniques that are more limited in scope,
 but produce faster code.
 
 The limitation to regular nested parallelism is not as onerous as it
-may seem.  First, many interesting problems are naturally regular.
-Second, we can always \textit{manually} apply the flattening algorithm
-to our program to the degree necessary to remove irregular nested
-parallelism.  This may require manual inlining and thus breaking
-modularity.  Third, many irregular programs can be modified in an
-ad-hoc fashion to become regular.  For example, the irregular program
-shown above can be rewritten to
+may seem.  First, many interesting problems are naturally regular (see
+Chapter~\ref{chap:empirical-validation} for examples).  Second, we can
+always \textit{manually} apply the flattening algorithm to our program
+to the degree necessary to remove irregular nested parallelism.  This
+may require manual inlining and thus breaking modularity.  Third, many
+irregular programs can be modified in an ad-hoc fashion to become
+regular.  For example, the irregular program shown above can be
+rewritten to
 
 \begin{lstlisting}
 map (\i -> reduce (+) 0
@@ -985,10 +992,64 @@ map (\i -> reduce (+) 0
     [1...n]
 \end{lstlisting}
 
+But this method is not mechanical---a unique approach is required
+based on the algorithm in question, in contrast to flattening, which
+is general.
 
+The largest problem with the restriction to only regular parallelism
+is that it inhibits modularity.  Consider a function that computes the
+sum of the first $n$ positive integers for some $n$:
+
+\begin{lstlisting}
+let sum_nats (n: i32): i32 =
+  reduce (+) 0 [1...n]
+\end{lstlisting}
+
+The type of this function is merely \lstinline{i32 -> i32}, and so we
+should be able to map it over an array of type \lstinline{i32}:
+
+\begin{lstlisting}
+map sum_nats [1...100]
+\end{lstlisting}
+
+However, this gives rise to irregular parallelism, because the
+parallelism of the \lstinline{map} inside the definition of
+\lstinline{sum_nats} depends on the integer argument to
+\lstinline{sum_nats}.  This is not a problem that can be detected
+merely by the type of \lstinline{sum_nats}.  It remains future work
+to investigate language mechanisms that allows programmers to reason
+about the regularity of parallelism in a modular fashion.
+
+The restriction to regular parallelism is an artifact of the current
+Futhark implementation, not Futhark as a programming language.
+Therefore, if necessary, an implementation could be constructed that
+avoids this issie by using full flattening.  However, the performance
+advantage of regular nested parallelism still motivates a language
+mechanism for modular reasoning.
 
 \section{Why a New Language?}
 \label{sec:new-language}
+
+Most of the preceding discussion involves concepts and constructs that
+are common to many functional languages.  Indeed, it is frequently
+claimed that pure functional programming makes parallel execution
+trivial.  Why, then, do I propose an entirely new language, rather
+than applying my techniques to existing and reasonably popular
+languages such as Haskell, OCaml, or F\#?  What does Futhark have that
+these languages lack?
+
+The answer lies in the inverse question: what has been excluded from
+Futhark to permit efficient parallel execution?  While all mentioned
+languages contain the essentials for data-parallel programming---bulk
+operations with pure functions---they also contain features and
+promote programming styles that complicates the task of writing a
+compiler capable of generating high-performance code for restricted
+parallel machines.  This is not a task that needs further
+complication.
+
+\subsection{Uniqueness Types}
+
+\subsection{Streaming SOACs}
 
 %%% Local Variables:
 %%% mode: latex
