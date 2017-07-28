@@ -20,12 +20,19 @@
 \usepackage{color}
 \usepackage{fancyvrb}
 \usepackage{semantic}
-
+\usepackage{environ}
+\usepackage{newtxtext}
+\usepackage{newtxmath}
 
 \usepackage[final]{listings}
 % Fix dashes in listings (from
 % https://tex.stackexchange.com/questions/33185/listings-package-changes-hyphens-to-minus-signs
 % )
+
+% Avoid breaking lstlistings environments across pages.
+\BeforeBeginEnvironment{lstlisting}{\vspace{\topskip}\par\noindent\begin{minipage}{\linewidth}}
+\AfterEndEnvironment{lstlisting}{\end{minipage}\par}
+\newenvironment{wrap}{\vspace{\topskip}\par\noindent\begin{minipage}{\linewidth}}{\end{minipage}\par}
 
 \renewcommand{\ttdefault}{pcr} % Courier instead of Computer Modern
 
