@@ -19,20 +19,22 @@ This thesis describes the design and implementation of
 Futhark is a small programming language that is superficially similar
 to known functional languages such as OCaml and Haskell, but with
 restrictions and extensions meant to permit compilation into efficient
-parallel code.  While my research has produced techniques that could
-be applied in other settings, Futhark has been the overarching context
-for my work.  Apart from serving as a vehicle for compiler research,
-Futhark is also a programming language that is useful in practice for
-high-performance parallel programming.
+parallel code.  While this thesis contains techniques that could be
+applied in other settings, Futhark has been the overarching context
+for my work.  We demonstrate the applicability and efficiency of the
+techniques by their application in the Futhark compiler, and the
+performance of the resulting code.  Apart from serving as a vehicle
+for compiler research, Futhark is also a programming language that is
+useful in practice for high-performance parallel programming.
 
 The remainder of this introductory chapter introduces the challenges
-posed by modern high-performance parallel computers.  I will discuss
+posed by modern high-performance parallel computers.  We will discuss
 that while conventional imperative languages once benefited greatly
 from their relatively close similarity to the hardware, the divide
 behind their conceptual model and the realities of hardware is now
-ever widening.  I will show the advantages of a high-level explicitly
+ever widening.  We will show the advantages of a high-level explicitly
 parallel programming model, both for expressing parallel algorithms,
-as well as for compilation to efficient low-level code.  I will
+as well as for compilation to efficient low-level code.  We will
 discuss how techniques considered \textit{heroic effort} in a compiler
 for an imperative language become tractable when applied in the
 functional setting.
@@ -40,7 +42,7 @@ functional setting.
 Chapter~\ref{chap:calculus} introduces a formal array calculus that
 serves as inspiration for Futhark.  Various rewrite rules are shown
 and justified.  Chapter~\ref{chap:hardware} discusses a simplified but
-performance-faithful design of contemporary GPU hardware, and shows
+performance-faithful model of contemporary GPU hardware, and shows
 how the primitive combinators of the previous chapter can be mapped
 efficiently to low-level code.
 
@@ -301,7 +303,7 @@ viable.  I will introduce a high-level hardware-agnostic programming
 model, and describe its efficient mapping to GPUs.  The implication is
 that if the model can be mapped efficiently to a platform as
 restricted as GPUs, it can probably also be mapped to other parallel
-platforms, such as multicore CPUs or FPGAs.
+platforms, such as multicore CPUs, clusters, or maybe even FPGAs.
 
 \subsection{Basic Properties of GPUs}
 
@@ -383,18 +385,26 @@ required to execute in exactly the order written by the programmer,
 and the C compiler must perform significant work to figure out which
 of the sequencing restrictions are essential, and which are
 accidental.  In the following, I will introduce the \textit{Futhark
-  programming language}, a purely functional array language that has
-been developed as part of my PhD work\footnote{Futhark has its roots
-  in an earlier language, $\mathcal{L}_0$, which I helped develop
-  during my master's studies.}.
+  programming language}, a purely functional ML-like array language
+that has been developed as part of my PhD work\footnote{Futhark has
+  its roots in an earlier language, $\mathcal{L}_0$, which I helped
+  develop during my master's studies.}.  Futhark is statically typed
+and eagerly evaluated.  While the full language supports both
+parametric polymorphism and an advanced higher-order module system
+inspired by Standard ML~\cite{Milner:1997:DSM:549659}, but for this
+thesis we shall restrict ourselves to the simple monomorphic subset.
+Futhark is not a general-purpose programming language. Instead,
+Futhark is intended for relatively small and simple high-performance
+programs, which can form the computational core of a larger program
+written in a conventional language.
 
-A reasonable high-level programming model for modern computers is one
-based on \textit{bulk operations}, where we program in terms of
-large-scale transformations of collections of data.  Suppose we wish
-to increment every element in a vector by $2$.  The functional
+A reasonable high-level programming model for parallel computers is
+one based on \textit{bulk operations}, where we program in terms of
+transformations on entire collections of data.  Suppose we wish to
+increment every element in a vector by $2$.  The functional
 programming tradition comes with an established vocabulary of such
 bulk operations which we can use as inspiration.  For this task, we
-can use the \lstinline{map} construct, which takes a function
+use the \lstinline{map} construct, which takes a function
 $\alpha~\rightarrow~\beta$ and an array of values of type $\alpha$,
 and produces a collection of values of type $\beta$:
 
@@ -1044,12 +1054,256 @@ languages contain the essentials for data-parallel programming---bulk
 operations with pure functions---they also contain features and
 promote programming styles that complicates the task of writing a
 compiler capable of generating high-performance code for restricted
-parallel machines.  This is not a task that needs further
-complication.
+parallel machines, such as GPUs.  This is not a task that needs
+further complication.  The following discusses common problematic
+traits, and how Futhark circumvents them.  We do not claim that these
+problems cannot be solved, merely that they provide significant
+challenges that would have distracted from the core goal our work,
+which is developing compilation techniques for programs written as
+compositions of bulk parallel operators.
+
+\begin{description}
+\item[Emphasis on recursion:] Recursion is an inherently sequential
+  process, which is then immediately of less use in a parallel
+  language.  However, even for those cases where we do desire
+  sequential loops, free-form recursive functions are challenging to
+  implement efficiently.
+
+  Threads on a GPU do not have a stack in the conventional sense.
+  While stacks can be emulated (slowly), hardware limitations force a
+  small, static size.  For example, a GPU may need $100,000$ parallel
+  threads to be saturated.  On a GPU with 8GiB of memory (not
+  insignificant for the current generation), each thread could at most
+  have a stack size of 83KiB---and that's if we use all available
+  memory just for stacks.  Recursion inside code running on a GPU is
+  thus a bad idea.
+
+  A language could conceivably be defined where the only form of
+  recursion permitted is tail-recursion, which does not suffer from
+  this problem.  In the interest of expedience, Futhark entirely bans
+  ordinary recursive functions, and provides special syntax (the
+  \lstinline{loop} construct) for the equivalent of tail recursion.
+  In the future, this restriction could be loosened to support
+  (mutually) tail recursive functions.
+
+  Another approach, which is in practice what is done by the
+  flattening transformation, is to interchange the recursion outside
+  of the parallel sections.  This comes at a significant cost in both
+  memory usage and expensive control flow.
+
+\item[Sum types and recursive types:] Sum types by themselves are only
+  problematic in that they necessarily imply control flow to handle
+  different cases.  While control flow is not hard to map to a GPU,
+  branching can be expensive.  Nevertheless, the use of a sum type is
+  an explicit choice made by the programmer, presumably with an
+  understanding of the costs involved, and so are likely to be
+  supported by Futhark in the future.
+
+  Recursive types (such as linked lists) usually imply pointer-chasing
+  at runtime, which fits poorly with the very regular access patterns
+  require to obtain peak GPU performance (see
+  Section~\ref{sec:gpu-coalesced}).  Constructing complex data types
+  usually requires allocation, which is also generally not possible on
+  a GPU.  While it has been shown that these problems can be solved in
+  some cases, for example by region inference in the Harland
+  programming language~\cite{holk2014region}, it is not clear that the
+  performance of the resulting code is good.  As Futhark is a language
+  primarily focused on obtaining good performance, we have left out
+  features that---while \textit{possible} to map to GPU---should
+  probably not be used in a program we wish to be fast.
+
+\item[Lazy evaluation:] Lazy evaluation is essentially shared state
+  plus runtime effects---two of the most difficult things to map to
+  GPUs.  As allocation is not generally possible on the GPU, it is a
+  serious problem that evaluation of any term could potentially
+  require allocating an arbitrary amount of space.  It is telling that
+  data-parallel extensions to Haskell, such as
+  Accelerate~\cite{mcdonell2013optimising} and Data Parallel
+  Haskell~\cite{Chak06DPH}, are both strict, even though Haskell
+  itself heavily emphasises laziness.
+
+\item[Side effects:] While all functional languages emphasise
+  programming with pure functions, most languages in the ML family
+  tend to permit essentially unrestricted side effects.  This is
+  traditionally not a problem when only ``benign effects'' are used.
+  For example, a function could internally use mutable references for
+  performance reasons, such as to implement memoisation.  As long as
+  the effects are not visible to callers of the function, the
+  programmer can still perform black-box reasoning as if the function
+  were pure.
+
+  However, a compiler does not have this freedom.  Even if we are
+  willing to trust some annotation that an function implemented with
+  effects really behaves as an extensionally pure function, this does
+  not extend to its definition.  A compiler cannot treat a function as
+  a black box, but may need to perform significant transformations on
+  its definition to produce efficient code.
+
+  As a result, Futhark permits no side effects, except for
+  nontermination and other error cases.  To address some of the
+  performance issues associated with expressing efficient sequential
+  algorithms in a pure functional language, Futhark supports
+  \textit{uniqueness types}, which are used to permit in-place updates
+  of arrays under some circumstances.  These are discussed in
+  Section~\ref{sec:uniqueness-types}.
+
+\item[First class functions:] GPUs do not support function pointers
+  (related to the absence of a stack), which immediately renders most
+  conventional implementation techniques for first-class functions
+  unviable.  We can use
+  \textit{defunctionalisation}~\cite{reynolds1972definitional}, where
+  every function term in the program is identified with a unique
+  integer, and a large branch-statement is used to select the
+  corresponding function a runtime.  This is the approach taken by
+  Harland, but the heavy use of branching renders it inefficient on
+  GPUs.  In particular, this approach has the unfortunate consequence
+  that whenever the programmer adds a function, all other function
+  calls will become slower (except those that can be statically
+  resolved).
+
+  While fully first class functions are not viable, limited support
+  for higher-order functions is possible.  Whenever we can statically
+  determine the form of the functional arguments to a function, we can
+  generate a specialised version of the function at compile-time,
+  where the concrete functional argument is embedded.  This is not yet
+  implemented in Futhark, and so user-defined higher-order functions
+  are not supported.  It is, however, possible to use the higher-order
+  module system to imitate higher-order functions, albeit at some cost
+  in boilerplate.  An example is shown on Figure~\ref{fig:faking-hof}.
+  As the module system is outside the scope of this thesis, we shall
+  not delve further on the merits and demerits of this approach.
+\end{description}
+
+\begin{figure}
+  \centering
+\begin{lstlisting}
+-- A parametric module (functor) taking as argument
+-- a module, and producing a module.
+module map2(fm: { type c_t -- "closure" type
+                  type x_t -- element type
+                  val f: c_t -> x_t -> x_t }) = {
+  let g [n] (c: fm.c_t) (xs: [n]fm.x_t): [n]fm.x_t =
+    map (\x -> fm.f c (fm.f c x)) xs
+}
+
+module increment_twice = map2 {
+  type c_t = i32
+  type x_t = i32
+  let f (c: i32) (x: i32) = x + c
+}
+
+module scale_twice = map2 {
+  type c_t = f64
+  type x_t = i32
+  let f (c: f64) (x: i32) = i32 (f64 x * c)
+}
+
+let foo = increment_twice.g 2 [1...5]
+-- foo == [5i32, 6i32, 7i32, 8i32, 9i32]
+let bar = scale_twice.g f64.pi [1...5]
+-- bar == [9i32, 18i32, 28i32, 37i32, 47i32]
+\end{lstlisting}
+  \caption{Using higher-order modules to imitate higher order
+    functions in Futhark.  The \lstinline{map2} parametric module
+    produces a module containing a function \lstinline{g}, which
+    applies a provided function twice.  The parameter of type
+    \lstinline{c_t} is used to emulate a closure environment.}
+  \label{fig:faking-hof}
+\end{figure}
+
+The primary motivation behind Futhark was to create a language whose
+efficient implementation was not hindered by complicated features.
+And for the most part, Futhark resembles a least-common-denominator
+functional language.  However, we have taken the opportunity to add
+various language features specialised for the task of high-performance
+parallel array programming.  In particular, the fact that Futhark is
+not intended for constructing advanced user-defined data types, but
+instead expects programmers to express their program in terms of
+arrays, allows us to add specialised constructs and notation to aid in
+array programming.  We have already seen an example in the form of
+size parameters, which allows the programmer to express size
+constraints on functions parameters.  For example, the dot product
+function on Figure~\ref{fig:futhark-dotprod} requires that the two
+input arrays have the same length, while the matrix multiplication on
+Figure~\ref{fig:futhark-matmult} specifies the usual size constraints
+on matrix multiplication.
+
+\begin{figure}
+  \centering
+  \begin{subfigure}{1\textwidth}
+    \begin{lstlisting}
+let dotprod [n] (xs: [n]i32) (ys: [n]i32): i32 =
+  reduce (+) 0 (map (+) (zip xs ys))
+\end{lstlisting}
+    \caption{Dot product of integer vectors in Futhark.}
+    \label{fig:futhark-dotprod}
+  \end{subfigure}
+\par\bigskip
+  \begin{subfigure}{1\textwidth}
+\begin{lstlisting}
+let matmul [n][m][p]
+    (xss: [n][m]i32) (yss: [m][p]i32): [n][p]i32 =
+  map (\xs -> map (dotprod xs) (transpose yss)) xss
+\end{lstlisting}
+    \caption{Multiplication of integer matrices in Futhark.}
+    \label{fig:futhark-matmult}
+  \end{subfigure}
+
+  \caption{Two examples of using size parameters to encode size constraints on Futhark functions.  Presently the constraints are checked at run-time, not compile-time, and thus serve more as documentation than a safety mechanism.}
+  \label{fig:futhark-size-parameters}
+\end{figure}
+
+Futhark also supports two somewhat more exotic features, both of which
+are introduced for performance reasons.  These are discussed below.
 
 \subsection{Uniqueness Types}
+\label{sec:uniqueness-types}
+
+In-place updates are supported in Futhark through a type-system
+feature called \textit{uniqueness types}, which is similar to, but
+simpler than the system found in
+Clean~\cite{clean-uniqueness-types,barendsen1996uniqueness}, where the
+primary motivation is modeling IO.  Our use is reminiscent of the
+ownership types of Rust~\cite{rust}.  Alongside a relatively simple
+(conservative) aliasing analysis in the type checker, this approach is
+sufficient to determine at compile time whether an in-place
+modification is safe, and signal an error otherwise.  We introduce
+uniqueness types through the example below, which shows a function
+declaration: {\small
+\begin{lstlisting}
+let modify (n: int) (a: @*@[n]int) (i: int) (x: [n]int): @*@[n]int =
+  a with [i] <- (a[i] + x[i])
+\end{lstlisting}
+} A call \lstinline{modify n a i x} returns \lstinline{a}, but where
+\lstinline{a[i]} has been increased by \lstinline{x[i]}.  In the
+parameter declaration \lstinline{a: *[n]int}, the asterisk
+(\lstinline{*}) means that \lstinline{modify} has been given
+``ownership'' of the array \lstinline{a}. The caller of
+\lstinline{modify} will never reference array \lstinline{a} after the
+call.  As a consequence, \lstinline{modify} can change the element at
+index \lstinline{i} in place, without first copying the array;
+i.e. \lstinline{modify} is free to do an in-place modification.
+Further, the result of \lstinline{modify} is also unique---the
+\lstinline{*} in the return type declares that the function will not
+share elements with any of the non-unique parameters (it might share
+elements with \lstinline{a} but not with \lstinline{x}).
+%other visible variables,
+Finally, the call \lstinline!modify n a i x! is valid if neither
+\lstinline{a} nor any variable that \textit{aliases} \lstinline{a} is
+used on any execution path following the call to \lstinline{modify}.
+
+
+We say that an array is \textit{consumed} when it is the source of an
+in-place update or is passed as a unique parameter to a function call;
+for instance, \lstinline{a} is consumed in the expression \lstinline{a with [i] <- x}. Past the consumption point, neither \lstinline{a}
+nor its aliases may be used again.  From an implementation
+perspective, this contract allows type checking to rely on simple
+intra-procedural analysis, both in the callee and in the caller, as
+described in the following sections.
+
 
 \subsection{Streaming SOACs}
+\label{sec:streaming-soacs}
 
 %%% Local Variables:
 %%% mode: latex
