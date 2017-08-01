@@ -1,0 +1,625 @@
+\newcommand{\ft}{\phi}
+\newcommand{\fts}{\varphi}
+\newcommand{\tty}{\rho}
+\newcommand{\sembox}[1]{\hfill \normalfont \mbox{\fbox{\(#1\)}}}
+\newcommand{\sempart}[2]{\textrm{\textit{#1 \sembox{#2}}}}
+\newcommand{\vdp}{\vd_\textrm{p}}
+\newcommand{\vdP}{\vd_\textrm{P}}
+\newcommand{\vda}{\vd_\textrm{a}}
+\newcommand{\fracc}[2]{\begin{eqnarray} \frac{\begin{array}{c} #1
+    \end{array}}{\begin{array}{c} #2 \end{array}} \end{eqnarray}}
+\newcommand{\fraccn}[2]{\refstepcounter{equation}\mbox{$\frac{\begin{array}{c} #1 \end{array}}{\begin{array}{c} #2 \end{array}}$}~(\arabic{equation})}
+\newcommand{\fraccc}[2]{\mbox{$\frac{\begin{array}{c} #1 \end{array}}{\begin{array}{c} #2 \end{array}}$}}
+\newcommand{\fn}[3]{\texttt{\textbackslash}~#1~\Par{#2}\Rightarrow #3}
+\newcommand{\ubar}[1]{\underline{#1}}
+\newcommand{\utau}{\ubar{\tau}}
+\newcommand{\usigma}{\ubar{\sigma}}
+\newcommand{\Fun}[4]{\texttt{let}~#1~#2\Par{#3}\mbox{\texttt{~=~}}#4}
+\newcommand{\Fn}[3]{\texttt{\textbackslash}}
+
+\chapter{Overview and Uniqueness Types}
+
+Whenever $z$ is an object of some kind, we write $\bar{z}$ to range
+over sequences of objects of this kind. When we want to be explicit
+about the size of a sequence $\bar{z} = z_0,\cdots,z_{(n-1)}$, we
+often write it on the form $\nseq{z}{n}$ and we write $z,\bar{z}$ to
+denote the sequence $z,z_0,\cdots,z_{(n-1)}$.  We will write
+$\text{d}(\tau)$ to indicate the \emph{rank} (number of dimensions) of
+a type $\tau$.  We may also write $\text{d}(v)$, where $v$ is not
+itself a type, but something which {\em has} a type, such as a
+variable.
+
+
+\begin{figure*}[bt]
+
+  $$
+  \begin{array}{lrlr}
+    t & ::= & \mbox{\textbf{t} ~ $|$ ~ \texttt{[]$t$} ~ $|$ ~ \texttt{[$v$]$t$}} & \mbox{(Scalar/array type)} \\
+    ft & ::= & \mbox{$t$ ~ $|$ ~ \texttt{*}$t$} & \mbox{(Nonunique/Unique type)} \\
+    p & ::= & (v : t) & \mbox{(Let or lambda-bound name)} \\
+    fp & ::= & (v : dt) & \mbox{(Function-bound name)} \\
+    \\
+    k & ::= & \mbox{\textbf{x}} & \mbox{(Constant )}\\
+    l & ::= & \mbox{\texttt{(\textbackslash $p_{0} \ldots p_{n}$:$dt$ -> $b$)}} ~~& ~~\mbox{(Anonymous Function)} \\
+    fun & ::= & \mbox{\lstinline[mathescape]!let\ $v$\ $fp_{0} \ldots fp_{n}$:$dt$ =\ $b$!} ~~& ~~\mbox{(Named function)} \\
+    prog & ::= & \mbox{$\epsilon$ ~ $|$ ~ $fun$ ~ $prog$} & \mbox{(Program)} \\
+    \\
+    b & ::= & e & \mbox{(Expression)} \\
+      & | & \mbox{\lstinline[mathescape]!let ($p_{1},\ldots,p_{n}$) =\ $e$ in\ $b$!} & \mbox{(Let binding)}\\
+    e & ::= & k & \mbox{(Constant)} \\
+      & | & v & \mbox{(Variable)} \\
+      & | & \mbox{\texttt{($v_{1},\ldots,v_{n}$)}} & \mbox{($n$-tuple)}\\
+      & | & v \odot{} v & \mbox{(Scalar binary operator)}\\
+      & | & \mbox{\lstinline[mathescape]!if\ $v$ then\ $b$ else\ $b$!} & \mbox{(Branch)} \\
+      & | & \mbox{\texttt{$v$[$v_{1},\ldots,v_{n}$]}} & \mbox{(Array indexing)}\\
+      & | & \mbox{\lstinline[mathescape]!$v$ with [$v_{1},\ldots,v_{n}$] <-\ $v$!} &\mbox{(In-place update)}\\
+      & | & \mbox{\lstinline[mathescape]!loop ($p_{1},\ldots,p_{n}$)=($v_{1},\ldots,v_{n}$)\ for\ $v$ <\ $v$ do\ $b$!} &  \mbox{(Loop)}\\
+      & | & \mbox{\texttt{$v$ $v_{1}$ \ldots{} $v_{n}$}} &  \mbox{(Function call)}\\
+      & | & op & \mbox{(Other operation)} \\
+    \\
+    op & ::= \\
+      & | & \mbox{\lstinline{size} $v$} & \mbox{(Size of an array)}\\
+      & | & \mbox{\lstinline{iota} $v$} & \mbox{([0,$\ldots$,$v-1$])}\\
+      & | & \mbox{\lstinline{replicate} $v_{n}$ $v$} &  \mbox{([$v,\ldots,v$] of size $v_{n}$)}\\
+      & | & \mbox{\lstinline{rearrange} ($k_{1},\ldots,k_{n}$) $v$} &  \mbox{(Rearrange dimensions)}\\
+      & | & \mbox{\lstinline{reshape} ($v_{1},\ldots,v_{n}$) $v$} &  \mbox{(Reshape array)}\\
+      & | & \mbox{\lstinline{map} $l$ $v_{1}$ \ldots{} $v_{n}$} \\
+      & | & \mbox{\lstinline{reduce} $l$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_n$} \\
+      & | & \mbox{\lstinline{scan} $l$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_n$} \\
+      & | & \mbox{\lstinline{stream_seq} $l$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_m$} \\
+      & | & \mbox{\lstinline!stream_red! $l_{1}$ $l_{2}$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_m$}
+  \end{array}
+  $$
+  \caption{Grammar for the core Futhark IR.  Some compiler stages may
+    impose additional constraints on the structure of ASTs, in
+    particular by requiring size annotations to be present, or banning
+    certain operations.  The definition of $op$ in particular may
+    differ between stages.  Some constructs, such as \lstinline{while}
+    loops, have been elided for simplicity.  The elided constructs
+    would have no influence on the development of the thesis.  }
+  \label{fig:core-futhark-syntax}
+\end{figure*}
+
+For giving concise types to operators, we use a notion of \emph{extended
+types} that supports polymorphism in types and for which arguments to
+functions may themselves be functions:
+
+\begin{tabular}{lrl}
+$\utau$ & $::=$ & $t$ $~|~$ $\alpha$ $~|~$ $[\utau]$ $~|~$ $(\utau_1, \ldots, \utau_n)$ $~|~$ $\utau_1 \rightarrow \utau_2$ \\
+$\usigma$ & $::=$ & $\forall\bar{\alpha}.\utau$
+\end{tabular}
+
+\noindent Extended types ($\ubar{\tau}$) and extended type schemes
+($\ubar{\sigma}$) are used only for the treatment of operators and we
+shall be implicit about converting types and type schemes to and from
+their extended counter parts. A \emph{substitution} ($S$) is a mapping
+from type variables to extended types. Applying a substitution $S$ to
+some object $B$, written $S(B)$, has the effect of simultaneously
+applying $S$ to type variables in $B$ (being the identity outside its
+domain). An extended type $\utau'$ is \emph{an instance of} an extended
+type scheme $\usigma = \forall \vec{\alpha}.\utau$, written $\usigma
+\geq \utau'$, if there exists a substitution $S$ such that $S(\utau) =
+\utau'$.
+
+Type schemes for operators, including a representative subset of the
+SOAC operators, are given in Figure~\ref{fig:soacType}.  The SOACs of
+the intermediate language (e.g., \lstinline{map}) are the
+tuple-of-array version of the user language SOACs. The SOACs of the
+intermediate language receive an arbitrary number of array arguments
+and produce a tuple of arrays. The semantics of a SOAC operator can be
+intuitively understood as a composition between \texttt{unzip}, the
+user-language SOAC (e.g., \texttt{map}), and \texttt{zip}, where the
+unnamed function is suitably modified to work with the flat sequence
+of array arguments.
+
+\begin{figure}[hbt]
+\begin{tabular}{lcl}
+\emph{op} & & \textrm{TySch}(\emph{op}) \\ \hline
+{\lstinline!size!} & :: & $\forall\alpha.(\texttt{i32},\alpha) \rightarrow \texttt{i32}$ \\
+{\lstinline!iota!} & :: & $\texttt{i32} \rightarrow []\texttt{i32}$ \\
+{\lstinline!replicate!} & :: & $\forall\alpha.(\texttt{i32},\alpha) \rightarrow []\alpha$ \\
+{\lstinline!map!} & :: & $\forall\bar{\alpha}^{(n)}\bar{\beta}^{(m)}. ((\bar{\alpha}^{(n)}) \rightarrow (\bar{\beta}^{(m)}), []\alpha_1,\ldots,[]\alpha_n)$ \\
+           & & ~~~ $\rightarrow ([]\beta_1,\ldots,[]\beta_m)$ \\
+{\lstinline!reduce!} & :: & $\forall\bar{\alpha}^{(n)}.(\ft,\bar{\alpha}^{(n)},[]\alpha_1,\ldots,[]\alpha_n) \rightarrow (\bar{\alpha}^{(n)})$ \\
+& & ~~~ where ~ $\ft = (\bar{\alpha}^{(n)},\bar{\alpha}^{(n)}) \rightarrow (\bar{\alpha}^{(n)})$ \\
+
+{\lstinline!scan!} & :: & $\forall\bar{\alpha}^{(n)}.(\ft,\bar{\alpha}^{(n)},[]\alpha_1,\ldots,[]\alpha_n) \rightarrow (\bar{\alpha}^{(n)})$ \\
+& & ~~~ where ~ $\ft = (\bar{\alpha}^{(n)},\bar{\alpha}^{(n)}) \rightarrow ([]\alpha_1,\ldots,[]\alpha_m)$ \\
+
+{\lstinline!filter!} & :: & $\forall\bar{\alpha}^{(n)}.(\ft,[]\alpha_1,\ldots,[]\alpha_n) \rightarrow ([]\alpha_1,\ldots,[]\alpha_n)$ \\
+& & ~~~ where ~ $\ft = (\bar{\alpha}^{(n)}) \rightarrow \texttt{bool}$
+\end{tabular}
+\caption{Size-agnostic type schemes for operators, including various SOACs.}
+\label{fig:soacType}
+\end{figure}
+
+\begin{figure}[bt]
+  \begin{minipage}[t]{0.45\linewidth}
+\sempart{Patterns}{\vdp p : \rho}
+
+\fracc{}{\vdp (x_1: \tau_1, \cdots, x_n: \tau_n) : \{\tau_1, \cdots, \tau_n\}}
+
+\sempart{Operator arguments}{\vda a : \tau / \ft}
+
+\fracc{}{\Gamma \vda x : \Gamma(x)}
+
+\fracc{\vdp p : \rho \sp \Gamma,p \vd e : \rho'}{\Gamma \vda \fn{\rho'}{p}{e}: \rho \rightarrow \rho'}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.45\linewidth}
+\sempart{Programs}{\Gamma \vdP P : \tty}
+
+\fracc{\vdp p : \tty_1 \sp \Gamma,p \vd e : \tty_2 \\
+\Gamma(g) = \tty_1 \rightarrow \tty_2  \sp  \Gamma \vdP P : \tty}
+{\Gamma \vdP \Fun{\tty_2}{g}{p}{e} ; P : \tty}
+
+\fracc{\Gamma \vd e : \tty}{\Gamma \vdP e : \tty}
+\end{minipage}
+
+\vspace{2ex}
+
+\sempart{Expressions}{\Gamma \vd e : \rho}
+\fracc{}{\Gamma \vd (x_1,\cdots,x_n) : (\Gamma(x_1),\cdots,\Gamma(x_n))}
+
+\fracc{\Gamma(y) = [\tau] \sp \Gamma(s) = \texttt{int} \sp \Gamma,x:\tau \vd e : \rho}
+{\Gamma \vd \Let{x:\tau}{y[s]}{e} : \rho}
+
+\fracc{\textrm{ConstType}(\emph{ct}) = \tau \sp \Gamma, x:\tau \vd e : \rho}{\Gamma \vd \Let{x:\tau}{\emph{ct}}{e} : \rho}
+
+\fracc{\Gamma \vda a_i : \utau_i \sp i = [0;n[ \\
+\textrm{TySch}(\emph{op}) \geq (\bar{\utau}^{(n)}) \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vd e : \rho'}
+{\Gamma \vd \Let{p}{\emph{op}(\bar{a}^{(n)})}{e} : \rho'}
+
+\fracc{\Gamma(x_i) = \tau_i \sp i = [0;n[ \\
+\Gamma(g) = (\bar{\tau}^{(n)}) \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vd e : \rho'}
+{\Gamma \vd \Let{p}{g(\bar{x}^{(n)})}{e} : \rho'}
+
+\fracc{\Gamma(s) = \texttt{bool} \sp \Gamma \vd e_1 : \rho \sp \Gamma \vd e_2 : \rho \\
+\vdp p : \rho \sp \Gamma,p \vd e : \rho'}
+{\Gamma \vd \Let{p}{\If{s}{e_1}{e_2}}{e} : \rho'}
+
+\caption{Typing rules for Futhark's core IR.}
+\label{fig:srcTypeRules}
+\end{figure}
+
+\section{Size Analysis}
+
+
+\section{Checking Uniqueness Types}
+
+\subsection{Alias Analysis}
+
+\newcommand{\expAliases}[3]{#1 \vdash #2 \Rightarrow #3}
+\newcommand{\aliases}[1]{\textrm{aliases}(#1)}
+\newcommand{\seqOccurences}[3]{#1 \gg #2 : #3}
+
+We perform alias analysis on a program that we assume to be otherwise
+type-correct.  Our presentation uses an inference rule-based approach
+%similar to the one usually used for type systems.
+in which the central judgment takes the form %as follows:
+$\expAliases{\Sigma}{e}{\langle \sigma_{1}, \ldots, \sigma_{n} \rangle}$, which
+asserts that, within the context $\Sigma$, the
+expression $e$ produces $n$ values, where value number $i$ has the
+\textit{alias set} $\sigma_{i}$.  An alias set is a subset of the
+variable names in scope, and indicates which variables an array value
+(or variable) may share elements with.
+%(Alias sets for non-array variables are meaningless in this context).
+The context $\Sigma$ maps variables in scope
+to their aliasing sets.
+
+\begin{figure}
+\[
+\boxed{
+\expAliases{\Sigma}{e}{\langle \sigma_{1}, \ldots, \sigma_{n} \rangle}
+}
+\]
+
+\begin{equation*}
+\inference{
+}{
+  \expAliases{\Sigma}{v}{\langle \{ v \} \cup \Sigma(v) \rangle}
+}
+\tagsc{Alias-Var}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+}{
+  \expAliases{\Sigma}{k}{\langle \emptyset \rangle}
+}
+\tagsc{Alias-Const}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+}{
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!map($l$, $\nseq{v}{n}$)!}}
+  {\langle \nseq{\emptyset}{n} \rangle}
+}
+\tagsc{Alias-Map}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  \expAliases{\Sigma}{e_{2}}{\langle s^{2}_{1}, \ldots, s^{2}_{n}\rangle}
+  &
+  \expAliases{\Sigma}{e_{3}}{\langle s^{3}_{1}, \ldots, s^{3}_{n}\rangle}
+}{
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!if\ $v_{1}$ then\ $e_{2}$ else\ $e_{3}$!}}
+  {\langle s^{2}_{1} \cup s^{3}_{1}, \ldots, s^{2}_{n} \cup s^{3}_{n}\rangle}
+}
+\tagsc{Alias-If}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  \expAliases{\Sigma}{e_{1}}{\langle \nseq{\sigma}{n} \rangle}
+  \\
+  \expAliases{\Sigma, p_{i} \mapsto \sigma_{i}}{e_{2}}{\langle \nseq{\sigma'}{n} \rangle}
+}{
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!let ($\nseq{p}{n}$) = $e_{1}$ in $e_{2}$!}}
+  {\langle \nseq{\sigma'}{n} \rangle \setminus \{\nseq{p}{n}\}}
+}
+\tagsc{Alias-LetPat}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  \textrm{$v$ is of rank $n$}
+}{
+  \expAliases{\Sigma}{\textsf{$v$[$\nseq{v}{n}$]}}{\langle \emptyset \rangle}
+}
+\tagsc{Alias-IndexArray}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  \textrm{$v$ is of rank $>n$}
+}{
+  \expAliases{\Sigma}{\textsf{$v$[$\nseq{v}{n}$]}}{\langle \{ v \} \cup \Sigma(v) \rangle}
+}
+\tagsc{Alias-SliceArray}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  \expAliases{\Sigma}{v_{1}}{\langle \sigma \rangle}
+  \\
+  \expAliases{\Sigma, v_{1} \mapsto \sigma }{e_{3}}{\langle \sigma' \rangle}
+}{
+\expAliases{\Sigma}
+{\bfrac{\text{\lstinline[mathescape]!loop ($p_{1}$ = $v_{1}$)!}}
+  {\text{\lstinline[mathescape]! for\ $p_{2}$ <\ $v_{2}$ do\ $e_{3}$!}}}
+{\langle \sigma' \setminus \{p_{1} \rangle\}}
+}\tagsc{Alias-DoLoop}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+}{
+\expAliases{\Sigma}{
+  \text{\lstinline[mathescape]!$v_{a}$ with [$\nseq{v}{n}$] <- $v_{v}$!}
+}{\langle \Sigma(v_{a}) \rangle}
+}
+\tagsc{Alias-Update}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  \textrm{lookup}_{\textrm{fun}}(v_{f}) = \langle t_{r}, dt_{1}, \ldots, dt_{n} \rangle
+  \\
+  \expAliases{\Sigma}{v_{i}}{\langle \sigma_{i} \rangle}
+  \\
+  \sigma = \bigcup_{\textrm{$dt_{i}$ is not of form \textsf{*}$t$}} \sigma_{i}
+}{
+  \expAliases{\Sigma}{\textsf{$v_{f}$ $v_{1}$ \ldots{} $v_{n}$}}
+  {\langle \sigma \rangle}
+}\tagsc{Alias-Apply-Nonunique}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  \textrm{lookup}_{\textrm{fun}}(v_{f}) = \langle \textsf{*} t_{r}, dt_{1}, \ldots, dt_{n} \rangle
+}{
+  \expAliases{\Sigma}{\textsf{$v_{f}$ $v_{1}$ \ldots{} $v_{n}$}}
+  {\langle \emptyset \rangle}
+}\tagsc{Alias-Apply-Unique}
+\end{equation*}
+
+\begin{equation*}
+\boxed{
+\seqOccurences{\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}{\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}{\langle\mathcal{C}_{3},\mathcal{O}_{3}\rangle}
+}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  (\mathcal{O}_{2} \cup \mathcal{C}_{2}) \cap \mathcal{C}_{1} = \emptyset
+}{
+  \seqOccurences
+  {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
+  {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
+  {\langle\mathcal{C}_{1}\cup\mathcal{C}_{2},\mathcal{O}_{1}\cup\mathcal{O}_{2}\rangle}
+}\tagsc{Occurence-Seq}
+\end{equation*}
+\caption{Aliasing rules.}
+\label{fig:aliasing-rules}
+\end{figure}
+
+The aliasing rules are listed in Figure~\ref{fig:aliasing-rules},
+although for space reasons, some are left out.  The
+\textsc{Alias-Var}-rule defines the aliases of a variable expression
+to be the alias set of the variable joined by the name of the variable
+itself - this is because $v \notin \Sigma(v)$, as can be seen by
+\textsc{Alias-LetPat}.  Alias sets for values
+produced by SOACs such as \lstinline{map} are empty.  We
+can imagine the arrays produced as \textit{fresh}, although the
+compiler is of course free to reuse existing memory if it can do so
+safely.  The \textsc{Alias-IndexArray} rule tells us that a scalar
+read from an array does not alias its origin array, but
+\textsc{Alias-SliceArray} dictates that an array slice does,
+which fits the implementation intuition.
+% about how such operations might be implemented.
+
+
+The most interesting aliasing rules are the ones for function calls
+(\textsc{Alias-Apply-Nonunique} and \textsc{Alias-Apply-Unique}).
+Since our alias analysis is intra-procedural, we are forced to be
+conservative.  There are two rules, corresponding to functions
+returning unique and non-unique arrays, respectively. When the result
+is unique the alias set is empty, otherwise the result conservatively
+aliases all non-unique parameters.
+
+\subsection{In-Place Update Checking}
+
+\newcommand{\inPlaceSafe}[3]{#1\ \rhd \langle #2, #3 \rangle}
+\newcommand{\consumedOK}[3]{#1 \vdash #2 \triangle #3}
+
+In our implementation, alias computation and in-place update checking
+is performed at the same time, but is split here for expository
+purposes.  Let $\aliases{v}$ the alias set of the variable $v$.  We
+denote by $\mathcal{O}$ the set of the variables \textit{observed}
+(used) in expression $e$, and by $\mathcal{C}$ the set of variables
+\textit{consumed} through function calls and in-place updates.
+Together, the pair $\langle\mathcal{C},\mathcal{O}\rangle$ is called
+an \textit{occurrence trace}.
+
+Figure~\ref{fig:aliasing-rules} defines a \textit{sequencing} judgment
+between two occurrence traces, which takes the form $\seqOccurences
+  {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
+  {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
+  {\langle\mathcal{C}_{3},\mathcal{O}_{3}\rangle}$
+%We also define a judgment for \textit{sequencing} two occurrence
+%traces on figure \ref{fig:aliasing-rules}.  The sequencing judgment
+%\begin{equation*}\boxed{
+%  \seqOccurences
+%  {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
+%  {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
+%  {\langle\mathcal{C}_{3},\mathcal{O}_{3}\rangle}
+%}\end{equation*}
+and which can be derived if and only if it is acceptable for
+$\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle$ to happen first, then
+$\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle$, giving the combined
+occurrence trace $\langle\mathcal{C}_{3},\mathcal{O}_3\rangle$.  The
+formulation as a judgment is because sequencing is sometimes not
+derivable---for example in the case where an array is used after  %this situation corresponds to
+it has been consumed.  The judgment is defined by a single inference
+rule, which states that two occurrence traces can be sequentialized if
+and only if no array consumed in the left-hand trace is used in the
+right-hand trace.
+
+Some of the inference rules for checking if an expression $e$ is
+functionally safe with respect to in-place updates are shown in
+Figure~\ref{fig:uniqueness-rules}, where the central judgment is
+$\inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}$.
+%\begin{equation*}
+%\boxed{
+%\inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}
+%}
+%\end{equation*}
+%
+
+The rule for in-place update
+\lstinline[mathescape]{$v_{a}$ with [$\nseq{v}{n}$] <- $v_{v}$} gives rise to an
+occurrence trace indicating that we have \textit{observed} $v_{v}$ and
+\textit{consumed} $v_{a}$.  Indices $\nseq{v}{n}$ are ignored as
+they are necessarily scalar variables and cannot be consumed.
+
+Another case is checking the safety of a \lstinline{map} expression.
+We do not wish to permit the function of a \lstinline{map} to consume
+any array bound outside of it, as that would imply the array is
+consumed once for every iteration of the \lstinline{map}.  However,
+the function may consume its parameters, which should be seen as the
+\lstinline{map} expression as a whole consuming the corresponding
+input array.  This restriction also preserves the parallel semantics
+of \lstinline{map}, because different rows of a matrix can be safely
+updated in parallel.  An example can be seen on
+Figure~\ref{fig:map-in-place-update}, which shows an in-place update
+nested inside an array.  To express this restriction, we define an
+auxiliary judgment
+$\consumedOK {\mathcal{P}}
+{\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
+{\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}$.
+%
+%:\begin{equation*} \boxed{ \consumedOK {\mathcal{P}}
+%  {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
+%  {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle} }
+%\end{equation*}
+Here, $\mathcal{P}$ is a mapping from parameter names to alias sets.
+Any variable $v$ in $\mathcal{O}_{1}$ that has a mapping in
+$\mathcal{P}$ is replaced with $\mathcal{P}[v]$ to produce
+$\mathcal{O}_{2}$.  If no such mapping exists, $v$ is simply included
+in $\mathcal{O}_{2}$.  Similarly, any variable $v$ in
+$\mathcal{C}_{1}$ that has a mapping in $\mathcal{P}$ is replaced with
+the variables in the set $\mathcal{P}[v]$ (taking the union of all
+such replacements), producing $\mathcal{C}_{2}$.  However, if $v$ does
+not have such a mapping, the judgment is not derivable.
+%This
+%corresponds to the body of the function consuming something that is not
+%a parameter.
+%
+The precise inference rules are shown on
+Figure~\ref{fig:parameter-consumption}.
+%
+Do-loops and function declarations can be checked for safety in a
+similar way.  A function is safe with respect to in-place updates if
+its body consumes only those of the function's parameters that are
+unique.
+
+\begin{figure}
+\begin{equation*}
+\boxed{
+\inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}
+}
+\end{equation*}
+
+  \begin{equation*}
+\inference{
+}{
+\inPlaceSafe{v}{\emptyset}{\aliases{v}}
+}
+\tagsc{Safe-Var}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+}{
+\inPlaceSafe{k}{\emptyset}{\emptyset}
+}
+\tagsc{Safe-Const}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  \inPlaceSafe{e_{1}}{\mathcal{C}_{1}}{\mathcal{O}_{1}}
+  &
+  \inPlaceSafe{e_{2}}{\mathcal{C}_{2}}{\mathcal{O}_{2}}
+  \\
+  \seqOccurences
+  {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
+  {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
+  {\langle\mathcal{C}_{3},\mathcal{O}_{3}\rangle}
+}{
+  \inPlaceSafe{\text{\lstinline[mathescape]!let ($v_{1}, \ldots, v_{n}$) = $e_{1}$ in\ $e_{2}$!}}
+  {\mathcal{C}_{3}}{\mathcal{O}_{3}\rangle}
+}
+\tagsc{Safe-LetPat}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  \inPlaceSafe{v_{1}}{\mathcal{C}_{1}}{\mathcal{O}_{1}}
+  &
+  \inPlaceSafe{e_{2}}{\mathcal{C}_{2}}{\mathcal{O}_{2}}
+  &
+  \inPlaceSafe{e_{3}}{\mathcal{C}_{3}}{\mathcal{O}_{3}}
+  \\
+  \seqOccurences
+  {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
+  {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
+  {\langle\mathcal{C}_{2}',\mathcal{O}_{2}'\rangle}
+  \\
+  \seqOccurences
+  {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
+  {\langle\mathcal{C}_{3},\mathcal{O}_{3}\rangle}
+  {\langle\mathcal{C}_{3}',\mathcal{O}_{3}'\rangle}
+}{
+  \inPlaceSafe{\text{\lstinline[mathescape]!if\ $v_{1}$ then\ $e_{2}$ else\ $e_{3}$!}}
+  {\mathcal{C}'_{2}\cup\mathcal{C}'_{3}}
+  {\mathcal{O}'_{2}\cup\mathcal{O}'_{3}}
+}
+\tagsc{Safe-If}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+}{
+  \inPlaceSafe{
+    \text{\lstinline[mathescape]!$v_{a}$ with [$\nseq{v}{n}$] <- $v_{v}$!}
+  }{\aliases{v_{a}}}{\aliases{v_{n}}}
+}\tagsc{Safe-Update}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  \inPlaceSafe{e_{b}}{\mathcal{C}}{\mathcal{O}}
+  \\
+  \consumedOK
+  {\nseq{p_{i} \mapsto \aliases{v_{i}}}{n}}
+  {\langle\mathcal{C},\mathcal{O}\rangle}
+  {\langle\mathcal{C}',\mathcal{O}'\rangle}
+}{
+  \inPlaceSafe
+  {\text{\lstinline[mathescape]!map ($\Fn\nseq{p}{n}$: $\nseq{t}{m}$ -> $e_{b}$) $\nseq{v}{n}$!}}
+  {\mathcal{C}'}{\mathcal{O}'}
+}
+\tagsc{Safe-Map}
+\end{equation*}
+
+  \caption{Checking safety of consumption.}
+  \label{fig:uniqueness-rules}
+\end{figure}
+
+\begin{figure}
+\begin{equation*}
+\boxed{
+  \consumedOK
+  {\mathcal{P}}
+  {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
+  {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
+}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+}{
+\mathcal{P} \vdash \langle \emptyset, \emptyset \rangle \triangle \langle \emptyset, \emptyset \rangle
+} \tagsc{Observe-BaseCase}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+v \in \mathcal{P} \qquad \mathcal{P} \vdash \langle \emptyset, \mathcal{O} \rangle \triangle \langle \emptyset, \mathcal{O}' \rangle
+}
+{
+\mathcal{P} \vdash \langle \emptyset, \{ v \} \cup \mathcal{O} \rangle \triangle \langle \emptyset, \mathcal{P}[v] \cup \mathcal{O}' \rangle
+}\tagsc{Observe-Param}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+\neg(v \in \mathcal{P}) \qquad \mathcal{P} \vdash \langle \emptyset, \mathcal{O} \rangle \triangle \langle \emptyset, \mathcal{O}' \rangle
+}
+{
+\mathcal{P} \vdash \langle \emptyset, \{ v \} \cup \mathcal{O} \rangle \triangle \langle \emptyset, \{ v \} \cup \mathcal{O}' \rangle
+}\tagsc{Observe-NonParam}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+v \in \mathcal{P} \qquad \mathcal{P} \vdash \langle \mathcal{C}, \mathcal{O} \rangle \triangle \langle \mathcal{C}', \mathcal{O}' \rangle
+}
+{
+\mathcal{P} \vdash \langle \{ v \} \cup \mathcal{C}, \mathcal{O} \rangle \triangle \langle \mathcal{P}[v] \cup \mathcal{C}', \mathcal{O}' \rangle
+}\tagsc{Observe-NonParam}
+\end{equation*}
+  \caption{Checking parameter consumption.}
+  \label{fig:parameter-consumption}
+\end{figure}
+
+
+\begin{figure}
+\begin{lstlisting}
+  -- This one is OK and considered to consume 'as'.
+  let bs = map (\(a) -> !a with [0] <- 2!) as
+  let d  = iota m
+  -- This one is NOT safe, since d is not a formal parameter.
+  let cs = map (\(i) -> @d with [i] <- 2@) (iota n)
+\end{lstlisting}
+  \caption{Examples of \lstinline{map}s with in-place updates.}
+  \label{fig:map-in-place-update}
+\end{figure}
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "thesis"
+%%% End:

@@ -19,6 +19,7 @@
     while,
     with,
     module,
+    where,
   },
   sensitive=true, % keywords are not case-sensitive
   morecomment=[l]{--}, % l is for line comment
@@ -74,15 +75,18 @@
     unzip,
     write,
     zip,
+    stream_seq,
+    stream_red,
+    stream_map,
+    size,
   },
   emphstyle=\ttfamily\bfseries,
   moredelim=**[is][\color{red}]{@@}{@@}
 }
 
 \newcommand{\kt}[1]{\textsf{#1}}
-\newcommand{\kw}[1]{\mbox{\textsf{\bfseries{#1}}}}
+\newcommand{\kw}[1]{\mbox{\texttt{\bfseries{#1}}}}
 \newcommand{\id}[1]{\mbox{\it{#1}}}
-\newcommand{\Fn}{\ensuremath{\lambda}}
 \newcommand{\M}{\kw{M}}
 \newcommand{\Mv}[2]{\M~\overline{#1}~\overline{#2}}
 \newcommand{\Loop}{\kw{loop}}
@@ -92,8 +96,8 @@
 \newcommand{\Reduce}{\kw{reduce}}
 \newcommand{\Scan}{\kw{scan}}
 \newcommand{\Transpose}{\kw{transpose}}
-\newcommand{\Let}{\kw{let}}
-\newcommand{\In}{\kw{in}}
+\newcommand{\Let}[3]{\kw{let}~#1~\mbox{\texttt{=~}}#2~\kw{in}~#3}
+\newcommand{\If}[3]{\kw{if}~#1~\kw{then}~#2~\kw{else}~#3}
 \newcommand{\vd}{\vdash}
 \newcommand{\Rearrange}{\kw{rearrange}}
 \newcommand{\Replicate}{\kw{replicate}}
@@ -104,10 +108,8 @@
 \newcommand{\ov}[1]{\overline{#1}}
 \newcommand{\G}[1]{G#1}
 \newcommand{\nseq}[2]{\overline{#1}^{(#2)}}
-\newcommand{\tagsc}[1]{\tag{\textsc{#1}}} % Fake Small Caps tagging
-\newcommand*{\bfrac}[2]{\genfrac{}{}{0pt}{}{#1}{#2}}
 
 %%% Local Variables:
-%%% mode: plain-tex
+%%% mode: latex
 %%% TeX-master: "thesis"
 %%% End:

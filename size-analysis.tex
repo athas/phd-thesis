@@ -1,6 +1,51 @@
 \chapter{Size Analysis}
 \label{chap:size-analysis}
 
+\begin{figure*}[bt]
+
+  $$
+  \begin{array}{lrlr}
+    t & ::= & \mbox{\textbf{t} ~ $|$ ~ \texttt{[]$t$} ~ $|$ ~ \texttt{[$v$]$t$}} & \mbox{(Scalar/array type)} \\
+    ft & ::= & \mbox{$t$ ~ $|$ ~ \texttt{*}$t$} & \mbox{(Nonunique/Unique type)} \\
+    p & ::= & (v : t) & \mbox{(Let or lambda-bound name)} \\
+    fp & ::= & (v : dt) & \mbox{(Function-bound name)} \\
+    \\
+    k & ::= & \mbox{\textbf{x}} & \mbox{(Constant )}\\
+    l & ::= & \mbox{\texttt{\textbackslash $p_{0} \ldots p_{n}$:$dt$ -> $b$}} ~~& ~~\mbox{(Anonymous Function)} \\
+    fun & ::= & \mbox{\lstinline[mathescape]!let\ $v$\ $fp_{0} \ldots fp_{n}$:$dt$ =\ $b$!} ~~& ~~\mbox{(Named function)} \\
+    prog & ::= & \mbox{$\epsilon$ ~ $|$ ~ $fun$ ~ $prog$} & \mbox{(Program)} \\
+    \\
+    b & ::= & e & \mbox{(Expression)} \\
+      & | & \mbox{\lstinline[mathescape]!let ($p_{1},\ldots,p_{n}$) =\ $e$ in\ $b$!} & \mbox{(Let binding)}\\
+    e & ::= & k & \mbox{(Constant)} \\
+      & | & v & \mbox{(Variable)} \\
+      & | & \mbox{\texttt{($v_{1},\ldots,v_{n}$)}} & \mbox{($n$-tuple)}\\
+      & | & v \odot{} v & \mbox{(Scalar binary operator)}\\
+      & | & \mbox{\lstinline[mathescape]!if\ $v$ then\ $b$ else\ $b$!} & \mbox{(Branch)} \\
+      & | & \mbox{\texttt{$v$[$v_{1},\ldots,v_{n}$]}} & \mbox{(Array indexing)}\\
+      & | & \mbox{\lstinline[mathescape]!$v$ with [$v_{1},\ldots,v_{n}$] <-\ $v$!} &\mbox{(In-place update)}\\
+      & | & \mbox{\lstinline[mathescape]!loop ($p_{1},\ldots,p_{n}$)=($v_{1},\ldots,v_{n}$)\ for\ $v$ <\ $v$ do\ $b$!} &  \mbox{(Loop)}\\
+      & | & \mbox{\texttt{$v$ $v_{1}$ \ldots{} $v_{n}$}} &  \mbox{(Function call)}\\
+      & | & \mbox{\lstinline{iota} $v$} & \mbox{([0,$\ldots$,$v-1$])}\\
+      & | & \mbox{\lstinline{replicate} $n$ $v$} &  \mbox{([$v,\ldots,v$] of size $n$)}\\
+      & | & \mbox{\lstinline{rearrange} ($k_{1},\ldots,k_{n}$) $v$} &  \mbox{(Rearrange dimensions)}\\
+      & | & \mbox{\lstinline{map} $l$ $v_{1}$ \ldots{} $v_{n}$} \\
+      & | & \mbox{\lstinline{reduce} $l$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_n$} \\
+      & | & \mbox{\lstinline{scan} $l$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_n$} \\
+      & | & \mbox{\lstinline{stream_seq} $l$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_m$} \\
+      & | & \mbox{\lstinline{stream_seq} $l$ $v_1$ \ldots{} $v_m$} \\
+      & | & \mbox{\lstinline!stream_red! $l_{1}$ $l_{2}$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_m$}
+  \end{array}
+  $$
+  \caption{Grammar for the core Futhark IR.  Some compiler stages may
+    impose additional constraints on the structure of ASTs, in
+    particular by requiring size annotations to be present, or banning
+    certain operations.  Some constructs, such as \lstinline{while}
+    loops, have been elided for simplicity.  The elided constructs
+    would have no influence on the development of the thesis.}
+  \label{fig:core-futhark-syntax}
+\end{figure*}
+
 
 %%% Local Variables:
 %%% mode: latex
