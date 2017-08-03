@@ -74,18 +74,9 @@ defernumbers=true
 
 % Fonts
 \usepackage{fontspec}
-\setmainfont{EB Garamond SC}
+\usepackage{palatino}
 \linespread{1.05}
 \setmonofont[Scale=MatchLowercase]{DejaVu Sans Mono}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Palatino doesn't have all the emoticons, use Symbola for that block
-% but use Palatino for punctuation classes
-\usepackage{ucharclasses}
-\newfontfamily\emotifont{Symbola}
-\newfontfamily\punctfont{EB Garamond SC}
-\setTransitionsForSymbols{\emotifont}{\normalfont}
-\setTransitionsForMathematics{\emotifont}{\normalfont}
-\setTransitionsForPunctuation{\punctfont}{\normalfont}
 
 % customize chapter pages
 \makepagestyle{myheadings}
