@@ -73,9 +73,19 @@ defernumbers=true
 \usepackage[capitalise,noabbrev]{cleveref}
 
 % Fonts
-\usepackage{palatino}
+\usepackage{fontspec}
+\setmainfont{EB Garamond SC}
 \linespread{1.05}
-\usepackage[scaled]{beramono}
+\setmonofont[Scale=MatchLowercase]{DejaVu Sans Mono}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Palatino doesn't have all the emoticons, use Symbola for that block
+% but use Palatino for punctuation classes
+\usepackage{ucharclasses}
+\newfontfamily\emotifont{Symbola}
+\newfontfamily\punctfont{EB Garamond SC}
+\setTransitionsForSymbols{\emotifont}{\normalfont}
+\setTransitionsForMathematics{\emotifont}{\normalfont}
+\setTransitionsForPunctuation{\punctfont}{\normalfont}
 
 % customize chapter pages
 \makepagestyle{myheadings}

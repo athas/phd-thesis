@@ -73,7 +73,7 @@ let bss =
 \small
 \begin{align*}
 \inference{
-\Sigma \vd \Map~\Par{\Fn~\overline{x}~\kt{->}~e}~\overline{y} \Rightarrow e'
+\Sigma \vd \Map~\Par{\fn~\overline{x}~\kt{->}~e}~\overline{y} \Rightarrow e'
 }{
 \Sigma, \M~\overline{x}~\overline{y} \vd e \Rightarrow e'
 }
@@ -84,7 +84,7 @@ let bss =
 \inference{
 \Sigma, \M~\overline{x}~\overline{y} \vd e \Rightarrow e'
 }{
-\Sigma \vd \Map~\Par{\Fn~\overline{x}~\kt{->}~e}~\overline{y} \Rightarrow e'
+\Sigma \vd \Map~\Par{\fn~\overline{x}~\kt{->}~e}~\overline{y} \Rightarrow e'
 }
 \tagsc{G2}
 \end{align*}
@@ -112,11 +112,9 @@ let bss =
 
 \begin{align*}
 \inference{
-%  g = \Fn~\ov{x}^p~\kt{=>}~ \Reduce~\Par{\Fn~\ov{y}^{2*p} ~\kt{=>} ~e}~\ov{n}^p ~\ov{x}^p \\
-  g = \Reduce~\Par{\Fn~\ov{y}^{2*p} ~\kt{->} ~e}~\ov{n}^p \\
+  g = \Reduce~\Par{\fn~\ov{y}^{2*p} ~\kt{->} ~e}~\ov{n}^p \\
   \Sigma \vd \Map~\Par{g} ~\Par{\Transpose~z_0}\ldots\Par{\Transpose~z_{p-1}} \Rightarrow e' \\
-%  f = \Fn~\ov{a}^p~\ov{x}^p ~\kt{=>}~ \Map~\Par{\Fn~\ov{y}^{2*p}~\kt{=>} e}~\ov{a}^p~\ov{x}^p
-  f = \Map~\Par{\Fn~\ov{y}^{2*p}~\kt{->} e}
+  f = \Map~\Par{\fn~\ov{y}^{2*p}~\kt{->} e}
 }{
 \Sigma \vd \Reduce~\Par{f}~\Par{\ov{\Replicate~k ~n}^p}~\ov{z}^p \Rightarrow e'
 }

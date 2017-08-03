@@ -1,51 +1,438 @@
 \chapter{Size Analysis}
 \label{chap:size-analysis}
 
-\begin{figure*}[bt]
+A great many optimisations and safety checks in Futhark depend on how
+the shape of two arrays relate to each other, and at which point the
+shape of an array can be known.  Especially the latter is important.
+Nested parallelism supports construction arrays whose \textit{value}
+is dependent on some outer parallel construct.  However, for
+\textit{regular} nested parallelism, the shapes of those arrays can be
+computed invariant to all parallel loops.  It is crucial for efficient
+execution that we can hoist the computation of such sizes out of
+parallel loops.  This requires us to reify the notion of an array
+shape, and the computation of that shape, in the IR.  In the Futhark
+compiler, we treat size computations like any other expression, which
+allows us to use our general compiler optimisation repertoire to
+optimise and simplify the computation of sizes.  We maintain the
+invariant that for \textit{any} array-typed variable in scope, each
+dimension of that array corresponds to some \lstinline{i32}-typed
+variable also in scope.  This chapter discusses how we augment the IR
+to provide this property, and how we move from the unsized IR to the
+sized IR (analogous to ``typed'' versus ``untyped'').
 
-  $$
-  \begin{array}{lrlr}
-    t & ::= & \mbox{\textbf{t} ~ $|$ ~ \texttt{[]$t$} ~ $|$ ~ \texttt{[$v$]$t$}} & \mbox{(Scalar/array type)} \\
-    ft & ::= & \mbox{$t$ ~ $|$ ~ \texttt{*}$t$} & \mbox{(Nonunique/Unique type)} \\
-    p & ::= & (v : t) & \mbox{(Let or lambda-bound name)} \\
-    fp & ::= & (v : dt) & \mbox{(Function-bound name)} \\
-    \\
-    k & ::= & \mbox{\textbf{x}} & \mbox{(Constant )}\\
-    l & ::= & \mbox{\texttt{\textbackslash $p_{0} \ldots p_{n}$:$dt$ -> $b$}} ~~& ~~\mbox{(Anonymous Function)} \\
-    fun & ::= & \mbox{\lstinline[mathescape]!let\ $v$\ $fp_{0} \ldots fp_{n}$:$dt$ =\ $b$!} ~~& ~~\mbox{(Named function)} \\
-    prog & ::= & \mbox{$\epsilon$ ~ $|$ ~ $fun$ ~ $prog$} & \mbox{(Program)} \\
-    \\
-    b & ::= & e & \mbox{(Expression)} \\
-      & | & \mbox{\lstinline[mathescape]!let ($p_{1},\ldots,p_{n}$) =\ $e$ in\ $b$!} & \mbox{(Let binding)}\\
-    e & ::= & k & \mbox{(Constant)} \\
-      & | & v & \mbox{(Variable)} \\
-      & | & \mbox{\texttt{($v_{1},\ldots,v_{n}$)}} & \mbox{($n$-tuple)}\\
-      & | & v \odot{} v & \mbox{(Scalar binary operator)}\\
-      & | & \mbox{\lstinline[mathescape]!if\ $v$ then\ $b$ else\ $b$!} & \mbox{(Branch)} \\
-      & | & \mbox{\texttt{$v$[$v_{1},\ldots,v_{n}$]}} & \mbox{(Array indexing)}\\
-      & | & \mbox{\lstinline[mathescape]!$v$ with [$v_{1},\ldots,v_{n}$] <-\ $v$!} &\mbox{(In-place update)}\\
-      & | & \mbox{\lstinline[mathescape]!loop ($p_{1},\ldots,p_{n}$)=($v_{1},\ldots,v_{n}$)\ for\ $v$ <\ $v$ do\ $b$!} &  \mbox{(Loop)}\\
-      & | & \mbox{\texttt{$v$ $v_{1}$ \ldots{} $v_{n}$}} &  \mbox{(Function call)}\\
-      & | & \mbox{\lstinline{iota} $v$} & \mbox{([0,$\ldots$,$v-1$])}\\
-      & | & \mbox{\lstinline{replicate} $n$ $v$} &  \mbox{([$v,\ldots,v$] of size $n$)}\\
-      & | & \mbox{\lstinline{rearrange} ($k_{1},\ldots,k_{n}$) $v$} &  \mbox{(Rearrange dimensions)}\\
-      & | & \mbox{\lstinline{map} $l$ $v_{1}$ \ldots{} $v_{n}$} \\
-      & | & \mbox{\lstinline{reduce} $l$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_n$} \\
-      & | & \mbox{\lstinline{scan} $l$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_n$} \\
-      & | & \mbox{\lstinline{stream_seq} $l$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_m$} \\
-      & | & \mbox{\lstinline{stream_seq} $l$ $v_1$ \ldots{} $v_m$} \\
-      & | & \mbox{\lstinline!stream_red! $l_{1}$ $l_{2}$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_m$}
-  \end{array}
-  $$
-  \caption{Grammar for the core Futhark IR.  Some compiler stages may
-    impose additional constraints on the structure of ASTs, in
-    particular by requiring size annotations to be present, or banning
-    certain operations.  Some constructs, such as \lstinline{while}
-    loops, have been elided for simplicity.  The elided constructs
-    would have no influence on the development of the thesis.}
-  \label{fig:core-futhark-syntax}
-\end{figure*}
+\section{A Sized IR}
 
+One important observation of the IR presented in the previous chapter
+is that some operator-semantics invariants, related to the array
+regularity, are guaranteed to hold by construction, but several other
+invariants are only ``assumed'', that is, they have not been verified
+(made explicit) in the IR:
+\begin{itemize}
+\item \lstinline{iota} and \lstinline{replicate} assume a non-negative
+  first argument, and the size of the resulting array is exactly the
+  value of the first argument.
+\item \lstinline{map} is guaranteed to receive arguments of identical
+  outermost size, which also matches the outermost size of all result
+  arrays\footnote{ In the user language \lstinline{zip} accepts an
+    arbitrary number of array arguments that are required to have the
+    same outermost size.}.  However, \lstinline{map} assumes that its
+  function argument produces arrays of identical shape for each
+  element of the input array.
+\item \lstinline{filter} receives and produces arguments and results
+  of identical outermost size, respectively (and the outermost size of
+  the argument is not smaller than the one of the result).
+\item \lstinline{reduce} and \lstinline{scan} receive arguments of
+  identical outermost size, and \lstinline{scan} results have
+  outermost size equal to that of the input.  The semantics for
+  \lstinline{reduce} and \lstinline{scan} assumes that the
+  (corresponding two) arguments and result of the binary associative
+  operator have identical shapes.
+\end{itemize}
+
+\begin{figure}
+\begin{tabular}{lrlr}
+  $\tau$ & $::=$ & \mbox{\texttt{t} ~ $|$ ~ \texttt{[$d$]$\tau$}} & \mbox{(Scalar/array type)} \\
+  $\ft$ & $::=$ & $(x_{1}: \tau_1) \rightarrow \cdots \rightarrow (x_{n}: \tau_{n}) \rightarrow \exists \bar{d_2}.\tty$ & (Sizes of results $\in \bar{d_2}$)\\
+  $\etau$ & $::=$ & $\alpha~|~(x_{1}: \tau_{1}, \ldots, x_{n}: \tau_{n})~|~(x: \etau) \rightarrow \etau$ \\
+  $\opty$ & $::=$ & $\forall\bar{\alpha}.\etau$ \\
+  fun & ::= & \mbox{\Fun{$f$}{$\hat{p}$}{$\overline{d}.\utau$}{$b$}} ~~& ~~\mbox{(Named function)} \\
+\end{tabular}
+\caption{Types with embedded size information and named parameters.
+  The remaining syntax definitions remain unchanged.}
+\label{fig:sizeTypes}
+\end{figure}
+
+\begin{figure}
+\begin{tabular}{lcl}
+  \emph{op} & & \textrm{TySch}(\emph{op}) \\\hline
+  {\lstinline!iota!} & : & $(d: \texttt{i32}) \rightarrow [d]\texttt{i32}$ \\
+  {\lstinline!replicate!} & : & $\forall\alpha.(d: \texttt{i32}) \rightarrow \alpha \rightarrow [d]\alpha$ \\
+  \lstinline[mathescape]!reshape! & : & $\forall\nseq{d}{m}\alpha.(x_{1}: \texttt{i32}, \ldots, x_{n}: \texttt{i32})$ \\
+  & & ~~~~~~~~~~~~ $\rightarrow[d_{1}]\cdots[d_{m}]\alpha\rightarrow[x_{1}]\cdots[x_{n}]\alpha$ \\
+  \lstinline[mathescape]!rearrange ($c_{1}, \ldots, c_{n}$)! & : & $\forall\nseq{d}{n}\alpha.[d_{1}]\cdots[d_{n}]\alpha\rightarrow[d_{p(1)}]\cdots[d_{p(n)}]\alpha$ \\
+            & & ~~ \text{where $p(i)$ is the result of applying the}\\
+            & & ~~ \text{permutation induced by $c_{1}, \ldots, c_{n}$}. \\
+{\lstinline!map!} & : & $\forall d\ \bar{\alpha}^{(n)}\bar{\beta}^{(m)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\bar{\beta}^{(m)}))$\\
+          & & ~~~~~~~~~~~~~~~~~~~~ $\rightarrow [s]\alpha_1\rightarrow\cdots\rightarrow[s]\alpha_n$\\
+          & & ~~~~~~~~~~~~~~~~~~~~ $\rightarrow ([s]\beta_1,\ldots,[s]\beta_m)$\\
+  {\lstinline!reduce!} & : & $\forall \ d \ \bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\bar{\beta}^{(n)}))$ \\
+          & & ~~~~~~~~~~~~~~ $\rightarrow (\alpha_1, \ldots, \alpha_n)$\\
+          & & ~~~~~~~~~~~~~~ $\rightarrow [d]\alpha_1 \rightarrow \ldots \rightarrow [d]\alpha_n$\\
+          & & ~~~~~~~~~~~~~~ $\rightarrow (\alpha_1,\ldots,\alpha_m)$ \\
+  {\lstinline!scan!} & : & $\forall \ d \ \bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\bar{\beta}^{(n)}))$ \\
+          & & ~~~~~~~~~~~~~~ $\rightarrow (\alpha_1, \ldots, \alpha_n)$\\
+          & & ~~~~~~~~~~~~~~ $\rightarrow [d]\alpha_1 \rightarrow \ldots \rightarrow [d]\alpha_n$\\
+          & & ~~~~~~~~~~~~~~ $\rightarrow ([d]\alpha_1,\ldots,[d]\alpha_m)$ \\
+{\lstinline!filter!} & : & $\forall \ d_1 \ \bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \texttt{bool})$ \\
+          & & ~~~~~~~~~~~~~~ $\rightarrow [d_{1}]\alpha_1 \rightarrow \ldots \rightarrow [d_{1}]\alpha_n$ \\
+          & & ~~~~~~~~~~~~~~ $\rightarrow \exists d_{2}.([d_{2}]\alpha_1,\ldots,[d_{2}]\alpha_n)$ \\
+\end{tabular}
+\caption{Dependent-size types for various SOACs.}
+\label{fig:soacSizeType}
+\end{figure}
+
+Figure~\ref{fig:sizeTypes} shows an extended type system in which (i)
+sizes are encoded in each array type, that is, $[d]\tau$ represents
+the type of an array in which the outermost dimension has size $d$,
+and in which (ii) function/lambda types use universal quantifiers for
+the sizes of the array parameters ($\forall s_1$), and existential
+quantifiers for the sizes of the result arrays ($\exists s_2$).
+Function types now also contain \textit{named} parameters, supporting
+a simple variant of dependent types.  For function parameters where
+the name is irrelevant, we shall elide the name and use the same
+notation as previously.
+%
+Figure~\ref{fig:soacSizeType} also shows that this extension allows to
+encode most of the afore-mentioned invariants into size-dependent
+types.  The requirement for non-negative input to \lstinline{iota} and
+\lstinline{replicate} remains a dynamic property.  We see that most
+parameters remain unnamed, but are crucially used to encode the shape
+properties of \lstinline{iota} and \lstinline{replicate}.
+
+The type of \lstinline{map} is interesting because the result array
+types do not follow immediately from the input array types.  Instead,
+it is expected that the functional argument declares the result type
+(including sizes) in advance.  Operationally, we can see this as being
+able to ``pre-allocate'' space for the result.  However, the return
+size cannot in general be known in advance without evaluating the
+function.
+% 
+The following demonstrates, by example, the code transformation that
+(i) makes explicit in the code the shape-dependent types and verifies
+the assumed invariants and (ii) optimizes away in many cases the
+existential types.
+
+\section{Size Analysis by Example}
+\label{subsec:size-analysis-intuition}
+
+
+\begin{figure}
+\begin{lstlisting}
+let concat (xs: []f64) (ys: []f64): []f64 =
+  let a = size 0 xs
+  let b = size 0 ys
+  let c = a+b
+  let (is: []i32) = iota c
+  let (zs: []f64) = map (\i -> if i < a then xs[i] else ys[i+b])
+                        is
+  in zs
+
+let f (vss: [][]f64): []f64 =
+  let (ys: []f64) (zs: []f64) =
+    map (\(vs: []f64) ->
+          let ys = reduce (+) 0.0 vs
+          let zs = reduce (*) 1.0 vs
+          in (ys, zs))
+        vss
+  let (rs: []f64) = concat ys zs
+  in rs
+
+let main (vsss: [][][]f64): [][]f64 =
+  let (rss: [][]f64) =
+    map (\(vss: [][]f64): []f64 ->
+           let rs = f vss
+           in rs) vs
+  in rss
+\end{lstlisting}
+
+\caption{Running example: Program in un-sized IR.} 
+\label{fig:RunEgSrc}
+\end{figure}
+
+The program in Figure~\ref{fig:RunEgSrc} receives as input a
+three-dimensional array \texttt{A}, and produces a two-dimensional
+array \texttt{B}, by mapping the elements of the outermost dimension
+of \texttt{A} by function \texttt{f}, such that each of the rows of
+\texttt{B} is the catenation of the arrays produced by reducing the
+innermost dimension of \texttt{A} by addition and multiplication,
+respectively. The Futhark source language is very close to the
+un-sized IR in Figure~\ref{fig:RunEgSrc}, except that types are
+required only in function declarations, and expressions need not be in
+A-normal form.
+
+The parameters/result of \texttt{main} are treated in adhoc fashion
+(read/written from/to a file).
+Note that the source IR is size-agnostic (typed): 
+for example, \texttt{B} has been inferred to be a two-dimensional array of 
+reals \texttt{--} as a result of a \texttt{map} with a function of signature
+\texttt{[[real]] $\rightarrow$ [real]} \texttt{--} but its shape is not known yet. 
+
+\begin{figure}
+\begin{lstlisting}
+let concat @(n: i32) (m: i32)@ (xs: [@n@]f64) (ys: [@m@]f64): @d.@[@d@]f64 =
+  let a = @n@
+  let b = @m@
+  let c = a+b
+  let (is: [@c@]i32) = iota c
+  let (zs: [@c@]f64) =
+   map (\i -> if i < n then xs[i] else ys[i+a]) is
+  in zs
+
+let f @(m: i32) (k: i32)@ (vss: [@m@][@k@]f64): @d@.[@d@]f64 =
+  let (ys: [@m@]f64) (zs: [@m@]f64) =
+    map (\(vs: [@k@]f64) ->
+          let ys = reduce (+) 0.0 vs
+          let zs = reduce (*) 1.0 vs
+          in (ys, zs))
+        vss
+  let @(l: i32)@ (rss: [@l@]f64) = concat @m m@ ys zs
+  in rs
+
+let main @(n: i32) (m: i32) (k: i32)@
+         (vsss: [@n@][@m@][@k@]f64): @d1 d2.@[@d@][@d1@][@d2@]f64 =
+@  let l = if n != 0@
+@          then let (d: i32) (ws: [d]f64) = f n m vsss[0]@
+@               in d@
+@          else 0@
+  let (rss: [@n@][@d@]f64) =
+    map (\(vss: [@m@][@k@]f64): [@l@]f64 ->
+           let @(d: i32)@ @(w: [d]f64)@ = f @m k@ vss
+@           let vs = reshape l w@
+           in vs)
+        vsss
+  in rss
+\end{lstlisting}
+
+  \caption{Running example:
+    $\exists$-quantified target IR.  Changes compared to
+    Figure~\ref{fig:RunEgSrc} highlighted in red.}
+\label{fig:RunEgTgt}
+\end{figure}
+
+The first stage, demonstrated in Figure~\ref{fig:RunEgTgt}, transforms
+the program into an unoptimised version in which (i) all arrays have
+shape-dependent types, which may be existentially quantified, and (ii)
+all ``assumed'' invariants are explicitly checked.
+%
+This is achieved by:
+\begin{itemize}
+\item Extending the function signatures to encompass also the shape
+  information for each array argument.  For example, \lstinline{f}
+  takes additional parameters \lstinline{m} and \lstinline{k} that
+  specify the shape of array argument \lstinline{vss},
+
+\item Representing function's array results via
+  existentially-quantified shape-dependent types.  For example, the
+  return type of of \lstinline{f} is specified as
+  \lstinline{d.[d]f64}, indicating an existential size \lstinline{d}.
+
+\item Modifying \lstinline{let} patterns to also explicitly bind any
+  existential sizes returned by the corresponding expression.  For
+  example, the binding of the result of \lstinline{concat} now also
+  includes a variable \lstinline{l}, representing the result size.
+
+\item For the \lstinline{map} in \lstinline{main}, we need to make a
+  ``guess'' at the size of the array being returned, which we store as
+  the variable \lstinline{l}..  This guess is made by applying the
+  anonymous function to \lstinline{vsss[0]}, which produces both a
+  size and an array, from which we use just the size.  If
+  \lstinline{vsss} is empty (that is, if \lstinline{n} is zero), the
+  guess is zero.
+
+  Since \lstinline{f} returns an existential result, and the lambda
+  \textit{must} return an array of exactly type \lstinline{[l]f64}, we
+  use a \lstinline{reshape} to obtain this desired type.  Since the
+  \lstinline{reshape} fails if \lstinline{d != n}, this effectively
+  ensures that the \lstinline{map} produces a regular array.
+
+\item Since all arrays in scope also have variables in scope for
+  describing their size, replace all uses of \lstinline{size} with
+  references to those varuables.
+\end{itemize}
+
+It is important to note that this transformation preserves
+asymptotically the number of operations of the original program.
+However, it performs a significant amount of redundant computation.
+To compute \lstinline{l}, we compute the entire result, only to throw
+most of it away.  General-purpose optimisation techniques can be
+employed to eliminate the overhead.  On
+Figure~\ref{fig:SimplifyFShape} we see the result of inlining all
+functions, followed by straightforward simplification, dead code
+removal, and hoisting of the computation of \lstinline{c}.  The result
+is that all arrays constructed insice the \lstinline{map}s have a size
+that can be computed before the \lstinline{map}s are entered.  From an
+operational perspective, this lets us pre-allocate memory before
+executing the \lstinline{map}s on a GPU.  This is essential for GPU
+execution because dynamic allocation and assertions are typically not
+well suited for accelerators, hence the shapes of the result and of
+various intermediate arrays need to be computed (or at least
+overestimated) and verified before the kernel is run.
+
+\begin{figure}
+\begin{lstlisting}
+let main (n: i32) (m: i32) (k: i32)
+         (vsss: [n][m][k]f64): d1 d2.[d][d1][d2]f64 =
+  let l = if n != 0 then m+m else 0
+  let c = m+m
+  let (rss: [n][d]f64) =
+    map (\(vss: [m][k]f64): [l]f64 ->
+          let (ys: [m]f64) (zs: [m]f64) =
+            map (\(vs: [k]f64) ->
+                  let ys = reduce (+) 0.0 vs
+                  let zs = reduce (*) 1.0 vs
+                  in (ys, zs))
+                vss
+          let (is: [c]i32) = iota c
+          let (zs: [c]f64) =
+            map (\i -> if i < n then xs[i] else ys[i+a]) is
+          let rs = reshape l zs
+          in rs)
+        vsss
+  in rss
+\end{lstlisting}
+
+  \caption{After inlining all functions and performing simple
+    inlining, dead-code elimination, and simplification---no
+    existential quantification left.}
+\label{fig:SimplifyFShape}
+\end{figure}
+
+However, there is still a problem with the current form of the code.
+The issue is that the compiler cannot statically see that
+\lstinline{l==m}, and thus has to maintain the \lstinline{reshape} and
+perform a dynamic safety check at run-time.  This is because the
+computation of \lstinline{l} is hidden behind a branch.  The branch
+was conservatively inserted because we could not be sure that the
+value of \lstinline{vsss[0]} would not be used for computing the size
+(size analysis is intraprocedural, and so we have no insight in the
+definition of \lstinline{f}), but now it is a hindrance to further
+simplification.  There are at least two possible solutions, both of
+which are used by the present Futhark compiler:
+
+\begin{enumerate}
+\item Give the programmer the ability to annotate the original lambda
+  (in the source language) with the return type, \textit{including}
+  expected size.  This effectively lets the programmer make the guess
+  for us, with no branch required.  The result is still checked by a
+  \lstinline{reshape}, but in most cases the guess will be statically
+  the same as the computed size, and the \lstinline{reshape} can thus
+  be simplified away.
+\item Somehow ``mark'' the branch as being a size computation.  Then,
+  after inlining and simplification, we can recognise such branches,
+  and simplify them to their ``true'' branch, if that branch contains
+  only ``safe'' expressions, where a safe expression is one whose
+  evaluation can never fail.  We have to wait until after inlining and
+  simplification, as a function call can never be considered safe.
+
+  This solution has the downside that it may affect whether an inner
+  size of an empty array is zero or nonzero.
+\end{enumerate}
+
+In practise, the first solution is preferable in the vast majority of
+cases, as it also serves as useful documentation of programmer intent
+in the source program.
+
+A third solution is to factor out the ``checking'' part of the
+\lstinline{reshape} operation.  This approach is sketched on
+Figure~\ref{fig:SimplifyFShapeCert}.  Here, we use a hypothetical
+\lstinline{assert} expression for computing a ``certificate'', on
+which the \lstinline{reshape} expression itself is predicated.  To
+enable the check to be hoisted safely out of the outer
+\lstinline{map}, the condition also succeeds if the outer map contains
+no iterations (\lstinline{n == 0}).  The Futhark compiler currently
+makes only limited use of this technique, as the static equivalence of
+sizes is a more powerful enabler of other optimisations.
+
+One may observe that in the resulting code, the shape and regularity
+of \texttt{rss} are computed and verified before the definition of
+\texttt{rss}, respectively, and, most importantly, that the size
+computation and assumed-invariant verification introduce negligible
+overhead, i.e., $O(1)$ number of operations.
+
+\begin{figure}
+\begin{lstlisting}
+let main (n: i32) (m: i32) (k: i32)
+         (vsss: [n][m][k]f64): d1 d2.[d][d1][d2]f64 =
+  let l = if n != 0 then m+m else 0
+  let c = m+m
+@  let cert = assert(n == 0 || l==c)@
+  let (rss: [n][d]f64) =
+    map (\(vss: [m][k]f64): [l]f64 ->
+          let (ys: [m]f64) (zs: [m]f64) =
+            map (\(vs: [k]f64) ->
+                  let ys = reduce (+) 0.0 vs
+                  let zs = reduce (*) 1.0 vs
+                  in (ys, zs))
+                vss
+          let (is: [c]i32) = iota c
+          let (zs: [c]f64) =
+            map (\i -> if i < n then xs[i] else ys[i+a]) is
+          let rs = reshape@<cert>@ l zs
+          in rs)
+        vsss
+  in rss
+\end{lstlisting}
+
+  \caption{Separating the size-checking of a \lstinline{reshape} from
+    the \lstinline{reshape} itself.}
+\label{fig:SimplifyFShapeCert}
+\end{figure}
+
+Note that the code shown on Figure~\ref{fig:RunEgTgt} is the only
+\textit{required} step we have to perform.  Subsequent optimisation to
+eliminate existential quantification could be done in any way that is
+found desirable, perhaps via interprocedural analysis or slicing.
+Previously, we experienced with a technique based on \textit{slicing},
+where a function \lstinline{g} is divided into two functions
+\lstinline{g_shape} and \lstinline{g_value}, the first of which
+computes the sizes of all (top-level) arrays in the latter, including
+the result.  An example is shown on Figure~\ref{fig:FShapeSlice},
+which contains a portion of the running example.  The
+\lstinline{concat} function has been split into
+\lstinline{concat_shape} and \lstinline{concat_value}. The call to
+\lstinline{concat} has been likewise split.  The Futhark compiler
+currently does not use this approach.  Partly because of the risk for
+asymptotic slowdown in the presence of recursion (which was supported
+at the time), and partly because merely inlining plus simplification
+is easier to implement, and performed equally well.
+
+\begin{figure}
+
+\begin{lstlisting}
+let concat_shape (n: i32) (m: i32) (xs: [n]f64) (ys: [m]f64): i32 =
+  n+m
+
+let concat_value (n: i32) (m: i32) (c: i32) (xs: [n]f64) (ys: [m]f64): [c]f64 =
+  let (is: [c]i32) = iota c
+  let (zs: [c]f64) =
+    map (\i -> if i < n then xs[i] else ys[i+n]) is
+  in zs
+
+let f (m: i32) (k: i32) (vss: [m][k]f64): d.[d]f64 =
+  let (ys: [m]f64) (zs: [m]f64) =
+    map (\(vs: [k]f64) ->
+          let ys = reduce (+) 0.0 vs
+          let zs = reduce (*) 1.0 vs
+          in (ys, zs))
+        vss
+  let (l: i32) = concat_shape m m c ys zs
+  let (rss: [l]f64) = concat_value m m c ys zs
+  in rs
+\end{lstlisting}
+
+  \caption{An example of applying the slicing approach to \lstinline{concat}.}
+  \label{fig:FShapeSlice}
+\end{figure}
 
 %%% Local Variables:
 %%% mode: latex

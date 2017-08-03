@@ -1,194 +1,315 @@
+\renewcommand{\sp}{~~~~~}
 \newcommand{\ft}{\phi}
 \newcommand{\fts}{\varphi}
 \newcommand{\tty}{\rho}
+\newcommand{\utty}{\hat{\rho}}
 \newcommand{\sembox}[1]{\hfill \normalfont \mbox{\fbox{\(#1\)}}}
 \newcommand{\sempart}[2]{\textrm{\textit{#1 \sembox{#2}}}}
+\newcommand{\vdb}{\vd_\textrm{b}}
 \newcommand{\vdp}{\vd_\textrm{p}}
+\newcommand{\vdhp}{\vd_{\hat{\textrm{p}}}}
 \newcommand{\vdP}{\vd_\textrm{P}}
 \newcommand{\vda}{\vd_\textrm{a}}
 \newcommand{\fracc}[2]{\begin{eqnarray} \frac{\begin{array}{c} #1
     \end{array}}{\begin{array}{c} #2 \end{array}} \end{eqnarray}}
 \newcommand{\fraccn}[2]{\refstepcounter{equation}\mbox{$\frac{\begin{array}{c} #1 \end{array}}{\begin{array}{c} #2 \end{array}}$}~(\arabic{equation})}
 \newcommand{\fraccc}[2]{\mbox{$\frac{\begin{array}{c} #1 \end{array}}{\begin{array}{c} #2 \end{array}}$}}
-\newcommand{\fn}[3]{\texttt{\textbackslash}~#1~\Par{#2}\Rightarrow #3}
+\newcommand{\fn}{\ensuremath{\lambda}}
+\newcommand{\Fn}[3]{\fn~#2:~#1~\Rightarrow #3}
 \newcommand{\ubar}[1]{\underline{#1}}
-\newcommand{\utau}{\ubar{\tau}}
-\newcommand{\usigma}{\ubar{\sigma}}
-\newcommand{\Fun}[4]{\texttt{let}~#1~#2\Par{#3}\mbox{\texttt{~=~}}#4}
-\newcommand{\Fn}[3]{\texttt{\textbackslash}}
+\newcommand{\utau}{\hat{\tau}}
+\newcommand{\etau}{\ubar{\tau}}
+\newcommand{\opty}{\ubar{\phi}}
+\newcommand{\Fun}[4]{\mbox{\lstinline[mathescape]!let\ #1\ #2:#3 =\ #4!}}
 
 \chapter{Overview and Uniqueness Types}
 
-Whenever $z$ is an object of some kind, we write $\bar{z}$ to range
-over sequences of objects of this kind. When we want to be explicit
-about the size of a sequence $\bar{z} = z_0,\cdots,z_{(n-1)}$, we
-often write it on the form $\nseq{z}{n}$ and we write $z,\bar{z}$ to
-denote the sequence $z,z_0,\cdots,z_{(n-1)}$.  We will write
-$\text{d}(\tau)$ to indicate the \emph{rank} (number of dimensions) of
-a type $\tau$.  We may also write $\text{d}(v)$, where $v$ is not
-itself a type, but something which {\em has} a type, such as a
-variable.
+The simplification engine encompasses well established optimisations
+such as inlining, copy propagation, constant folding,
+common-subexpression elimination, dead-code elimination, and hoisting
+of invariant terms out of recurrences in loops and SOACs.  The
+simplification rules are critical for optimising the result of
+higher-level optimisations, such as producer-consumer
+fusion~\cite{henriksen2014exploiting,henriksen2013t2}, hoisting, and
+size analysis, which is the subject of
+Chapter~\ref{chap:size-analysis}.  For example, size analysis is
+implemented via high-level transformation rules that only guarantee
+that the asymptotic complexity (in number of operations) of the
+original program is preserved, but rely on the simplification engine
+to reduce the overhead to be negligible in the common case.
 
+\section{Abstract Syntax}
 
-\begin{figure*}[bt]
+In this section we describe the abstract syntax of a simplified form
+of the Futhark intermediate representation (IR).  Whenever $z$ is an
+object of some kind, we write $\bar{z}$ to range over sequences of
+objects of this kind. When we want to be explicit about the size of a
+sequence $\bar{z} = z_0,\cdots,z_{(n-1)}$, we often write it on the
+form $\nseq{z}{n}$ and we write $z,\bar{z}$ to denote the sequence
+$z,z_0,\cdots,z_{(n-1)}$.  Depending on context, this sequence may
+have its components separated by commas, or merely juxtaposed.
 
-  $$
+\begin{figure*}
+$$
   \begin{array}{lrlr}
-    t & ::= & \mbox{\textbf{t} ~ $|$ ~ \texttt{[]$t$} ~ $|$ ~ \texttt{[$v$]$t$}} & \mbox{(Scalar/array type)} \\
-    ft & ::= & \mbox{$t$ ~ $|$ ~ \texttt{*}$t$} & \mbox{(Nonunique/Unique type)} \\
-    p & ::= & (v : t) & \mbox{(Let or lambda-bound name)} \\
-    fp & ::= & (v : dt) & \mbox{(Function-bound name)} \\
+    f & ::= & \textbf{id} & \mbox{(Function names)}\\
+    d,x,y,z & ::= & \textbf{id} & \mbox{(Variable names)}\\
+    c & ::= & \textbf{const} & \mbox{(Constant value)}\\
+    t &::=& \texttt{bool}~|~\texttt{i32}~|~\texttt{f32}~|~... & \mbox{(Built-in types)} \\
     \\
-    k & ::= & \mbox{\textbf{x}} & \mbox{(Constant )}\\
-    l & ::= & \mbox{\texttt{(\textbackslash $p_{0} \ldots p_{n}$:$dt$ -> $b$)}} ~~& ~~\mbox{(Anonymous Function)} \\
-    fun & ::= & \mbox{\lstinline[mathescape]!let\ $v$\ $fp_{0} \ldots fp_{n}$:$dt$ =\ $b$!} ~~& ~~\mbox{(Named function)} \\
-    prog & ::= & \mbox{$\epsilon$ ~ $|$ ~ $fun$ ~ $prog$} & \mbox{(Program)} \\
+    \tau & ::= & \mbox{\texttt{t} ~ $|$ ~ \texttt{[]$\tau$}} & \mbox{(Scalar/array type)} \\
+    \utau & ::= & \mbox{$\tau$ ~ $|$ ~ \texttt{*}$\tau$} & \mbox{(Nonunique/Unique type)} \\
+    \tty  & ::=   & (\tau_1, \ldots, \tau_n) & \mbox{(Tuple types)}\\
+    \utty  & ::=   & (\utau_1, \ldots, \utau_n) & \mbox{(Nonunique/Unique tuple types)}\\
+    \ft & ::= & \tty_1 \rightarrow \tty_2 & \mbox{(Function type)}\\
     \\
-    b & ::= & e & \mbox{(Expression)} \\
-      & | & \mbox{\lstinline[mathescape]!let ($p_{1},\ldots,p_{n}$) =\ $e$ in\ $b$!} & \mbox{(Let binding)}\\
+    p & ::= & (x_{1} : \tau_{1})~\ldots~(x_{n} : \tau_{n})  & \mbox{(\lstinline{let} or $\lambda$ pattern)} \\
+    \hat{p} & ::= & (x_{1} : \utau_{1})~\ldots~(x_{n} : \utau_{n})  & \mbox{(Function pattern)} \\
+    \\
+    fun & ::= & \mbox{\Fun{$f$}{$\hat{p}$}{$\utau$}{$b$}} ~~& ~~\mbox{(Named function)} \\
+    P & ::= & \mbox{$\epsilon$ ~ $|$ ~ $fun$ ~ $P$} & \mbox{(Program)} \\
+    \\
+    b & ::= & \mbox{\texttt{($x_{1},\ldots,x_{n}$)}} & \mbox{($n$-tuple)}\\
+      & | & \mbox{\lstinline[mathescape]!let\ $p$ =\ $e$ in\ $b$!} & \mbox{(Let binding)}\\
     e & ::= & k & \mbox{(Constant)} \\
-      & | & v & \mbox{(Variable)} \\
-      & | & \mbox{\texttt{($v_{1},\ldots,v_{n}$)}} & \mbox{($n$-tuple)}\\
-      & | & v \odot{} v & \mbox{(Scalar binary operator)}\\
-      & | & \mbox{\lstinline[mathescape]!if\ $v$ then\ $b$ else\ $b$!} & \mbox{(Branch)} \\
-      & | & \mbox{\texttt{$v$[$v_{1},\ldots,v_{n}$]}} & \mbox{(Array indexing)}\\
-      & | & \mbox{\lstinline[mathescape]!$v$ with [$v_{1},\ldots,v_{n}$] <-\ $v$!} &\mbox{(In-place update)}\\
-      & | & \mbox{\lstinline[mathescape]!loop ($p_{1},\ldots,p_{n}$)=($v_{1},\ldots,v_{n}$)\ for\ $v$ <\ $v$ do\ $b$!} &  \mbox{(Loop)}\\
-      & | & \mbox{\texttt{$v$ $v_{1}$ \ldots{} $v_{n}$}} &  \mbox{(Function call)}\\
-      & | & op & \mbox{(Other operation)} \\
-    \\
-    op & ::= \\
-      & | & \mbox{\lstinline{size} $v$} & \mbox{(Size of an array)}\\
-      & | & \mbox{\lstinline{iota} $v$} & \mbox{([0,$\ldots$,$v-1$])}\\
-      & | & \mbox{\lstinline{replicate} $v_{n}$ $v$} &  \mbox{([$v,\ldots,v$] of size $v_{n}$)}\\
-      & | & \mbox{\lstinline{rearrange} ($k_{1},\ldots,k_{n}$) $v$} &  \mbox{(Rearrange dimensions)}\\
-      & | & \mbox{\lstinline{reshape} ($v_{1},\ldots,v_{n}$) $v$} &  \mbox{(Reshape array)}\\
-      & | & \mbox{\lstinline{map} $l$ $v_{1}$ \ldots{} $v_{n}$} \\
-      & | & \mbox{\lstinline{reduce} $l$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_n$} \\
-      & | & \mbox{\lstinline{scan} $l$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_n$} \\
-      & | & \mbox{\lstinline{stream_seq} $l$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_m$} \\
-      & | & \mbox{\lstinline!stream_red! $l_{1}$ $l_{2}$ ($v_{1},\ldots,v_{n}$) $v_1$ \ldots{} $v_m$}
+      & | & x & \mbox{(Variable)} \\
+      & | & x \odot{} x & \mbox{(Scalar binary operator)}\\
+      & | & \mbox{\lstinline[mathescape]!if\ $x$ then\ $b$ else\ $b$!} & \mbox{(Branch)} \\
+      & | & \mbox{\texttt{$x$[$x_{1},\ldots,x_{n}$]}} & \mbox{(Array indexing)}\\
+      & | & \mbox{\lstinline[mathescape]!$x$ with [$x_{1},\ldots,x_{n}$] <-\ $x$!} &\mbox{(In-place update)}\\
+      & | & \mbox{\lstinline[mathescape]!loop ($\hat{p}$)=($x_{1},\ldots,x_{n}$)!}  &  \mbox{(Loop)} \\
+      &   & \mbox{\lstinline[mathescape]!\ for\ $x$ <\ $x$ do\ $b$!}\\
+      & | & f~x_{1}~\ldots~x_{n} & \mbox{(Function call)}\\
+      & | & \emph{op}~a_{1}~\ldots~a_{n} & \mbox{(Operator call)} \\
+    a & ::= & x & \mbox{(Simple argument)} \\
+      & |   & (x_{1}, \ldots, x_{n}) & \mbox{(Tuple argument)} \\
+      & |   & (\Fn{\tty}{\Par{p_{0}} \ldots \Par{p_{n}}}{e}) & \mbox{(Function argument)}
   \end{array}
   $$
+
   \caption{Grammar for the core Futhark IR.  Some compiler stages may
     impose additional constraints on the structure of ASTs, in
     particular by requiring size annotations to be present, or banning
     certain operations.  The definition of $op$ in particular may
     differ between stages.  Some constructs, such as \lstinline{while}
     loops, have been elided for simplicity.  The elided constructs
-    would have no influence on the development of the thesis.  }
-  \label{fig:core-futhark-syntax}
+    would have no influence on the development of the thesis.}
+  \label{fig:futhark-ir}
 \end{figure*}
+
+Figure~\ref{fig:futhark-ir} shows the (simplified) IR of Futhark,
+which will be used for all compiler-chapters of this thesis.  The
+syntax is intentionally similar to the source language.  Notable
+details include:
+\begin{itemize}
+\item Variable names are ranged over by $d$, $x$, $y$, and $z$, and we use
+  $f$ to range over function names.
+\item A variable may have a scalar type (i.e., \texttt{bool},
+  \texttt{i32}, \texttt{f64}), or a multidimensional (regular) array
+  type, such as $[][]\texttt{f64}$, which is the type of a matrix in
+  which all rows have the same size.
+\item Named and unnamed functions use a syntax similar to the source
+  language, but unnamed functions may appear only as immediate
+  arguments to SOACS, such as \lstinline{map}, \lstinline{reduce},
+  \lstinline{filter}, and so on. Moreover, named functions may only be
+  defined at top-level.  Recursion is not permitted.
+\end{itemize}
+``Body'' expressions ($b$) in the intermediate language are in
+A-normal form~\cite{Sabry:1992:RPC:141478.141563}.  That is, they
+consist of a sequence of \lstinline{let}-bindings that always ends in
+a tuple of variable names.  Tuple-typed variables do not exist in the
+IR, except as a syntactical construct for some operators.  A let-bound
+pattern ($p$) consists of one or more variables and associated types
+that bind the result of a non-body expression ($e$); intuitively
+equivalent to a tuple pattern in the source language.  Types are
+syntactically differentiated into two sorts: $\tau$, without
+uniqueness attributes, and $\utau$, which permit an optional
+uniqueness attribute (an asterisk).  Uniqueness attributes are only
+used when specifying the parameter and return types of top-level
+functions and \lstinline{for}-loops---patterns in \lstinline{let}
+bindings and anonymous functions possess no uniqueness attributes.
+
+
+\begin{figure}
+\begin{tabular}{lp{58mm}}
+  $\emph{op}~a_{1}~\ldots~a_{n}$ & Description \\ \hline
+  \lstinline[mathescape]!size $c$ $x$! & Returns the size of dim $x$ of $x$, where $x$ must be a non-negative integer literal. \\
+  \lstinline[mathescape]!iota $x$! & Returns the vector $[0,\ldots, x-1]$. \\
+  \lstinline[mathescape]!replicate $y$ $x$! & Returns an array of rank one higher than $x$'s rank, containing an $y$-times replication of $x$.\\
+  \lstinline[mathescape]!reshape ($y_{1},\ldots,y_{n}$) $x$! & Return an array of shape $y_{1}\times\ldots\times y_{n}$ containing the row-major elements of $x$.  It is a dynamic error if $x$ does not contain exactly $y_{1}\times\ldots\times y_{n}$ elements. \\
+  \lstinline[mathescape]!rearrange ($c_{1}, \ldots, c_{n}$) $x$! & Rearrange the order of dimensions of the $n$-dimensional array $x$.  The reordering $c_{1}, \ldots, c_{n}$ must be a permutation of $1...n$. \\
+  \lstinline[mathescape]!map $\lambda$ $x_{1}$ $\ldots$ $x_{n}$! & Apply the $n$-ary function $\lambda$ simultaneously to consecutive elements of $x_{1}\ldots{}x_{n}$, producing an array of the results.  If $\lambda$ returns $k$ values, $k$ arrays are returned. \\
+  \lstinline[mathescape]!reduce $\lambda$ ($y_{1}, \ldots, y_{n}$) $x_{1}$ $\ldots$ $x_{n}$! &
+                                                                                               Perform a reduction of arrays $x_{1}, \ldots, x_{n}$ via the $2n$-ary function $\lambda$, producing $n$ values.  The values $y_{1}, \ldots, y_{n}$ constitute a neutral argument for $\lambda$.
+  \\
+  \lstinline[mathescape]!scan $\lambda$ ($y_{1}, \ldots, y_{n}$) $x_{1}$ $\ldots$ $x_{n}$! &
+                                                                                             Perform an inclusive prefix scan of arrays $x_{1}, \ldots, x_{n}$ via the $2n$-ary function $\lambda$, producing $n$ values.  The values $y_{1}, \ldots, y_{n}$ constitute a neutral argument for $\lambda$.
+\end{tabular}
+\caption{Description of SOAC operators.}
+\label{fig:soacDesc}
+\end{figure}
+
+
+\begin{figure}[hbt]
+\begin{tabular}{lcl}
+\emph{op} & & \textrm{TySch}(\emph{op}) \\ \hline
+  {\lstinline!size!} & : & $\forall\alpha.\texttt{i32} \rightarrow \alpha \rightarrow \texttt{i32}$ \\
+  {\lstinline!iota!} & : & $\texttt{i32} \rightarrow []\texttt{i32}$ \\
+  {\lstinline!replicate!} & : & $\forall\alpha.\texttt{i32} \rightarrow \alpha \rightarrow []\alpha$ \\
+  \lstinline[mathescape]!reshape! & : & $\forall\alpha.(\texttt{i32}_{1}, \ldots, \texttt{i32}_{n})\rightarrow[]_{1}\cdots[]_{m}\alpha\rightarrow[]_{1}\cdots[]_{n}\alpha$ \\
+  \lstinline[mathescape]!rearrange ($c_{1}, \ldots, c_{n}$)! & : & $\forall\alpha.[]_{1}\cdots[]_{n}\alpha\rightarrow[]_{1}\cdots[]_{n}\alpha$ \\
+  {\lstinline!map!} & : & $\forall\bar{\alpha}^{(n)}\bar{\beta}^{(m)}. (\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\bar{\beta}^{(m)}))$ \\
+          & & ~~~~~~~~~~~~~~~~~ $\rightarrow []\alpha_1 \rightarrow \ldots \rightarrow []\alpha_n$ \\
+          & & ~~~~~~~~~~~~~~~~~ $\rightarrow ([]\beta_1,\ldots,[]\beta_m)$ \\
+  {\lstinline!reduce!} & : & $\forall\bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\bar{\alpha}^{(n)}))$\\
+          & & ~~~~~~~~~~ $\rightarrow (\alpha_1, \ldots, \alpha_n)$\\
+          & & ~~~~~~~~~~ $\rightarrow []\alpha_1 \rightarrow \ldots \rightarrow []\alpha_n$\\
+          & & ~~~~~~~~~~ $\rightarrow (\alpha_1,\ldots,\alpha_m)$ \\
+  {\lstinline!scan!} & : & $\forall\bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\bar{\alpha}^{(n)}))$\\
+          & & ~~~~~~~~~~ $\rightarrow (\alpha_1, \ldots, \alpha_n)$\\
+          & & ~~~~~~~~~~ $\rightarrow []\alpha_1 \rightarrow \ldots \rightarrow []\alpha_n$\\
+          & & ~~~~~~~~~~ $\rightarrow ([]\alpha_1,\ldots,[]\alpha_m)$ \\
+  {\lstinline!filter!} & : & $\forall\bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \texttt{bool})$ \\
+          & & ~~~~~~~~~~ $\rightarrow []\alpha_1 \rightarrow \ldots \rightarrow []\alpha_n$ \\
+          & & ~~~~~~~~~~ $\rightarrow ([]\alpha_1,\ldots,[]\alpha_n)$ \\
+\end{tabular}
+\caption{Size-agnostic type schemes for operators, including various SOACs.}
+\label{fig:soacType}
+\end{figure}
+
+An \textit{array operator} ($op$) is one of several constructs that
+operate on arrays.  These include SOACs, but also such operations as
+\lstinline{iota} and \lstinline{reshape}.  An array operator can be
+applied to multiple arguments ($a$), where an argument can be a
+variable in scope, but may also be a tuple of variables, or an
+anonymous function.
 
 For giving concise types to operators, we use a notion of \emph{extended
 types} that supports polymorphism in types and for which arguments to
 functions may themselves be functions:
 
 \begin{tabular}{lrl}
-$\utau$ & $::=$ & $t$ $~|~$ $\alpha$ $~|~$ $[\utau]$ $~|~$ $(\utau_1, \ldots, \utau_n)$ $~|~$ $\utau_1 \rightarrow \utau_2$ \\
-$\usigma$ & $::=$ & $\forall\bar{\alpha}.\utau$
+$\etau$ & $::=$ & $\alpha~|~(\tau_{1}, \ldots, \tau_{n})~|~\etau_1 \rightarrow \etau_2~|~\etau \rightarrow \etau$ \\
+$\opty$ & $::=$ & $\forall\bar{\alpha}.\etau$
 \end{tabular}
 
 \noindent Extended types ($\ubar{\tau}$) and extended type schemes
 ($\ubar{\sigma}$) are used only for the treatment of operators and we
 shall be implicit about converting types and type schemes to and from
-their extended counter parts. A \emph{substitution} ($S$) is a mapping
-from type variables to extended types. Applying a substitution $S$ to
-some object $B$, written $S(B)$, has the effect of simultaneously
-applying $S$ to type variables in $B$ (being the identity outside its
-domain). An extended type $\utau'$ is \emph{an instance of} an extended
-type scheme $\usigma = \forall \vec{\alpha}.\utau$, written $\usigma
-\geq \utau'$, if there exists a substitution $S$ such that $S(\utau) =
-\utau'$.
+their extended counter parts.  We treat the single-element tuple
+$(\tau)$ as equivalent to $\tau$.  A \emph{substitution} ($S$) is a
+mapping from type variables to extended types. Applying a substitution
+$S$ to some object $B$, written $S(B)$, has the effect of
+simultaneously applying $S$ to type variables in $B$ (being the
+identity outside its domain). An extended type $\etau'$ is \emph{an
+  instance of} an extended type scheme
+$\opty = \forall \vec{\alpha}.\etau$, written $\opty \geq \etau'$,
+if there exists a substitution $S$ such that $S(\etau) = \etau'$.
 
 Type schemes for operators, including a representative subset of the
-SOAC operators, are given in Figure~\ref{fig:soacType}.  The SOACs of
-the intermediate language (e.g., \lstinline{map}) are the
+SOAC operators, are given in Figure~\ref{fig:soacType}, and an
+informal description of them is given in Figure~\ref{fig:soacDesc}.
+The SOACs of the intermediate language (e.g., \lstinline{map}) are the
 tuple-of-array version of the user language SOACs. The SOACs of the
 intermediate language receive an arbitrary number of array arguments
 and produce a tuple of arrays. The semantics of a SOAC operator can be
-intuitively understood as a composition between \texttt{unzip}, the
-user-language SOAC (e.g., \texttt{map}), and \texttt{zip}, where the
+intuitively understood as a composition between \lstinline{unzip}, the
+user-language SOAC (e.g., \lstinline{map}), and \lstinline{zip}, where the
 unnamed function is suitably modified to work with the flat sequence
 of array arguments.
 
-\begin{figure}[hbt]
-\begin{tabular}{lcl}
-\emph{op} & & \textrm{TySch}(\emph{op}) \\ \hline
-{\lstinline!size!} & :: & $\forall\alpha.(\texttt{i32},\alpha) \rightarrow \texttt{i32}$ \\
-{\lstinline!iota!} & :: & $\texttt{i32} \rightarrow []\texttt{i32}$ \\
-{\lstinline!replicate!} & :: & $\forall\alpha.(\texttt{i32},\alpha) \rightarrow []\alpha$ \\
-{\lstinline!map!} & :: & $\forall\bar{\alpha}^{(n)}\bar{\beta}^{(m)}. ((\bar{\alpha}^{(n)}) \rightarrow (\bar{\beta}^{(m)}), []\alpha_1,\ldots,[]\alpha_n)$ \\
-           & & ~~~ $\rightarrow ([]\beta_1,\ldots,[]\beta_m)$ \\
-{\lstinline!reduce!} & :: & $\forall\bar{\alpha}^{(n)}.(\ft,\bar{\alpha}^{(n)},[]\alpha_1,\ldots,[]\alpha_n) \rightarrow (\bar{\alpha}^{(n)})$ \\
-& & ~~~ where ~ $\ft = (\bar{\alpha}^{(n)},\bar{\alpha}^{(n)}) \rightarrow (\bar{\alpha}^{(n)})$ \\
+In the type rules, we permit the implicit transformation of uniqueness
+types and patterns $\utau/\utty/\hat{p}$ to their corresponding
+$\tau/\tty/p$, where uniqueness attributes have simply been removed.
+This simplifies the type rules, which can then be stated separate from
+the rules for checking uniqueness properties.
 
-{\lstinline!scan!} & :: & $\forall\bar{\alpha}^{(n)}.(\ft,\bar{\alpha}^{(n)},[]\alpha_1,\ldots,[]\alpha_n) \rightarrow (\bar{\alpha}^{(n)})$ \\
-& & ~~~ where ~ $\ft = (\bar{\alpha}^{(n)},\bar{\alpha}^{(n)}) \rightarrow ([]\alpha_1,\ldots,[]\alpha_m)$ \\
+Type environments ($\Gamma$) are finite
+maps from program variables to types or function types. When $\Gamma$
+is a type environment and $p$ is a pattern
+$\tau_1~x_1,\cdots,\tau_n~x_n$, we write $\Gamma,p$ to denote the
+typing environment $\Gamma,x_1:\tau_1,\cdots,x_n:\tau_n$.
 
-{\lstinline!filter!} & :: & $\forall\bar{\alpha}^{(n)}.(\ft,[]\alpha_1,\ldots,[]\alpha_n) \rightarrow ([]\alpha_1,\ldots,[]\alpha_n)$ \\
-& & ~~~ where ~ $\ft = (\bar{\alpha}^{(n)}) \rightarrow \texttt{bool}$
-\end{tabular}
-\caption{Size-agnostic type schemes for operators, including various SOACs.}
-\label{fig:soacType}
-\end{figure}
+Typing rules for the source language are given in
+Figures~\ref{fig:srcTypeRules} and \ref{fig:srcTypeRulesExps}. The
+rules allow inferences among sentences of the following forms:
+
+\begin{description}
+\item[$\vdp p : \tty$,] read ``the pattern $p$ is matched by
+  expressions of tuple type $\tty$.''
+\item[$\vdhp \hat{p} : \utty$,] read ``the pattern with uniqueness
+  $\hat{p}$ is matched by expressions of tuple type $\tty$.''
+\item[$\Gamma \vda a : \tau / \ft$,] read ``under the assumptions
+$\Gamma$, the operator argument $a$ has type $\tau$ or function type
+$\ft$.''
+\item[$\Gamma \vdb b : \rho$,] read ``under the assumptions $\Gamma$,
+  the expression $e$ has tuple type $\rho$.''
+\item[$\Gamma \vdP P : \rho$,] read ``under the assumptions
+$\Gamma$, the program $P$ has tuple type $\rho$.''
+\end{description}
 
 \begin{figure}[bt]
-  \begin{minipage}[t]{0.45\linewidth}
-\sempart{Patterns}{\vdp p : \rho}
+\sempart{Patterns}{\vdp p : \tty}
 
-\fracc{}{\vdp (x_1: \tau_1, \cdots, x_n: \tau_n) : \{\tau_1, \cdots, \tau_n\}}
+\fracc{}{\vdp (x_1: \tau_1, \cdots, x_n: \tau_n) : (\tau_1, \cdots, \tau_n)}
 
-\sempart{Operator arguments}{\vda a : \tau / \ft}
+\sempart{Operator arguments}{\vda a : \tty / \ft}
 
 \fracc{}{\Gamma \vda x : \Gamma(x)}
 
-\fracc{\vdp p : \rho \sp \Gamma,p \vd e : \rho'}{\Gamma \vda \fn{\rho'}{p}{e}: \rho \rightarrow \rho'}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.45\linewidth}
-\sempart{Programs}{\Gamma \vdP P : \tty}
+\fracc{\vdp p : \tty \sp \Gamma,p \vdb b : \tty'}{\Gamma \vda \Fn{\tty'}{\Par{p}}{b}: \tty \rightarrow \tty'}
 
-\fracc{\vdp p : \tty_1 \sp \Gamma,p \vd e : \tty_2 \\
-\Gamma(g) = \tty_1 \rightarrow \tty_2  \sp  \Gamma \vdP P : \tty}
-{\Gamma \vdP \Fun{\tty_2}{g}{p}{e} ; P : \tty}
+\fracc{}{\vdp (x_1, \ldots, x_n) : (\Gamma(x_1), \ldots, \Gamma(x_n))}
 
-\fracc{\Gamma \vd e : \tty}{\Gamma \vdP e : \tty}
-\end{minipage}
+\sempart{Parameters}{\vdhp \hat{p} : \utty}
 
-\vspace{2ex}
+\fracc{}{\vdhp (x_1: \utau_1, \cdots, x_n: \utau_n) : (\utau_1, \cdots, \utau_n)}
 
-\sempart{Expressions}{\Gamma \vd e : \rho}
-\fracc{}{\Gamma \vd (x_1,\cdots,x_n) : (\Gamma(x_1),\cdots,\Gamma(x_n))}
+\sempart{Programs}{\Gamma \vdP P}
 
-\fracc{\Gamma(y) = [\tau] \sp \Gamma(s) = \texttt{int} \sp \Gamma,x:\tau \vd e : \rho}
-{\Gamma \vd \Let{x:\tau}{y[s]}{e} : \rho}
+\fracc{\vdhp \hat{p} : (\tau_1, \ldots, \tau_n) \sp \Gamma,\hat{p} \vdb b : \tty \\
+\Gamma(g) = \tau_1 \rightarrow \ldots \rightarrow \tau_n \rightarrow \tau_{n+1}  \sp  \Gamma \vdP P}
+{\Gamma \vdP \Fun{$f$}{$\hat{p}$}{$\utty_2$}{$b$}~P}
 
-\fracc{\textrm{ConstType}(\emph{ct}) = \tau \sp \Gamma, x:\tau \vd e : \rho}{\Gamma \vd \Let{x:\tau}{\emph{ct}}{e} : \rho}
+\fracc{}{\Gamma \vdP \epsilon}
 
-\fracc{\Gamma \vda a_i : \utau_i \sp i = [0;n[ \\
-\textrm{TySch}(\emph{op}) \geq (\bar{\utau}^{(n)}) \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vd e : \rho'}
-{\Gamma \vd \Let{p}{\emph{op}(\bar{a}^{(n)})}{e} : \rho'}
-
-\fracc{\Gamma(x_i) = \tau_i \sp i = [0;n[ \\
-\Gamma(g) = (\bar{\tau}^{(n)}) \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vd e : \rho'}
-{\Gamma \vd \Let{p}{g(\bar{x}^{(n)})}{e} : \rho'}
-
-\fracc{\Gamma(s) = \texttt{bool} \sp \Gamma \vd e_1 : \rho \sp \Gamma \vd e_2 : \rho \\
-\vdp p : \rho \sp \Gamma,p \vd e : \rho'}
-{\Gamma \vd \Let{p}{\If{s}{e_1}{e_2}}{e} : \rho'}
-
-\caption{Typing rules for Futhark's core IR.}
+\caption{Typing rules for Futhark's core IR, excluding expressions.}
 \label{fig:srcTypeRules}
 \end{figure}
 
-\section{Size Analysis}
+\begin{figure}[bt]
+\sempart{Expressions}{\Gamma \vdb b : \rho}
+\fracc{}{\Gamma \vdb (x_1,\cdots,x_n) : (\Gamma(x_1),\cdots,\Gamma(x_n))}
 
+\fracc{\Gamma(y) = []\tau \sp \Gamma(s) = \texttt{i32} \sp \Gamma,x:\tau \vdb b : \rho}
+{\Gamma \vdb \Let{x:\tau}{y[s]}{b} : \rho}
+
+\fracc{\textrm{ConstType}(\emph{ct}) = \tau \sp \Gamma, x:\tau \vdb b : \rho}{\Gamma \vdb \Let{x:\tau}{\emph{c}}{b} : \rho}
+
+\fracc{\Gamma \vda a_i : \etau_i \sp i = [0;n[ \\
+\textrm{TySch}(\emph{op}) \geq (\bar{\etau}^{(n)}) \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vdb b : \rho'}
+{\Gamma \vdb \Let{p}{\emph{op}~\bar{a}^{(n)}}{b} : \rho'}
+
+\fracc{\Gamma(x_i) = \tau_i \sp i = [0;n[ \\
+\textrm{lookup}_{\textrm{fun}}(f) = \tau_1 \rightarrow \cdots \rightarrow \tau_n \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vdb b : \rho'}
+{\Gamma \vdb \Let{p}{f~x_{1}~\ldots~x_n}{b} : \rho'}
+
+\fracc{\Gamma(s) = \texttt{bool} \sp \Gamma \vdb b_1 : \rho \sp \Gamma \vdb b_2 : \rho \\
+\vdp p : \rho \sp \Gamma,p \vdb b : \rho'}
+{\Gamma \vdb \Let{p}{\If{s}{b_1}{b_2}}{b} : \rho'}
+
+\caption{Typing rules for expressions in Futhark's core IR.}
+\label{fig:srcTypeRulesExps}
+\end{figure}
+
+\fixme{Some rules are missing.}
 
 \section{Checking Uniqueness Types}
 
 \subsection{Alias Analysis}
 
 \newcommand{\expAliases}[3]{#1 \vdash #2 \Rightarrow #3}
+\newcommand{\bodyAliases}[3]{#1 \vdash_{b} #2 \Rightarrow #3}
 \newcommand{\aliases}[1]{\textrm{aliases}(#1)}
 \newcommand{\seqOccurences}[3]{#1 \gg #2 : #3}
 
@@ -207,24 +328,34 @@ The context $\Sigma$ maps variables in scope
 to their aliasing sets.
 
 \begin{figure}
-\[
-\boxed{
-\expAliases{\Sigma}{e}{\langle \sigma_{1}, \ldots, \sigma_{n} \rangle}
-}
-\]
+\sempart{Body aliases}{\bodyAliases{\Sigma}{e}{\langle \sigma_{1}, \ldots, \sigma_{n} \rangle}}
 
 \begin{equation*}
 \inference{
 }{
-  \expAliases{\Sigma}{v}{\langle \{ v \} \cup \Sigma(v) \rangle}
+  \bodyAliases{\Sigma}{(x_{1}, \ldots, x_{n})}{\langle \{ x_{1} \} \cup \Sigma(x_{1}), \ldots,  \{ x_{n} \} \cup \Sigma(x_{n}) \rangle}
 }
-\tagsc{Alias-Var}
+\tagsc{Alias-Tuple}
 \end{equation*}
 
 \begin{equation*}
 \inference{
+  \expAliases{\Sigma}{e}{\langle \nseq{\sigma}{n} \rangle}
+  \\
+  \bodyAliases{\Sigma, x_{i} \mapsto \sigma_{i}}{b}{\langle \nseq{\sigma'}{n} \rangle}
 }{
-  \expAliases{\Sigma}{k}{\langle \emptyset \rangle}
+  \bodyAliases{\Sigma}{\text{\lstinline[mathescape]!let\ $\nseq{(x:\tau)}{n}$ =\ $e$ in\ $b$!}}
+  {\langle \nseq{\sigma'}{n} \rangle \setminus \{\nseq{x}{n}\}}
+}
+\tagsc{Alias-LetPat}
+\end{equation*}
+
+\sempart{Expression aliases}{\expAliases{\Sigma}{e}{\langle \sigma_{1}, \ldots, \sigma_{n} \rangle}}
+
+\begin{equation*}
+\inference{
+}{
+  \expAliases{\Sigma}{c}{\langle \emptyset \rangle}
 }
 \tagsc{Alias-Const}
 \end{equation*}
@@ -232,19 +363,26 @@ to their aliasing sets.
 \begin{equation*}
 \inference{
 }{
-  \expAliases{\Sigma}{\text{\lstinline[mathescape]!map($l$, $\nseq{v}{n}$)!}}
-  {\langle \nseq{\emptyset}{n} \rangle}
+  \expAliases{\Sigma}{x}{\langle \{ x \} \cup \Sigma(x) \rangle}
 }
-\tagsc{Alias-Map}
+\tagsc{Alias-Var}
 \end{equation*}
 
 \begin{equation*}
 \inference{
-  \expAliases{\Sigma}{e_{2}}{\langle s^{2}_{1}, \ldots, s^{2}_{n}\rangle}
-  &
-  \expAliases{\Sigma}{e_{3}}{\langle s^{3}_{1}, \ldots, s^{3}_{n}\rangle}
 }{
-  \expAliases{\Sigma}{\text{\lstinline[mathescape]!if\ $v_{1}$ then\ $e_{2}$ else\ $e_{3}$!}}
+  \expAliases{\Sigma}{x \oplus y}{\langle \emptyset \rangle}
+}
+\tagsc{Alias-ScalarBinOp}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  \bodyAliases{\Sigma}{b_{2}}{\langle s^{2}_{1}, \ldots, s^{2}_{n}\rangle}
+  &
+  \bodyAliases{\Sigma}{b_{3}}{\langle s^{3}_{1}, \ldots, s^{3}_{n}\rangle}
+}{
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!if\ $x_{1}$ then\ $b_{2}$ else\ $b_{3}$!}}
   {\langle s^{2}_{1} \cup s^{3}_{1}, \ldots, s^{2}_{n} \cup s^{3}_{n}\rangle}
 }
 \tagsc{Alias-If}
@@ -252,112 +390,169 @@ to their aliasing sets.
 
 \begin{equation*}
 \inference{
-  \expAliases{\Sigma}{e_{1}}{\langle \nseq{\sigma}{n} \rangle}
-  \\
-  \expAliases{\Sigma, p_{i} \mapsto \sigma_{i}}{e_{2}}{\langle \nseq{\sigma'}{n} \rangle}
+  \textrm{$x$ is of rank $n$}
 }{
-  \expAliases{\Sigma}{\text{\lstinline[mathescape]!let ($\nseq{p}{n}$) = $e_{1}$ in $e_{2}$!}}
-  {\langle \nseq{\sigma'}{n} \rangle \setminus \{\nseq{p}{n}\}}
-}
-\tagsc{Alias-LetPat}
-\end{equation*}
-
-\begin{equation*}
-\inference{
-  \textrm{$v$ is of rank $n$}
-}{
-  \expAliases{\Sigma}{\textsf{$v$[$\nseq{v}{n}$]}}{\langle \emptyset \rangle}
+  \expAliases{\Sigma}{\textsf{$x$[$\nseq{x}{n}$]}}{\langle \emptyset \rangle}
 }
 \tagsc{Alias-IndexArray}
 \end{equation*}
 
 \begin{equation*}
 \inference{
-  \textrm{$v$ is of rank $>n$}
+  \textrm{$x$ is of rank $>n$}
 }{
-  \expAliases{\Sigma}{\textsf{$v$[$\nseq{v}{n}$]}}{\langle \{ v \} \cup \Sigma(v) \rangle}
+  \expAliases{\Sigma}{\textsf{$x$[$\nseq{x}{n}$]}}{\langle \{ x \} \cup \Sigma(x) \rangle}
 }
 \tagsc{Alias-SliceArray}
 \end{equation*}
 
 \begin{equation*}
 \inference{
-  \expAliases{\Sigma}{v_{1}}{\langle \sigma \rangle}
-  \\
-  \expAliases{\Sigma, v_{1} \mapsto \sigma }{e_{3}}{\langle \sigma' \rangle}
-}{
-\expAliases{\Sigma}
-{\bfrac{\text{\lstinline[mathescape]!loop ($p_{1}$ = $v_{1}$)!}}
-  {\text{\lstinline[mathescape]! for\ $p_{2}$ <\ $v_{2}$ do\ $e_{3}$!}}}
-{\langle \sigma' \setminus \{p_{1} \rangle\}}
-}\tagsc{Alias-DoLoop}
-\end{equation*}
-
-\begin{equation*}
-\inference{
 }{
 \expAliases{\Sigma}{
-  \text{\lstinline[mathescape]!$v_{a}$ with [$\nseq{v}{n}$] <- $v_{v}$!}
-}{\langle \Sigma(v_{a}) \rangle}
+  \text{\lstinline[mathescape]!$x_{a}$ with [$\nseq{x}{n}$] <-\ $x_{x}$!}
+}{\langle \Sigma(x_{a}) \rangle}
 }
 \tagsc{Alias-Update}
 \end{equation*}
 
+\caption{Aliasing rules for simple expressions.}
+\label{fig:aliasing-rules-1}
+\end{figure}
+
+\fixme{only 1 parameter in loop case}
+\fixme{only 1 return in apply case}
+\begin{figure}
+\sempart{Expression aliases (continued)}{\expAliases{\Sigma}{e}{\langle \sigma_{1}, \ldots, \sigma_{n} \rangle}}
+
+\begin{equation*}
+  \inference{
+    \textrm{$\tau$ is not of form \texttt{*}$\tau'$}
+    \\
+    \expAliases{\Sigma}{x_{1}}{\langle \sigma \rangle}
+    \sp
+    \bodyAliases{\Sigma, x_{1} \mapsto \sigma}{b}{\langle \sigma' \rangle}
+}{
+\expAliases{\Sigma}
+{\text{\lstinline[mathescape]!loop ($x_{1}: \tau$) =\ $y_{2}$ for\ $z_{1}$ <\ $z_{2}$ do\ $b$!}}
+{\langle \sigma' \setminus \{x_{1}\} \rangle}
+}\tagsc{Alias-DoLoop-Nonunique}
+\end{equation*}
+
+\begin{equation*}
+  \inference{
+}{
+\expAliases{\Sigma}
+{\text{\lstinline[mathescape]!loop ($x_{1}: \texttt{*}\tau$) =\ $y_{2}$ for\ $z_{1}$ <\ $z_{2}$ do\ $b$!}}
+{\langle \emptyset  \rangle}
+}\tagsc{Alias-DoLoop-Unique}
+\end{equation*}
+
 \begin{equation*}
 \inference{
-  \textrm{lookup}_{\textrm{fun}}(v_{f}) = \langle t_{r}, dt_{1}, \ldots, dt_{n} \rangle
+  \textrm{lookup}_{\textrm{fun}}(f) = \utau_{1}\rightarrow\cdots\rightarrow\utau_{n}\rightarrow\tau
   \\
-  \expAliases{\Sigma}{v_{i}}{\langle \sigma_{i} \rangle}
-  \\
-  \sigma = \bigcup_{\textrm{$dt_{i}$ is not of form \textsf{*}$t$}} \sigma_{i}
+  \expAliases{\Sigma}{x_{i}}{\langle \sigma_{i} \rangle}
+  \quad
+  \sigma = \bigcup_{\textrm{$\tau_{i}$ is not of form \texttt{*}$\tau'$}} \sigma_{i}
 }{
-  \expAliases{\Sigma}{\textsf{$v_{f}$ $v_{1}$ \ldots{} $v_{n}$}}
+  \expAliases{\Sigma}{\textsf{$f$ $x_{1}$ \ldots{} $x_{n}$}}
   {\langle \sigma \rangle}
 }\tagsc{Alias-Apply-Nonunique}
 \end{equation*}
 
 \begin{equation*}
 \inference{
-  \textrm{lookup}_{\textrm{fun}}(v_{f}) = \langle \textsf{*} t_{r}, dt_{1}, \ldots, dt_{n} \rangle
+  \textrm{lookup}_{\textrm{fun}}(f) = \utau_{1}\rightarrow\cdots\rightarrow\utau_{n}\rightarrow\texttt{*}\tau
 }{
-  \expAliases{\Sigma}{\textsf{$v_{f}$ $v_{1}$ \ldots{} $v_{n}$}}
+  \expAliases{\Sigma}{\textsf{$f$ $x_{1}$ \ldots{} $x_{n}$}}
   {\langle \emptyset \rangle}
 }\tagsc{Alias-Apply-Unique}
 \end{equation*}
 
 \begin{equation*}
-\boxed{
-\seqOccurences{\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}{\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}{\langle\mathcal{C}_{3},\mathcal{O}_{3}\rangle}
-}
+\inference{
+}{
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!iota\ $x$!}}{\langle \emptyset \rangle}
+}\tagsc{Alias-Iota}
 \end{equation*}
 
 \begin{equation*}
 \inference{
-  (\mathcal{O}_{2} \cup \mathcal{C}_{2}) \cap \mathcal{C}_{1} = \emptyset
 }{
-  \seqOccurences
-  {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
-  {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
-  {\langle\mathcal{C}_{1}\cup\mathcal{C}_{2},\mathcal{O}_{1}\cup\mathcal{O}_{2}\rangle}
-}\tagsc{Occurence-Seq}
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!replicate\ $x$\ $y$!}}{\langle \emptyset \rangle}
+}\tagsc{Alias-Replicate}
 \end{equation*}
-\caption{Aliasing rules.}
-\label{fig:aliasing-rules}
+
+\begin{equation*}
+  \inference{
+    \expAliases{\Sigma}{y}{\sigma}
+}{
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!reshape\ $(x_{1},\ldots,x_{n})$\ $y$!}}{\langle \sigma \rangle}
+}\tagsc{Alias-Reshape}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+    \expAliases{\Sigma}{y}{\sigma}
+}{
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!rearrange\ ($c_{i},\ldots,c_{n}$)\ $y$!}}{\langle \sigma \rangle}
+}\tagsc{Alias-Rearrange}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+}{
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!map ($\lambda p$:\ $(\nseq{\tau}{m}) \rightarrow b$)\ $\nseq{x}{n}$!}}
+  {\langle \nseq{\emptyset}{m} \rangle}
+}
+\tagsc{Alias-Map}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+}{
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!reduce\ $a$\ ($\nseq{x}{n}$)\ $\nseq{x}{n}$!}}
+  {\langle \nseq{\emptyset}{n} \rangle}
+}
+\tagsc{Alias-Reduce}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+}{
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!scan\ $a$\ ($\nseq{x}{n}$)\ $\nseq{x}{n}$!}}
+  {\langle \nseq{\emptyset}{n} \rangle}
+}
+\tagsc{Alias-Scan}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+}{
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!filter\ $a$\ $\nseq{x}{n}$!}}
+  {\langle \nseq{\emptyset}{n} \rangle}
+}
+\tagsc{Alias-Filter}
+\end{equation*}
+
+\caption{More aliasing rules.}
+\label{fig:aliasing-rules-2}
 \end{figure}
 
-The aliasing rules are listed in Figure~\ref{fig:aliasing-rules},
-although for space reasons, some are left out.  The
-\textsc{Alias-Var}-rule defines the aliases of a variable expression
-to be the alias set of the variable joined by the name of the variable
-itself - this is because $v \notin \Sigma(v)$, as can be seen by
-\textsc{Alias-LetPat}.  Alias sets for values
-produced by SOACs such as \lstinline{map} are empty.  We
-can imagine the arrays produced as \textit{fresh}, although the
-compiler is of course free to reuse existing memory if it can do so
-safely.  The \textsc{Alias-IndexArray} rule tells us that a scalar
-read from an array does not alias its origin array, but
-\textsc{Alias-SliceArray} dictates that an array slice does,
-which fits the implementation intuition.
+The aliasing rules are listed in Figures~\ref{fig:aliasing-rules-1}
+and \ref{fig:aliasing-rules-2}, although for space reasons, some are
+left out.  The \textsc{Alias-Var}-rule defines the aliases of a
+variable expression to be the alias set of the variable joined by the
+name of the variable itself - this is because $v \notin \Sigma(v)$, as
+can be seen by \textsc{Alias-LetPat}.  Alias sets for values produced
+by SOACs such as \lstinline{map} are empty.  We can imagine the arrays
+produced as \textit{fresh}, although the compiler is of course free to
+reuse existing memory if it can do so safely.  The
+\textsc{Alias-IndexArray} rule tells us that a scalar read from an
+array does not alias its origin array, but \textsc{Alias-SliceArray}
+dictates that an array slice does, which fits the implementation
+intuition.
 % about how such operations might be implemented.
 
 
@@ -383,7 +578,7 @@ denote by $\mathcal{O}$ the set of the variables \textit{observed}
 Together, the pair $\langle\mathcal{C},\mathcal{O}\rangle$ is called
 an \textit{occurrence trace}.
 
-Figure~\ref{fig:aliasing-rules} defines a \textit{sequencing} judgment
+Figure~\ref{fig:uniqueness-rules} defines a \textit{sequencing} judgment
 between two occurrence traces, which takes the form $\seqOccurences
   {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
   {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
@@ -466,13 +661,22 @@ its body consumes only those of the function's parameters that are
 unique.
 
 \begin{figure}
+\sempart{Validity of sequencing}{\seqOccurences{\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}{\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}{\langle\mathcal{C}_{3},\mathcal{O}_{3}\rangle}}
+
 \begin{equation*}
-\boxed{
-\inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}
-}
+\inference{
+  (\mathcal{O}_{2} \cup \mathcal{C}_{2}) \cap \mathcal{C}_{1} = \emptyset
+}{
+  \seqOccurences
+  {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
+  {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
+  {\langle\mathcal{C}_{1}\cup\mathcal{C}_{2},\mathcal{O}_{1}\cup\mathcal{O}_{2}\rangle}
+}\tagsc{Occurence-Seq}
 \end{equation*}
 
-  \begin{equation*}
+\sempart{Uniqueness Safety Rules}{\inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}}
+
+\begin{equation*}
 \inference{
 }{
 \inPlaceSafe{v}{\emptyset}{\aliases{v}}
@@ -549,7 +753,7 @@ unique.
   {\langle\mathcal{C}',\mathcal{O}'\rangle}
 }{
   \inPlaceSafe
-  {\text{\lstinline[mathescape]!map ($\Fn\nseq{p}{n}$: $\nseq{t}{m}$ -> $e_{b}$) $\nseq{v}{n}$!}}
+  {\text{\lstinline[mathescape]!map ($\fn\nseq{p}{n}$: $\nseq{t}{m} \rightarrow e_{b}$) $\nseq{v}{n}$!}}
   {\mathcal{C}'}{\mathcal{O}'}
 }
 \tagsc{Safe-Map}

@@ -1,10 +1,9 @@
 PAPERPDF=thesis.pdf
 all: $(PAPERPDF)
 
-PDFLATEX        = pdflatex -halt-on-error
-#latex
+PDFLATEX        = xelatex -halt-on-error
 
-%.pdf: %.tex Makefile *.tex
+%.pdf: %.tex Makefile $(shell ls *.tex)
 	$(PDFLATEX) $<
 	biber $*
 	$(PDFLATEX) $<
