@@ -7,6 +7,7 @@ addons:
     packages:
     - texlive-full
     - biber
+    - fonts-ebgaramond
 
 install:
  - make
