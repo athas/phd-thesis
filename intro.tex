@@ -39,9 +39,9 @@ discuss how techniques considered \textit{heroic effort} in a compiler
 for an imperative language become tractable when applied in the
 functional setting.
 
-Chapter~\ref{chap:calculus} introduces a formal array calculus that
+\Cref{chap:calculus} introduces a formal array calculus that
 serves as inspiration for Futhark.  Various rewrite rules are shown
-and justified.  Chapter~\ref{chap:hardware} discusses a simplified but
+and justified.  \Cref{chap:hardware} discusses a simplified but
 performance-faithful model of contemporary GPU hardware, and shows
 how the primitive combinators of the previous chapter can be mapped
 efficiently to low-level code.
@@ -49,25 +49,25 @@ efficiently to low-level code.
 The second part of the thesis discusses various analyses,
 transformations, and optimisations carried out by the Futhark
 compiler.  These constitute my main contributions.
-Chapter~\ref{chap:size-analysis} shows a technique for array shape
+\Cref{chap:size-analysis} shows a technique for array shape
 analysis based on slicing and existential types (previously published
-at FHPC 2014~\cite{henriksen2014size}).  Chapter~\ref{chap:fusion}
+at FHPC 2014~\cite{henriksen2014size}).  \Cref{chap:fusion}
 presents the fusion algorithm employed by the fusion compiler ---
 parts have been published in FHPC 2013~\cite{henriksen2013t2}, my
 master's thesis~\cite{henriksen2014exploiting}, FHPC
 2016~\cite{Futhark:redomap}, and PLDI
 2017~\cite{henriksen2017futhark}.
-Chapter~\ref{chap:kernel-extraction} shows an algorithm that uses
+\Cref{chap:kernel-extraction} shows an algorithm that uses
 primarily loop distribution to transforming regular nested parallelism
 into flat parallelism.  The main novelty is that information (such as
 access patterns) is not destroyed to the degree seen in previous
-techniques.  Chapter~\ref{chap:tiling} shows an implementation of
+techniques.  \Cref{chap:tiling} shows an implementation of
 automatic \textit{loop tiling} that exploits just this information.
 These two chapters are based on work previously published at PLDI
 2017~\cite{henriksen2017futhark}.
-Chapter~\ref{chap:empirical-validation} contains a performance
+\Cref{chap:empirical-validation} contains a performance
 analysis of Futhark on more than a dozen established benchmarks.
-Finally, Chapter~\ref{chap:interoperability} discusses how to call
+Finally, \cref{chap:interoperability} discusses how to invoke
 Futhark code from programs written in other languages, with Python
 used as the case study.
 

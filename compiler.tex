@@ -97,7 +97,7 @@ $$
   \label{fig:futhark-ir}
 \end{figure*}
 
-Figure~\ref{fig:futhark-ir} shows the (simplified) IR of Futhark,
+\Cref{fig:futhark-ir} shows the (simplified) IR of Futhark,
 which will be used for all compiler-chapters of this thesis.  The
 syntax is intentionally similar to the source language.  Notable
 details include:
@@ -207,8 +207,8 @@ $\opty = \forall \vec{\alpha}.\etau$, written $\opty \geq \etau'$,
 if there exists a substitution $S$ such that $S(\etau) = \etau'$.
 
 Type schemes for operators, including a representative subset of the
-SOAC operators, are given in Figure~\ref{fig:soacType}, and an
-informal description of them is given in Figure~\ref{fig:soacDesc}.
+SOAC operators, are given in \Cref{fig:soacType}, and an
+informal description of them is given in \Cref{fig:soacDesc}.
 The SOACs of the intermediate language (e.g., \lstinline{map}) are the
 tuple-of-array version of the user language SOACs. The SOACs of the
 intermediate language receive an arbitrary number of array arguments
@@ -578,7 +578,7 @@ denote by $\mathcal{O}$ the set of the variables \textit{observed}
 Together, the pair $\langle\mathcal{C},\mathcal{O}\rangle$ is called
 an \textit{occurrence trace}.
 
-Figure~\ref{fig:uniqueness-rules} defines a \textit{sequencing} judgment
+\Cref{fig:uniqueness-rules} defines a \textit{sequencing} judgment
 between two occurrence traces, which takes the form $\seqOccurences
   {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
   {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
@@ -604,7 +604,7 @@ right-hand trace.
 
 Some of the inference rules for checking if an expression $e$ is
 functionally safe with respect to in-place updates are shown in
-Figure~\ref{fig:uniqueness-rules}, where the central judgment is
+\Cref{fig:uniqueness-rules}, where the central judgment is
 $\inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}$.
 %\begin{equation*}
 %\boxed{
@@ -628,7 +628,7 @@ the function may consume its parameters, which should be seen as the
 input array.  This restriction also preserves the parallel semantics
 of \lstinline{map}, because different rows of a matrix can be safely
 updated in parallel.  An example can be seen on
-Figure~\ref{fig:map-in-place-update}, which shows an in-place update
+\Cref{fig:map-in-place-update}, which shows an in-place update
 nested inside an array.  To express this restriction, we define an
 auxiliary judgment
 $\consumedOK {\mathcal{P}}
@@ -653,7 +653,7 @@ not have such a mapping, the judgment is not derivable.
 %a parameter.
 %
 The precise inference rules are shown on
-Figure~\ref{fig:parameter-consumption}.
+\Cref{fig:parameter-consumption}.
 %
 Do-loops and function declarations can be checked for safety in a
 similar way.  A function is safe with respect to in-place updates if

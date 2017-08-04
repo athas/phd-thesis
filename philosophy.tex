@@ -319,7 +319,7 @@ level of abstraction, and stop overspecifying details like iteration
 order and sequencing, unless we really \textit{need} something to
 execute in some specific order.  In a C program, everything is
 required to execute in exactly the order written by the programmer,
-and the C compiler must perform significant work to figure out which
+and the C compiler must perform significant work to determine which
 of the sequencing restrictions are essential, and which are
 accidental.  In a (pure) functional language, only data dependencies
 affect ordering.  Furthermore, the language should be safe for
@@ -608,7 +608,7 @@ already made all parallelism explicit via constructs such as
 programming, it is likely that the program contains \textit{excess
   parallelism}, that is, more parallelism than the machine needs.  As
 almost all parallelism comes with a cost in terms of overhead, one of
-the main challenges of the Futhark compilers is to figure how much of
+the main challenges of the Futhark compilers is to determine how much of
 this parallelism to actually take advantage of, and how much to turn
 into low-overhead sequential code via \textit{efficient
   sequentialisation}.  It is therefore more correct to say that the
@@ -625,7 +625,7 @@ reduce (\x y -> x + y) 0 xs
 We require that the functional argument is an associative function,
 and that the second element is a neutral element for that function.
 The conventional way to illustrate a parallel reduction is via a tree,
-as on Figure~\ref{fig:tree-summation}.  To reduce an $n$-element array
+as on \Cref{fig:tree-summation}.  To reduce an $n$-element array
 $[x_{1},\ldots,x_{n}]$ using operator $\oplus$, we launch $n/2$
 threads, with thread $i$ computing $x_{2i}\oplus{}x_{2i+1}$.  The
 initial $n$ elements are thus reduced to $n/2$ elements.  The process
@@ -674,9 +674,9 @@ elements, producing one intermediate result per thread.  We then
 launch a second reduction over all these intermediate results.  This
 second reduction can also be done in parallel, or can be sequential if
 $k$ is sufficiently small.  This approach is shown on
-Figure~\ref{fig:chunked-summation}.  A rough performance comparison
+\Cref{fig:chunked-summation}.  A rough performance comparison
 between sample implementations of the two approaches to reduction is
-shown on Figure~\ref{fig:tree-vs-chunked}?.  On a sequential machine,
+shown on \Cref{fig:tree-vs-chunked}?.  On a sequential machine,
 we can simply set $k=1$, and not exploit any parallelism at all.
 Efficient sequentialisation is particularly important (and also more
 difficult) when it comes to handling nested parallelism, as it enables
@@ -1139,7 +1139,7 @@ compositions of bulk parallel operators.
   implemented in Futhark, and so user-defined higher-order functions
   are not supported.  It is, however, possible to use the higher-order
   module system to imitate higher-order functions, albeit at some cost
-  in boilerplate.  An example is shown on Figure~\ref{fig:faking-hof}.
+  in boilerplate.  An example is shown on \Cref{fig:faking-hof}.
   As the module system is outside the scope of this thesis, we shall
   not delve further on the merits and demerits of this approach.
 \end{description}
@@ -1193,9 +1193,9 @@ arrays, allows us to add specialised constructs and notation to aid in
 array programming.  We have already seen an example in the form of
 size parameters, which allows the programmer to express size
 constraints on functions parameters.  For example, the dot product
-function on Figure~\ref{fig:futhark-dotprod} requires that the two
+function on \Cref{fig:futhark-dotprod} requires that the two
 input arrays have the same length, while the matrix multiplication on
-Figure~\ref{fig:futhark-matmult} specifies the usual size constraints
+\Cref{fig:futhark-matmult} specifies the usual size constraints
 on matrix multiplication.
 
 \begin{figure}

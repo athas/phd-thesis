@@ -91,7 +91,7 @@ invariants are only ``assumed'', that is, they have not been verified
 \label{fig:soacSizeType}
 \end{figure}
 
-Figure~\ref{fig:sizeTypes} shows an extended type system in which (i)
+\Cref{fig:sizeTypes} shows an extended type system in which (i)
 sizes are encoded in each array type, that is, $[d]\tau$ represents
 the type of an array in which the outermost dimension has size $d$,
 and in which (ii) function/lambda types use universal quantifiers for
@@ -102,7 +102,7 @@ a simple variant of dependent types.  For function parameters where
 the name is irrelevant, we shall elide the name and use the same
 notation as previously.
 %
-Figure~\ref{fig:soacSizeType} also shows that this extension allows to
+\Cref{fig:soacSizeType} also shows that this extension allows to
 encode most of the afore-mentioned invariants into size-dependent
 types.  The requirement for non-negative input to \lstinline{iota} and
 \lstinline{replicate} remains a dynamic property.  We see that most
@@ -159,14 +159,14 @@ let main (vsss: [][][]f64): [][]f64 =
 \label{fig:RunEgSrc}
 \end{figure}
 
-The program in Figure~\ref{fig:RunEgSrc} receives as input a
+The program in \Cref{fig:RunEgSrc} receives as input a
 three-dimensional array \texttt{A}, and produces a two-dimensional
 array \texttt{B}, by mapping the elements of the outermost dimension
 of \texttt{A} by function \texttt{f}, such that each of the rows of
 \texttt{B} is the catenation of the arrays produced by reducing the
 innermost dimension of \texttt{A} by addition and multiplication,
 respectively. The Futhark source language is very close to the
-un-sized IR in Figure~\ref{fig:RunEgSrc}, except that types are
+un-sized IR in \Cref{fig:RunEgSrc}, except that types are
 required only in function declarations, and expressions need not be in
 A-normal form.
 
@@ -215,11 +215,11 @@ let main @(n: i32) (m: i32) (k: i32)@
 
   \caption{Running example:
     $\exists$-quantified target IR.  Changes compared to
-    Figure~\ref{fig:RunEgSrc} highlighted in red.}
+    \Cref{fig:RunEgSrc} highlighted in red.}
 \label{fig:RunEgTgt}
 \end{figure}
 
-The first stage, demonstrated in Figure~\ref{fig:RunEgTgt}, transforms
+The first stage, demonstrated in \Cref{fig:RunEgTgt}, transforms
 the program into an unoptimised version in which (i) all arrays have
 shape-dependent types, which may be existentially quantified, and (ii)
 all ``assumed'' invariants are explicitly checked.
@@ -266,7 +266,7 @@ However, it performs a significant amount of redundant computation.
 To compute \lstinline{l}, we compute the entire result, only to throw
 most of it away.  General-purpose optimisation techniques can be
 employed to eliminate the overhead.  On
-Figure~\ref{fig:SimplifyFShape} we see the result of inlining all
+\Cref{fig:SimplifyFShape} we see the result of inlining all
 functions, followed by straightforward simplification, dead code
 removal, and hoisting of the computation of \lstinline{c}.  The result
 is that all arrays constructed insice the \lstinline{map}s have a size
@@ -344,7 +344,7 @@ in the source program.
 
 A third solution is to factor out the ``checking'' part of the
 \lstinline{reshape} operation.  This approach is sketched on
-Figure~\ref{fig:SimplifyFShapeCert}.  Here, we use a hypothetical
+\Cref{fig:SimplifyFShapeCert}.  Here, we use a hypothetical
 \lstinline{assert} expression for computing a ``certificate'', on
 which the \lstinline{reshape} expression itself is predicated.  To
 enable the check to be hoisted safely out of the outer
@@ -388,7 +388,7 @@ let main (n: i32) (m: i32) (k: i32)
 \label{fig:SimplifyFShapeCert}
 \end{figure}
 
-Note that the code shown on Figure~\ref{fig:RunEgTgt} is the only
+Note that the code shown on \Cref{fig:RunEgTgt} is the only
 \textit{required} step we have to perform.  Subsequent optimisation to
 eliminate existential quantification could be done in any way that is
 found desirable, perhaps via interprocedural analysis or slicing.
@@ -396,7 +396,7 @@ Previously, we experienced with a technique based on \textit{slicing},
 where a function \lstinline{g} is divided into two functions
 \lstinline{g_shape} and \lstinline{g_value}, the first of which
 computes the sizes of all (top-level) arrays in the latter, including
-the result.  An example is shown on Figure~\ref{fig:FShapeSlice},
+the result.  An example is shown on \Cref{fig:FShapeSlice},
 which contains a portion of the running example.  The
 \lstinline{concat} function has been split into
 \lstinline{concat_shape} and \lstinline{concat_value}. The call to

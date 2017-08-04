@@ -1,6 +1,44 @@
 \chapter{Empirical Validation in Bulk}
 \label{chap:empirical-validation}
 
+When a new programming model is proposed, it must be demonstrated that
+interesting programs can be written within the model.  While the model
+espoused by this thesis---functional array programming---is not new,
+our claim that it is a good foundation for obtaining parallel
+performance requires evidence.
+
+This chapter contains a discussion of several programs implemented in
+Futhark, with a focus on their runtime performance.  While we cannot
+claim that the current Futhark compiler embodies the full potential of
+functional array programming, the results presented here constitute at
+least a lower bound on that potential.
+
+Most of the benchmark programs presented here are based on, and
+compared against, hand-written low-level code written in CUDA or
+OpenCL.  We have sourced these from the published
+Rodinia~\cite{5306797} (version 3.1) and
+Parboil~\cite{stratton2012parboil} (version 2.5) benchmark suites.
+The comparison with hand-written implementations is to show the cost
+of using a high-level language.  However, as we shall see, even
+published code often contains significant inefficiencies, which
+occasionally leads to Futhark outperforming the reference
+implementations.  A handful of programs are from
+Accelerate~\cite{mcdonell2013optimising}, a Haskell eDSL for parallel
+programming.  These are included to show the performance of Futhark
+compared to an existing mature GPU language.
+
+All programs have been manually ported to Futhark, and compiled and
+run with the default settings.  We show how the performance of the
+Futhark code compares to the performance of the original reference
+implementations.  In some cases, we also discuss the programming
+techniques used to obtain efficient Futhark implementations.
+
+\section{N Benchmarks from Rodinia}
+
+\section{M Benchmarks from Parboil}
+
+\section{L Benchmarks from Accelerate}
+
 %%% Local Variables:
 %%% mode: latex
 %%% TeX-master: "thesis"

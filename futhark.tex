@@ -48,9 +48,6 @@
   keepspaces=true, % does not ignore spaces to fit width, convert tabs to spaces
   showstringspaces=false, % lets spaces in strings appear as real spaces
   breaklines=true, % wrap lines if they don't fit
-  frame=trbl, % draw a frame at the top, right, left and bottom of the listing
-  frameround=tttt, % make the frame round at all four corners
-  framesep=4pt, % quarter circle size of the round corners
   numbers=left, % show line numbers at the left
   numberstyle=\small\ttfamily, % style of the line numbers
   commentstyle=\slshape\bfseries\color{eclipseGreen}, % style of comments
@@ -65,6 +62,8 @@
     rearrange,
     reduce,
     reduce_comm,
+    redomap,
+    scanomap,
     replicate,
     reshape,
     rotate,
@@ -73,11 +72,12 @@
     split,
     true,
     unzip,
-    write,
+    scatter,
     zip,
     stream_seq,
     stream_red,
     stream_map,
+    stream_par,
     size,
   },
   emphstyle=\ttfamily\bfseries,
