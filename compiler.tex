@@ -15,7 +15,8 @@
 \newcommand{\fraccn}[2]{\refstepcounter{equation}\mbox{$\frac{\begin{array}{c} #1 \end{array}}{\begin{array}{c} #2 \end{array}}$}~(\arabic{equation})}
 \newcommand{\fraccc}[2]{\mbox{$\frac{\begin{array}{c} #1 \end{array}}{\begin{array}{c} #2 \end{array}}$}}
 \newcommand{\fn}{\ensuremath{\lambda}}
-\newcommand{\Fn}[3]{\fn~#2:~#1~\Rightarrow #3}
+\newcommand{\Fn}[3]{\fn#2:~#1~\rightarrow #3}
+\newcommand{\FnU}[2]{\fn#1~\rightarrow #2}
 \newcommand{\ubar}[1]{\underline{#1}}
 \newcommand{\utau}{\hat{\tau}}
 \newcommand{\etau}{\ubar{\tau}}
@@ -540,6 +541,7 @@ to their aliasing sets.
 \label{fig:aliasing-rules-2}
 \end{figure}
 
+\fixme{not space reasons}
 The aliasing rules are listed in Figures~\ref{fig:aliasing-rules-1}
 and \ref{fig:aliasing-rules-2}, although for space reasons, some are
 left out.  The \textsc{Alias-Var}-rule defines the aliases of a

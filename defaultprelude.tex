@@ -29,6 +29,10 @@
 % Fix dashes in listings (from
 % https://tex.stackexchange.com/questions/33185/listings-package-changes-hyphens-to-minus-signs
 % )
+\makeatletter
+\lst@CCPutMacro\lst@ProcessOther {"2D}{\lst@ttfamily{-{}}{-{}}}
+\@empty\z@\@empty
+\makeatother
 
 % Avoid breaking lstlistings environments across pages.
 \BeforeBeginEnvironment{lstlisting}{\vspace{\topskip}\par\noindent\begin{minipage}{\linewidth}}
