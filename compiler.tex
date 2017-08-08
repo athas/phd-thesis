@@ -47,8 +47,22 @@ object of some kind, we write $\bar{z}$ to range over sequences of
 objects of this kind. When we want to be explicit about the size of a
 sequence $\bar{z} = z_0,\cdots,z_{(n-1)}$, we often write it on the
 form $\nseq{z}{n}$ and we write $z,\bar{z}$ to denote the sequence
-$z,z_0,\cdots,z_{(n-1)}$.  Depending on context, this sequence may
-have its components separated by commas, or merely juxtaposed.
+$z,z_0,\cdots,z_{(n-1)}$.  Depending on context, the elements of the
+sequence or may not have separators, or be merely juxtaposed.  For
+example, we may use the same notation to shorten a function
+application
+\[
+  f~\nseq{v}{n} \equiv f~v_{1}~\cdots~\v_{n}
+\]
+or a tuple
+\[
+  (\nseq{v}{n}) \equiv (v_{1}, \ldots, v_{n})
+\]
+or a function type
+\[
+  \nseq{\tau}{n} \rightarrow \tau_{n+1} \equiv \tau_{1} \rightarrow \cdots \rightarrow \tau_{n} \rightarrow \tau_{n+1}.
+\]
+It is always clear from the context which separator (if any) is intended.
 
 \begin{figure*}
 $$

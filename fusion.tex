@@ -416,14 +416,14 @@ tedious bookkeeping in the rules.
   \]
   Fuses to SOAC $C$:
   \[
-    \kw{let}~\seq{z_{r}}~\seq{y_{r}}~\seq{zs_{s}}~\seq{ys_{m}}~\seq{ys_{s}}~=~\kw{stream\_par}~\odot~h~\seq{xs_{A}}~\seq{xs_{B}}
+    \kw{let}~\seq{z_{r}}~\seq{y_{r}}~\seq{zs}~\seq{ys_{m}}~\seq{ys_{s}}~=~\kw{stream\_par}~\odot~h~\seq{xs_{A}}~\seq{xs_{B}}
   \]
 
   \begin{align*}
     h =~& \fn~c~\seq{xs'_{A}}~\seq{xs'_{B}} \rightarrow \\
         & \quad \kw{let}~\seq{y_{A}}~\seq{ys'_{m}}~\seq{ys'_{s}}~ = f~c~\seq{xs'_{A}} \\
         & \quad \kw{let}~\seq{z_{B}}~\seq{zs'} = g~c~\seq{ys'_{m}}~\seq{xs'_{B}} \\
-        & \quad \kw{in}~(z_{B},y_{A},\seq{zs'},\seq{ys'_{m}},\seq{ys'_{s}}) \\
+        & \quad \kw{in}~(\seq{z_{B}},\seq{y_{A}},\seq{zs'},\seq{ys'_{m}},\seq{ys'_{s}}) \\
     \odot =~& \fn \seq{a_{A}}~\seq{a_{B}}~\seq{b_{A}}~\seq{b_{B}} \rightarrow \\
         & \quad \kw{let}~\seq{c_{A}} = \oplus~\seq{a_{A}}~\seq{b_{A}} \\
         & \quad \kw{let}~\seq{c_{B}} = \otimes~\seq{a_{B}}~\seq{b_{B}} \\
@@ -434,14 +434,23 @@ tedious bookkeeping in the rules.
 
   SOAC $A$:
   \[
-    \kw{let}~\seq{y_{r}}~\seq{ys_{m}}~\seq{ys_{s}} = \kw{stream\_seq}~f~\seq{xs_{A}}
+    \kw{let}~\seq{y_{r}}~\seq{ys_{m}}~\seq{ys_{s}} = \kw{stream\_seq}~f~(\seq{v}_{A})~\seq{xs_{A}}
   \]
   SOAC $B$:
   \[
+    \kw{let}~\seq{z_{r}}~\seq{zs} = \kw{stream\_seq}~g~\seq{ys_{m}}~(\seq{v}_{B})~\seq{xs_{B}}
   \]
   Fuses to SOAC $B$:
   \[
+    \kw{let}~\seq{y_{r}}~\seq{z_{r}}~\seq{zs}~\seq{ys_{m}}~\seq{ys_{s}} = \kw{stream\_seq}~h~\seq{ys_{m}}~(\seq{v}_{B})~\seq{xs_{B}}
   \]
+
+  \begin{align*}
+    h =~& \fn~c~\seq{a_{A}}~\seq{a_{B}}~\seq{xs'_{A}}~\seq{xs'_{B}} \rightarrow \\
+        & \quad \kw{let}~\seq{y_{A}}~\seq{ys'_{m}}~\seq{ys'_{s}}~ = f~c~\seq{a_{A}}~\seq{xs'_{A}} \\
+        & \quad \kw{let}~\seq{z_{B}}~\seq{zs'} = g~c~\seq{a_{B}}~\seq{ys'_{m}}~\seq{xs'_{B}} \\
+        & \quad \kw{in}~(\seq{z_{B}},\seq{y_{A}},\seq{zs'},\seq{ys'_{m}},\seq{ys'_{s}}) \\
+  \end{align*}
 
 \end{description}
 
