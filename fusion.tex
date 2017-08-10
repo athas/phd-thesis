@@ -300,8 +300,9 @@ necessary because the moderate flattening algorithm of
 \kw{map} nestings.  Recovering a \kw{redomap} from a \StreamPar is
 more difficult, and is not attempted by the Futhark compiler.  In
 general, \StreamPar{}s only occur if the original source program
-contained one.  All SOACs can be transformed into \StreamSeq, which we
-will discuss in \cref{sec:streamseq-fusion}.
+contained a \StreamRed{}.  All SOACs can be transformed into
+\StreamSeq; the advantage of which we will discuss in
+\cref{sec:streamseq-fusion}.
 
 \begin{figure}[bt]
   Given a SOAC
@@ -347,52 +348,6 @@ where \begin{align*}
 
 
 \begin{description}
-\item[\kw{map}-\kw{map}]\hfill\\
-  SOAC $A$:
-  \[
-    \kw{let}~\seq{ys_{m}}~\seq{ys_{s}}~=~\kw{map}~f~\seq{xs_{A}}
-  \]
-  SOAC $B$:
-  \[
-    \kw{let}~\seq{zs}~=~\kw{map}~g~\seq{ys_{m}}~\seq{xs_{B}}
-  \]
-  Fuses to SOAC $C$:
-  \[
-    \kw{let}~\seq{zs}~\seq{ys_{m}}~\seq{ys_{s}}~=~\kw{map}~h~\seq{xs_{A}}~\seq{xs_{B}}
-  \]
-  where
-  \begin{align*}
-    h =~& \fn \seq{x}~\seq{y} \rightarrow \\
-      & \quad \kw{let}~\seq{y_{m}}~\seq{y_{s}} = f~\seq{x} \\
-      & \quad \kw{let}~\seq{z} = g~\seq{y_{m}} \\
-      & \quad \kw{in}~(\seq{z}, \seq{y_{m}}, \seq{y_{s}})
-  \end{align*}
-
-\item[\kw{map}-\kw{redomap}]\hfill\\
-  SOAC $A$:
-  \[
-    \kw{let}~\seq{ys_{m}}~\seq{ys_{s}}~=~\kw{map}~f~\seq{xs_{A}}
-  \]
-  SOAC $B$:
-  \[
-    \kw{let}~\seq{zs}~=~\kw{redomap}~\oplus~g~(\seq{v})~\seq{ys_{m}}~\seq{xs_{B}}
-  \]
-  Fuses to SOAC $C$:
-  \[
-    \kw{let}~\seq{zs}~\seq{ys_{m}}~\seq{ys_{s}}~=~\kw{redomap}~\oplus~h~(\seq{v})~\seq{xs_{A}}~\seq{xs_{B}}
-  \]
-  where
-  \begin{align*}
-    h =~& \fn \seq{a}~\seq{x}~\seq{y} \rightarrow \\
-      & \quad \kw{let}~\seq{y_{m}}~\seq{y_{s}} = f~\seq{x} \\
-      & \quad \kw{let}~\seq{z} = g~\seq{a}~\seq{y_{m}} \\
-      & \quad \kw{in}~(\seq{z}, \seq{y_{m}}, \seq{y_{s}})
-  \end{align*}
-
-\item[\kw{map}-\kw{scanomap}]\hfill\\
-
-  Similar to \kw{map}-\kw{redomap}.
-
 \item[\kw{map}-\kw{scatter}]\hfill\\
 
   SOAC $A$:
@@ -446,17 +401,9 @@ where
         & \quad \kw{in}~(\seq{c_{A}}, \seq{c_{B}})
   \end{align*}
 
-\item[\kw{redomap}-\kw{map}]\hfill\\
-
-  Similar to \kw{map}-\kw{redomap}.
-
 \item[\kw{scanomap}-\kw{scanomap}]\hfill\\
 
   Similar to \kw{redomap}-\kw{scanomap}.
-
-\item[\kw{scanomap}-\kw{map}]\hfill\\
-
-  Similar to \kw{redomap}-\kw{map}.
 
 \item[\kw{stream\_par}-\kw{stream\_par}]\hfill\\
 
