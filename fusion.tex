@@ -150,39 +150,34 @@ compiler implements \kw{filter} by a decomposition into \kw{scan} and
 \begin{figure}[hbt]
 \begin{tabular}{lcl}
 \emph{op} & & \textrm{TySch}(\emph{op}) \\ \hline
-  {\lstinline!map!} & : & $\forall d \bar{\alpha}^{(n)}\bar{\beta}^{(m)}. (\alpha_1 \rightarrow \cdots \rightarrow \alpha_n \rightarrow (\bar{\beta}^{(m)}))$ \\
-          & & ~~~~~~~~~~~~~~~~~ $\rightarrow [d]\alpha_1 \rightarrow \cdots \rightarrow [d]\alpha_n$ \\
-          & & ~~~~~~~~~~~~~~~~~ $\rightarrow ([d]\beta_1,\ldots,[d]\beta_m)$ \\
+  {\lstinline!map!} & : & $\forall d \bar{\alpha}^{(n)}\bar{\beta}^{(m)}. (\nseq{\alpha_{i}}{n} \rightarrow (\bar{\beta_{i}}^{(m)})) \rightarrow \nseq{[d]\alpha_{i}}{n} \rightarrow (\nseq{[d]\beta_{i}}{m})$ \\
   {\lstinline!scatter!} & : & $\forall d \nseq{x}{m} \bar{\alpha}^{(n)}\bar{\beta}^{(m)}.$\\
-          & & ~~~~~~~~~~~~~~ $(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\texttt{i32}, \beta_{1}, \ldots, \texttt{i32}, \beta_{m}))$\\
-          & & ~~~~~~~~~~ $\rightarrow ([x_{1}]\beta_1, \ldots, [x_{m}]\beta_m)$\\
-          & & ~~~~~~~~~~ $\rightarrow [d]\alpha_1 \rightarrow \cdots \rightarrow [d]\alpha_n$\\
-          & & ~~~~~~~~~~ $\rightarrow ([x_{1}]\beta_1, \ldots, [x_{m}]\beta_n)$\\
+          & & ~~~~~~~~~~~~~~ $(\nseq{\alpha}{n} \rightarrow (\nseq{\texttt{i32}, \beta_{1}}{m}))$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[x_{i}]\beta_{i}}{m})$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[d]\alpha_i}{n})$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[x_{i}]\beta_i}{m})$\\
   {\lstinline!redomap!} & : & $\forall d \bar{\alpha}^{(m)}\bar{\beta}^{(n)}\nseq{\gamma}{l}.$\\
-          & & ~~~~~~~~~~~~~~ $(\alpha_1 \rightarrow \cdots \rightarrow \alpha_m \rightarrow \alpha_1 \rightarrow \cdots \rightarrow \alpha_m \rightarrow (\bar{\alpha}^{(m)}))$\\
-          & & ~~~~~~~~~~ $\rightarrow (\alpha_1 \rightarrow \cdots \rightarrow \alpha_m \rightarrow \beta_1 \rightarrow \cdots \rightarrow \beta_n \rightarrow (\bar{\alpha}^{(m)}, \bar{\gamma}^{(l)}))$ \\
-          & & ~~~~~~~~~~ $\rightarrow (\alpha_1, \cdots, \alpha_m)$\\
-          & & ~~~~~~~~~~ $\rightarrow [d]\beta_1 \rightarrow \cdots \rightarrow [d]\beta_n$\\
-          & & ~~~~~~~~~~ $\rightarrow (\alpha_1,\ldots,\alpha_m,[d]\gamma_{1},\ldots,[d]\gamma_{l})$ \\
+          & & ~~~~~~~~~~~~~~ $(\nseq{\alpha}{m} \rightarrow \nseq{\alpha}{m} \rightarrow (\bar{\alpha}^{(m)}))$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m} \rightarrow \nseq{\beta}{n} \rightarrow (\bar{\alpha}^{(m)}, \bar{\gamma}^{(l)}))$ \\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$\\
+          & & ~~~~~~~~~~ $\rightarrow \nseq{[d]\beta_i}{n}$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m},\nseq{[d]\gamma_{i}}{l})$ \\
   {\lstinline!scanomap!} & : & $\forall d \bar{\alpha}^{(m)}\bar{\beta}^{(n)}\nseq{\gamma}{l}.$\\
-          & & ~~~~~~~~~~~~~~ $(\alpha_1 \rightarrow \cdots \rightarrow \alpha_m \rightarrow \alpha_1 \rightarrow \cdots \rightarrow \alpha_m \rightarrow (\bar{\alpha}^{(m)}))$\\
-          & & ~~~~~~~~~~ $\rightarrow (\alpha_1 \rightarrow \cdots \rightarrow \alpha_m \rightarrow \beta_1 \rightarrow \cdots \rightarrow \beta_n \rightarrow (\bar{\alpha}^{(m)}, \bar{\gamma}^{(l)}))$ \\
-          & & ~~~~~~~~~~ $\rightarrow (\alpha_1, \cdots, \alpha_m)$\\
-          & & ~~~~~~~~~~ $\rightarrow [d]\beta_1 \rightarrow \cdots \rightarrow [d]\beta_n$\\
-          & & ~~~~~~~~~~ $\rightarrow ([d]\alpha_1,\ldots,[d]\alpha_m,[d]\gamma_{1},\ldots,[d]\gamma_{l})$ \\
+          & & ~~~~~~~~~~~~~~ $(\nseq{\alpha}{m} \rightarrow \nseq{\alpha}{m} \rightarrow (\bar{\alpha}^{(m)}))$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m} \rightarrow \nseq{\beta}{n} \rightarrow (\bar{\alpha}^{(m)}, \bar{\gamma}^{(l)}))$ \\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[d]\beta_i}{n}$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[d]\alpha}{m},\nseq{[d]\gamma_{i}}{l})$ \\
   {\lstinline!stream_par!} & : & $\forall d x \bar{\alpha}^{(m)}\bar{\beta}^{(n)}\nseq{\gamma}{l}.$\\
-          & & ~~~~~~~~~~~~~~ $(\alpha_1 \rightarrow \cdots \rightarrow \alpha_m \rightarrow \alpha_1 \rightarrow \cdots \rightarrow \alpha_m \rightarrow (\bar{\alpha}^{(m)}))$\\
-          & & ~~~~~~~~~~ $\rightarrow ((x: \texttt{i32}) \rightarrow [x]\beta_1 \rightarrow \cdots \rightarrow [x]\beta_n \rightarrow (\bar{\alpha}^{(m)}, \nseq{[x]\gamma}{l}))$ \\
-          & & ~~~~~~~~~~ $\rightarrow [d]\beta_1 \rightarrow \cdots \rightarrow [d]\beta_n$\\
-          & & ~~~~~~~~~~ $\rightarrow (\alpha_1,\ldots,\alpha_m,[d]\gamma_{1},\ldots,[d]\gamma_{l})$ \\
+          & & ~~~~~~~~~~~~~~ $(\nseq{\alpha}{m} \rightarrow \nseq{\alpha}{m} \rightarrow (\nseq{\alpha}{m}))$\\
+          & & ~~~~~~~~~~ $\rightarrow ((x: \texttt{i32}) \rightarrow \nseq{[x]\beta_i}{n} \rightarrow (\bar{\alpha}^{(m)}, \nseq{[x]\gamma_{i}}{l}))$ \\
+          & & ~~~~~~~~~~ $\rightarrow \nseq{[d]\beta_i}{n}$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m},\nseq{[d]\gamma_{i}}{l})$ \\
   {\lstinline!stream_seq!} & : & $\forall d x \bar{\alpha}^{(m)}\bar{\beta}^{(n)}\nseq{\gamma}{l}.$\\
-          & & ~~~~~~~~~~ $\rightarrow ((x: \texttt{i32})$ \\
-          & & ~~~~~~~~~~~~~~~ $\rightarrow \alpha_1 \rightarrow \cdots \rightarrow \alpha_m$ \\
-          & & ~~~~~~~~~~~~~~~ $\rightarrow [x]\alpha_1 \rightarrow \cdots \rightarrow [x]\alpha_m$ \\
-          & & ~~~~~~~~~~~~~~~ $\rightarrow (\bar{\beta}^{(m)}, \nseq{[x]\gamma}{l}))$ \\
-          & & ~~~~~~~~~~ $\rightarrow (\alpha_1, \ldots, \alpha_m)$\\
-          & & ~~~~~~~~~~ $\rightarrow [d]\beta_1 \rightarrow \cdots \rightarrow [d]\beta_n$\\
-          & & ~~~~~~~~~~ $\rightarrow (\alpha_1,\ldots,\alpha_m)$ \\
+          & & ~~~~~~~~~~ $\rightarrow ((x: \texttt{i32}) \rightarrow \nseq{\alpha}{m} \rightarrow \nseq{[x]\alpha_i}{m} \rightarrow (\bar{\beta}^{(m)}, \nseq{[x]\gamma}{l}))$ \\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$\\
+          & & ~~~~~~~~~~ $\rightarrow \nseq{[d]\beta_i}{n}$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$ \\
 
 \end{tabular}
 \caption{Extended SOACs used for fusion and later stages of the compiler.}
@@ -271,8 +266,6 @@ computation may in some cases be preferable.
 \newpage
 \section{Fusion Rules}
 
-\subsection{Vertical Fusion}
-
 The rules describe the fusion of two SOACs with associated patterns,
 termed $A$ and $B$, where $A$ produces some arrays that are inputs to
 $B$.  Syntactically, we write the SOACs as a \kw{let}-binding without
@@ -291,6 +284,67 @@ lambda functions, as we permit ourselves to invoke lambda operands as
 if they were functions.  This is not strictly permitted by the grammar
 we use for the core language, but it avoids a significant amount of
 tedious bookkeeping in the rules.
+
+We do not describe explicitly rules for all compositions of SOACs,
+even those that are in principle fusible.  Since any \kw{map} can be
+transformed into a \kw{scanomap} or \kw{redomap} by the equivalence on
+Figure~\ref{fig:map-to-scanomap-or-redomap}, and any \kw{redomap} can
+be transformed into a \StreamPar by the equivalence on
+Figure~\ref{fig:redomap-to-streamred}, we elide those cases that can
+be handled by first transforming the SOAC into a more general form.
+This does mean that e.g. \kw{map}-\kw{map} fusion produces a
+\kw{redomap}, not a \kw{map}, but a \kw{map} can be recovered by
+exploiting the equivalence in the opposite direction.  This is
+necessary because the moderate flattening algorithm of
+\cref{chap:kernel-extraction} depends on being able to recognise
+\kw{map} nestings.  Recovering a \kw{redomap} from a \StreamPar is
+more difficult, and is not attempted by the Futhark compiler.  In
+general, \StreamPar{}s only occur if the original source program
+contained one.  All SOACs can be transformed into \StreamSeq, which we
+will discuss in \cref{sec:streamseq-fusion}.
+
+\begin{figure}[bt]
+  Given a SOAC
+\[
+  \kw{let}~\seq{ys}~=~\kw{map}~f~(\seq{v})~\seq{xs}
+\]
+the following SOACs are both equivalent:
+\[
+  \kw{let}~\seq{ys}~=~\kw{scanomap}~\kw{nil}~f~()~\seq{xs}
+\]
+and
+\[
+  \kw{let}~\seq{ys}~=~\kw{redomap}~\kw{nil}~f~()~\seq{xs}
+\]
+where \kw{nil} is the anonymous function that accepts zero arguments
+and returns zero values.
+  \caption{Transforming a \kw{map} to a \kw{scanomap} or \kw{redomap}.}
+  \label{fig:map-to-scanomap-or-redomap}
+\end{figure}
+
+\begin{figure}[bt]
+  Given a SOAC
+\[
+  \kw{let}~\seq{y}~\seq{ys}~=~\kw{redomap}~\oplus~f~(\seq{vs})~\seq{xs}
+\]
+the following SOAC is equivalent:
+\[
+  \kw{let}~\seq{y}~\seq{ys}~=~\StreamPar~\oplus~f~(\seq{vs})~\seq{xs}
+\]
+where \begin{align*}
+        h =~& \fn c~\seq{xs'} \rightarrow \\
+            & \quad \kw{let}~\seq{y'}~\seq{ys'} = \kw{redomap}~\oplus~f~(\seq{vs})~\seq{xs'} \\
+            & \quad \kw{in}~(\seq{y'}, \seq{ys'})
+  \end{align*}
+  \caption{Transforming a \kw{redomap} to a \StreamPar.  Note that the
+    function of the produced \StreamPar itself contains a
+    \kw{redomap}---an implementation must take care not to apply this
+    transformation when unnecessary for fusion, or risk
+    nontermination.  This transformation relies on the guarantee that
+    the map-result of \kw{redomap} cannot depend on the accumulator.}
+  \label{fig:redomap-to-streamred}
+\end{figure}
+
 
 \begin{description}
 \item[\kw{map}-\kw{map}]\hfill\\
@@ -380,7 +434,7 @@ tedious bookkeeping in the rules.
   \[
     \kw{let}~\seq{z_{r}}~\seq{y_{r}}~\seq{zs_{s}}~\seq{ys_{m}}~\seq{ys_{s}}~=~\kw{redomap}~\odot~h~(\seq{v_{A}},\seq{v_{B}})~\seq{xs_{A}}~\seq{xs_{B}}
   \]
-
+where
   \begin{align*}
     h =~& \fn \seq{a_{A}} \seq{a_{B}} \seq{x}~\seq{y} \rightarrow \\
       & \quad \kw{let}~\seq{c_{A}}~\seq{y_{m}}~\seq{y_{s}}~ = f~\seq{a_{A}}~\seq{x} \\
@@ -418,7 +472,7 @@ tedious bookkeeping in the rules.
   \[
     \kw{let}~\seq{z_{r}}~\seq{y_{r}}~\seq{zs}~\seq{ys_{m}}~\seq{ys_{s}}~=~\kw{stream\_par}~\odot~h~\seq{xs_{A}}~\seq{xs_{B}}
   \]
-
+where
   \begin{align*}
     h =~& \fn~c~\seq{xs'_{A}}~\seq{xs'_{B}} \rightarrow \\
         & \quad \kw{let}~\seq{y_{A}}~\seq{ys'_{m}}~\seq{ys'_{s}}~ = f~c~\seq{xs'_{A}} \\
@@ -444,7 +498,7 @@ tedious bookkeeping in the rules.
   \[
     \kw{let}~\seq{y_{r}}~\seq{z_{r}}~\seq{zs}~\seq{ys_{m}}~\seq{ys_{s}} = \kw{stream\_seq}~h~\seq{ys_{m}}~(\seq{v}_{B})~\seq{xs_{B}}
   \]
-
+where
   \begin{align*}
     h =~& \fn~c~\seq{a_{A}}~\seq{a_{B}}~\seq{xs'_{A}}~\seq{xs'_{B}} \rightarrow \\
         & \quad \kw{let}~\seq{y_{A}}~\seq{ys'_{m}}~\seq{ys'_{s}}~ = f~c~\seq{a_{A}}~\seq{xs'_{A}} \\
@@ -454,6 +508,189 @@ tedious bookkeeping in the rules.
 
 \end{description}
 
+\subsection{Infusible Cases}
+\label{sec:streamseq-fusion}
+
+There are some producer-consumer relationships that cannot be fused by
+the above rules.  For example, a \kw{scanomap} whose output is used
+as inputs to a \kw{map}.  This is because there is no SOAC that is
+able to describe the resulting composition without.  We could fuse and
+produce a sequential \kw{do}-loop as a result, but this would lose
+parallelism, which is not acceptable in general.  However, if the
+\kw{scanomap}-\kw{map} composition occurs at a place that will eventually
+be turned into sequential code by the moderate flattening algorithm
+described in Chapter~\ref{chap:kernel-extraction}, then such fusion
+would be desirable.  But since fusion occurs at a stage where it is
+not yet known which parts of the program will be executed in parallel,
+and which will be sequential, we have a conundrum.
+
+The solution is to fuse to a SOAC that permits the \textit{recovery}
+of all original parallelism, yet can also be turned into efficient
+sequential code.  We use \kw{stream\_seq} for this purpose.  Any SOAC
+can be transformed into a \kw{stream\_seq}.  An example, showing how
+\kw{scanomap} is turned into \kw{stream\_seq}, is shown on
+\Cref{fig:scanomap-to-streamseq}.  The idea is for each chunk to
+perform a \kw{scanomap}, then add to the result the carry produced by
+processing the previous chunk.  The carry for a chunk corresponds to
+the last element of a scanned chunk.  This works only because we are
+guaranteed that the scan operator $\oplus$ is associative.  The
+initial value of the carry is the neutral element for $\oplus$.
+
+\begin{figure}[bt]
+Given a SOAC
+\[
+  \kw{let}~\seq{ys}~=~\kw{scanomap}~\oplus~f~(\seq{v})~xs
+\]
+the following SOAC is equivalent:
+\[
+  \kw{let}~\seq{d}~\seq{ys}~=~\kw{stream\_seq}~\oplus~g~(\seq{v})~xs
+\]
+where $\seq{d}$ are the unused final carry values and
+  \begin{align*}
+    g =~& \fn~c~\seq{a}~\seq{xs'} \rightarrow \\
+        & \quad \kw{let}~\seq{xs''}~=~\kw{scanomap}~\oplus~f~(\seq{v})~xs' \\
+        & \quad \kw{let}~ys'_{1}~=~\kw{map}~\oplus~a_{1}~xs''_{1} \\
+        & \quad \vdots \\
+        & \quad \kw{let}~ys'_{n}~=~\kw{map}~\oplus~a_{n}~xs''_{n} \\
+        & \quad \kw{let}~a'_{1}~=~ys'_{1}[c-1] \\
+        & \quad \vdots \\
+        & \quad \kw{let}~a'_{n}~=~ys'_{n}[c-1] \\
+        & \quad \kw{in}~(\seq{a'},\seq{ys'}) \\
+  \end{align*}
+  \caption{Transforming a \kw{scanomap} to a \kw{stream\_seq}.  We
+    assume here that chunks may never be empty.  Other SOACs can be
+    transformed using similar techniques.}
+  \label{fig:scanomap-to-streamseq}
+\end{figure}
+
+The utility of \StreamSeq is that we can recover the parallelism of
+the original formulation simply by setting the chunk size to the full
+size of the input array, resulting in just one chunk.  While the
+transformation on \Cref{fig:scanomap-to-streamseq} has introduced
+additional \kw{map}s, these do not affect how much parallelism is
+available.  Furthermore, since the carry will be set to the neutral
+element, frequently a constant, basic simplification may be able to
+remove the \kw{map}s entirely.
+
+As an example, consider the following expression fragment:
+
+\begin{lstlisting}
+let ys = scanomap (+) (+) (0) xs
+let zs = map (+2) ys
+\end{lstlisting}
+
+The above can be transformed to the following \StreamSeq{}s:
+
+\begin{lstlisting}
+let ys =
+  stream_seq (\c a xs' ->
+                let xs'' = scanomap (+) (+) 0 xs'
+                let ys' = map (+) a xs''
+                let a' = ys[c-1]
+                in (a', ys'))
+             (0)
+             xs
+let zs =
+  stream_seq (\c ys' ->
+                let zs' = map (+2) ys'
+                in (zs'))
+             ()
+             ys
+\end{lstlisting}
+
+And these two \StreamSeq{}s can then be fused:
+
+\begin{lstlisting}
+let ys zs =
+  stream_seq (\c a xs' ->
+                let xs'' = scanomap (+) (+) 0 xs'
+                let ys' = map (+) a xs''
+                let a' = ys[c-1]
+                let zs' = map (+2) ys'
+                in (a', ys', zs'))
+             (0)
+             xs
+\end{lstlisting}
+
+Suppose that the size of \lstinline{xs} is given by \lstinline{n}.  We
+can recover the original parallelism simply by inlining the body of
+the function, preceded by explicit bindings of \lstinline{c},
+\lstinline{a}, and \lstinline{xs'} to values corresponding to a single
+chunk covering all of \lstinline{xs}, and followed by a binding of
+\lstinline{ys} to the result:
+
+\begin{lstlisting}
+let c = n
+let a = 0
+let xs' = xs
+let xs'' = scanomap (+) (+) 0 xs
+let ys' = map (+) a xs''
+let a' = ys[c-1]
+let zs' = map (+2) ys'
+let ys = ys'
+let zs = zs'
+\end{lstlisting}
+
+An application of copy propagation, constant folding, and other
+straightforward simplifications then recovers the original expression
+fragment.
+
+On the other hand, we can also transform the above \StreamSeq into aa
+sequential loop by forcing the chunk size to unit, and placing a
+sequential \kw{do}-loop around it:
+
+\begin{lstlisting}
+let ys_blank = ... -- an array of the same size as ys
+let zs_blank = ... -- an array of the same size as zs
+let ys zs =
+  loop (a ys_out zs_out) = (0, ys_blank, zs_blank) for i < n do
+    let c = 1
+    let xs' = xs[i:i+c]
+    let xs'' = scanomap (+) (+) 0 xs'
+    let ys' = map (+) a xs''
+    let a' = ys[c-1]
+    let zs' = map (+2) ys'
+    let ys_out' = ys_out with [i:i+c] <- ys'
+    let zs_out' = zs_out with [i:i+c] <- zs'
+    in (a', ys_out', zs_out)
+\end{lstlisting}
+
+(We cheat a bit notation-wise with the construction of such arrays as
+\lstinline{xs'} and \lstinline{ys_out'}---according to the grammar
+used thus far, indexes can only produce single elements, but here we
+perform an entire slice.  These can be turned into \kw{do}-loops if
+desirable.)
+
+Assuming straightforward simplification rules that can remove SOACs on
+single-element inputarrays, we obtain the following:
+
+\begin{lstlisting}
+let ys_blank = ...
+let zs_blank = ...
+let ys zs =
+  loop (a ys_out) = (0, ys_blank) for i < n do
+    let x = xs[i]
+    let y = a + x
+    let z = 1 + y
+    let ys_out' = ys_out with [i] <- y
+    let zs_out' = zs_out with [i] <- z
+    in (y, ys_out' zs_out')
+\end{lstlisting}
+
+This loop corresponds to a sequential fusion of the original
+\kw{scanomap}-\kw{map} composition, with no intermediate arrays.
+
+\subsection{Horizontal Fusion}
+
+Horizontal fusion can be treated as a special case of vertical fusion,
+with the same fusion rules.  We simply consider the set of names in
+the producer/consumer relationship to be empty, and only fuse with
+respect to the unconsumed names.  For example, for the
+\lstinline{map-map} fusion rule, we let $\seq{ys_{m}}$ be empty.  Two
+SOACs can be horizontally fused if their inputs have the same outer
+size, there is no data dependencies between them, and there are no
+uniqueness issues that would prevent the result of fusion from being
+safe.
 
 %%% Local Variables:
 %%% mode: latex

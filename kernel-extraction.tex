@@ -7,23 +7,23 @@
 
 \begin{figure}
 \begin{subfigure}{0.48\columnwidth}
-\begin{lstlisting}[basicstyle=\sffamily\footnotesize]
+\begin{lstlisting}
 let (asss, bss) =
-!map!
+map
    (\ps: ([m][m]int,[m]int) ->
     let ass =
-    !map! (\p: [m]int ->
+    map (\p: [m]int ->
         @let cs =@
         @  scan (+) 0 (iota p)@
         @let r = reduce (+) 0 cs@
-        let as = !map! (+r) ps
+        let as = map (+r) ps
         in as)
       ps
     let bs =
     @loop (ws=ps) for i < n do@
         let ws' =
-        !map! (\as w: int ->
-            let d = !reduce! (+) 0 as
+        map (\as w: int ->
+            let d = reduce (+) 0 as
             let e = d + w
             let w' = 2 * e
              in w')
@@ -36,27 +36,28 @@ let (asss, bss) =
 \label{fig:before-distrib}
 \end{subfigure}
 \begin{subfigure}{0.49\columnwidth}
-\begin{lstlisting}[basicstyle=\sffamily\footnotesize]
+\begin{lstlisting}
 let rss =
-!map! (\ps: [m]int ->
-    !map! (\p: int ->
+map (\ps: [m]int ->
+    map (\p: int ->
       @let cs = scan (+) 0 (iota p)@
-      @let r = reduce (+) 0 cs@ in r)
+      @let r = reduce (+) 0 cs@
+      in r)
     ps) pss
 let asss =
-!map! (\ps rs: [m]int ->
-      !map! (\int (r) ->
-         !map! (+r) ps)
+map (\ps rs: [m]int ->
+      map (\int (r) ->
+         map (+r) ps)
        fs) pss rss
 let bss =
 @loop (wss=pss) for i < n do@
     let dss =
-      !map!(\ass: [m]int ->
-          !map!(\as: int ->
-              !reduce! (+) 0 as
+      map(\ass: [m]int ->
+          map(\as: int ->
+              reduce (+) 0 as
         , ass), asss) in
-      !map! (\ws, ds: [m]int ->
-          !map! (\w d: int ->
+      map (\ws, ds: [m]int ->
+          map (\w d: int ->
               let e = d + w in
               let w' = 2 * e in w')
           ws ds) wss dss
@@ -73,7 +74,7 @@ let bss =
 \small
 \begin{align*}
 \inference{
-\Sigma \vd \Map~\Par{\fn~\overline{x}~\kt{->}~e}~\overline{y} \Rightarrow e'
+\Sigma \vd \Map~\Par{\fn~\overline{x}~\rightarrow~e}~\overline{y} \Rightarrow e'
 }{
 \Sigma, \M~\overline{x}~\overline{y} \vd e \Rightarrow e'
 }
@@ -84,7 +85,7 @@ let bss =
 \inference{
 \Sigma, \M~\overline{x}~\overline{y} \vd e \Rightarrow e'
 }{
-\Sigma \vd \Map~\Par{\fn~\overline{x}~\kt{->}~e}~\overline{y} \Rightarrow e'
+\Sigma \vd \Map~\Par{\fn~\overline{x}~\rightarrow~e}~\overline{y} \Rightarrow e'
 }
 \tagsc{G2}
 \end{align*}
@@ -112,9 +113,9 @@ let bss =
 
 \begin{align*}
 \inference{
-  g = \Reduce~\Par{\fn~\ov{y}^{2*p} ~\kt{->} ~e}~\ov{n}^p \\
+  g = \Reduce~\Par{\fn~\ov{y}^{2*p} ~\rightarrow ~e}~\ov{n}^p \\
   \Sigma \vd \Map~\Par{g} ~\Par{\Transpose~z_0}\ldots\Par{\Transpose~z_{p-1}} \Rightarrow e' \\
-  f = \Map~\Par{\fn~\ov{y}^{2*p}~\kt{->} e}
+  f = \Map~\Par{\fn~\ov{y}^{2*p}~\rightarrow e}
 }{
 \Sigma \vd \Reduce~\Par{f}~\Par{\ov{\Replicate~k ~n}^p}~\ov{z}^p \Rightarrow e'
 }

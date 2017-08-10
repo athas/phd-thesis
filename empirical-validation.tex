@@ -16,16 +16,16 @@ least a lower bound on that potential.
 Most of the benchmark programs presented here are based on, and
 compared against, hand-written low-level code written in CUDA or
 OpenCL.  We have sourced these from the published
-Rodinia~\cite{5306797} (version 3.1) and
-Parboil~\cite{stratton2012parboil} (version 2.5) benchmark suites.
-The comparison with hand-written implementations is to show the cost
-of using a high-level language.  However, as we shall see, even
-published code often contains significant inefficiencies, which
-occasionally leads to Futhark outperforming the reference
-implementations.  A handful of programs are from
-Accelerate~\cite{mcdonell2013optimising}, a Haskell eDSL for parallel
-programming.  These are included to show the performance of Futhark
-compared to an existing mature GPU language.
+Rodinia~\cite{5306797} (version 3.1),
+Parboil~\cite{stratton2012parboil} (version 2.5), and
+FinPar~\cite{FinPar:TACO} benchmark suites.  The comparison with
+hand-written implementations is to show the cost of using a high-level
+language.  However, as we shall see, even published code often
+contains significant inefficiencies, which occasionally leads to
+Futhark outperforming the reference implementations.  A handful of
+benchmarks are from Accelerate~\cite{mcdonell2013optimising}, a
+Haskell eDSL for parallel programming.  These are included to show the
+performance of Futhark compared to an existing mature GPU language.
 
 All programs have been manually ported to Futhark, and compiled and
 run with the default settings.  We show how the performance of the
@@ -36,6 +36,8 @@ techniques used to obtain efficient Futhark implementations.
 \section{N Benchmarks from Rodinia}
 
 \section{M Benchmarks from Parboil}
+
+\section{Two Benchmarks from FinPar}
 
 \section{L Benchmarks from Accelerate}
 

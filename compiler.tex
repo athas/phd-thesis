@@ -62,7 +62,17 @@ or a function type
 \[
   \nseq{\tau}{n} \rightarrow \tau_{n+1} \equiv \tau_{1} \rightarrow \cdots \rightarrow \tau_{n} \rightarrow \tau_{n+1}.
 \]
-It is always clear from the context which separator (if any) is intended.
+It is always clear from the context which separator (if any) is
+intended.  On occasion we use more complicated sequences, where not
+all terms under the bar variant.  In this case, the variant term is
+subscripted with $i$.  For example,
+\[
+  (\nseq{[d]v_{i}}{n}) = ([d]v_{1}, \ldots, [d] v_{n})
+\]
+and
+\[
+  (\nseq{[d_{i}]v_{i}}{n}) = ([d_{1}]v_{1}, \ldots, [d_{n}] v_{n})
+\]
 
 \begin{figure*}
 $$
@@ -173,20 +183,20 @@ bindings and anonymous functions possess no uniqueness attributes.
   {\lstinline!replicate!} & : & $\forall\alpha.\texttt{i32} \rightarrow \alpha \rightarrow []\alpha$ \\
   \lstinline[mathescape]!reshape! & : & $\forall\alpha.(\texttt{i32}_{1}, \ldots, \texttt{i32}_{n})\rightarrow[]_{1}\cdots[]_{m}\alpha\rightarrow[]_{1}\cdots[]_{n}\alpha$ \\
   \lstinline[mathescape]!rearrange ($c_{1}, \ldots, c_{n}$)! & : & $\forall\alpha.[]_{1}\cdots[]_{n}\alpha\rightarrow[]_{1}\cdots[]_{n}\alpha$ \\
-  {\lstinline!map!} & : & $\forall\bar{\alpha}^{(n)}\bar{\beta}^{(m)}. (\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\bar{\beta}^{(m)}))$ \\
-          & & ~~~~~~~~~~~~~~~~~ $\rightarrow []\alpha_1 \rightarrow \ldots \rightarrow []\alpha_n$ \\
+  {\lstinline!map!} & : & $\forall\bar{\alpha}^{(n)}\bar{\beta}^{(m)}. (\nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(m)}))$ \\
+          & & ~~~~~~~~~~~~~~~~~ $\rightarrow \nseq{[]\alpha_i}{n}$ \\
           & & ~~~~~~~~~~~~~~~~~ $\rightarrow ([]\beta_1,\ldots,[]\beta_m)$ \\
-  {\lstinline!reduce!} & : & $\forall\bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\bar{\alpha}^{(n)}))$\\
-          & & ~~~~~~~~~~ $\rightarrow (\alpha_1, \ldots, \alpha_n)$\\
-          & & ~~~~~~~~~~ $\rightarrow []\alpha_1 \rightarrow \ldots \rightarrow []\alpha_n$\\
-          & & ~~~~~~~~~~ $\rightarrow (\alpha_1,\ldots,\alpha_m)$ \\
-  {\lstinline!scan!} & : & $\forall\bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\bar{\alpha}^{(n)}))$\\
-          & & ~~~~~~~~~~ $\rightarrow (\alpha_1, \ldots, \alpha_n)$\\
-          & & ~~~~~~~~~~ $\rightarrow []\alpha_1 \rightarrow \ldots \rightarrow []\alpha_n$\\
-          & & ~~~~~~~~~~ $\rightarrow ([]\alpha_1,\ldots,[]\alpha_m)$ \\
+  {\lstinline!reduce!} & : & $\forall\bar{\alpha}^{(n)}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\bar{\alpha}^{(n)}))$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{n})$\\
+          & & ~~~~~~~~~~ $\rightarrow \nseq{[]\alpha_i}{n}$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$ \\
+  {\lstinline!scan!} & : & $\forall\bar{\alpha}^{(n)}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\bar{\alpha}^{(n)}))$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{n})$\\
+          & & ~~~~~~~~~~ $\rightarrow \nseq{[]\alpha_i}{n}$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[]\alpha_i}{m})$ \\
   {\lstinline!filter!} & : & $\forall\bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \texttt{bool})$ \\
-          & & ~~~~~~~~~~ $\rightarrow []\alpha_1 \rightarrow \ldots \rightarrow []\alpha_n$ \\
-          & & ~~~~~~~~~~ $\rightarrow ([]\alpha_1,\ldots,[]\alpha_n)$ \\
+          & & ~~~~~~~~~~ $\rightarrow \nseq{[]\alpha_i}{n}$ \\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[]\alpha_i}{n})$ \\
 \end{tabular}
 \caption{Size-agnostic type schemes for operators, including various SOACs.}
 \label{fig:soacType}

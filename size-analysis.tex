@@ -72,20 +72,20 @@ invariants are only ``assumed'', that is, they have not been verified
   \lstinline[mathescape]!rearrange ($c_{1}, \ldots, c_{n}$)! & : & $\forall\nseq{d}{n}\alpha.[d_{1}]\cdots[d_{n}]\alpha\rightarrow[d_{p(1)}]\cdots[d_{p(n)}]\alpha$ \\
             & & ~~ \text{where $p(i)$ is the result of applying the}\\
             & & ~~ \text{permutation induced by $c_{1}, \ldots, c_{n}$}. \\
-{\lstinline!map!} & : & $\forall d\ \bar{\alpha}^{(n)}\bar{\beta}^{(m)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\bar{\beta}^{(m)}))$\\
-          & & ~~~~~~~~~~~~~~~~~~~~ $\rightarrow [s]\alpha_1\rightarrow\cdots\rightarrow[s]\alpha_n$\\
-          & & ~~~~~~~~~~~~~~~~~~~~ $\rightarrow ([s]\beta_1,\ldots,[s]\beta_m)$\\
-  {\lstinline!reduce!} & : & $\forall \ d \ \bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\bar{\beta}^{(n)}))$ \\
-          & & ~~~~~~~~~~~~~~ $\rightarrow (\alpha_1, \ldots, \alpha_n)$\\
-          & & ~~~~~~~~~~~~~~ $\rightarrow [d]\alpha_1 \rightarrow \ldots \rightarrow [d]\alpha_n$\\
-          & & ~~~~~~~~~~~~~~ $\rightarrow (\alpha_1,\ldots,\alpha_m)$ \\
-  {\lstinline!scan!} & : & $\forall \ d \ \bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow (\bar{\beta}^{(n)}))$ \\
-          & & ~~~~~~~~~~~~~~ $\rightarrow (\alpha_1, \ldots, \alpha_n)$\\
-          & & ~~~~~~~~~~~~~~ $\rightarrow [d]\alpha_1 \rightarrow \ldots \rightarrow [d]\alpha_n$\\
-          & & ~~~~~~~~~~~~~~ $\rightarrow ([d]\alpha_1,\ldots,[d]\alpha_m)$ \\
-{\lstinline!filter!} & : & $\forall \ d_1 \ \bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \texttt{bool})$ \\
-          & & ~~~~~~~~~~~~~~ $\rightarrow [d_{1}]\alpha_1 \rightarrow \ldots \rightarrow [d_{1}]\alpha_n$ \\
-          & & ~~~~~~~~~~~~~~ $\rightarrow \exists d_{2}.([d_{2}]\alpha_1,\ldots,[d_{2}]\alpha_n)$ \\
+{\lstinline!map!} & : & $\forall d\ \bar{\alpha}^{(n)}\bar{\beta}^{(m)}.(\nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(m)}))$\\
+          & & ~~~~~~~~~~~~~~~~~~~~ $\rightarrow \nseq{[s]\alpha_i}{n}$\\
+          & & ~~~~~~~~~~~~~~~~~~~~ $\rightarrow (\nseq{[s]\beta_i}{m})$\\
+  {\lstinline!reduce!} & : & $\forall \ d \ \bar{\alpha}^{(n)}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(n)}))$ \\
+          & & ~~~~~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{n})$\\
+          & & ~~~~~~~~~~~~~~ $\rightarrow \nseq{[d]\alpha_i}{n}$\\
+          & & ~~~~~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{n})$ \\
+  {\lstinline!scan!} & : & $\forall \ d \ \bar{\alpha}^{(n)}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow \rightarrow (\bar{\beta}^{(n)}))$ \\
+          & & ~~~~~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{n})$\\
+          & & ~~~~~~~~~~~~~~ $\rightarrow \nseq{[d]\alpha_i}{n}$\\
+          & & ~~~~~~~~~~~~~~ $\rightarrow (\nseq{[d]\alpha_i}{n})$ \\
+{\lstinline!filter!} & : & $\forall \ d_1 \ \bar{\alpha}^{(n)}.(\nseq{\alpha}{n} \rightarrow \texttt{bool})$ \\
+          & & ~~~~~~~~~~~~~~ $\rightarrow \nseq{[d_{1}]\alpha_i}{n}$ \\
+          & & ~~~~~~~~~~~~~~ $\rightarrow \exists d_{2}.(\nseq{[d_{2}]\alpha_i}{n})$ \\
 \end{tabular}
 \caption{Dependent-size types for various SOACs.}
 \label{fig:soacSizeType}
