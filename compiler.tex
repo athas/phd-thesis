@@ -52,7 +52,7 @@ sequence or may not have separators, or be merely juxtaposed.  For
 example, we may use the same notation to shorten a function
 application
 \[
-  f~\nseq{v}{n} \equiv f~v_{1}~\cdots~\v_{n}
+  f~\nseq{v}{n} \equiv f~v_{1}~\cdots~v_{n}
 \]
 or a tuple
 \[
@@ -164,6 +164,7 @@ bindings and anonymous functions possess no uniqueness attributes.
   \lstinline[mathescape]!reshape ($y_{1},\ldots,y_{n}$) $x$! & Return an array of shape $y_{1}\times\ldots\times y_{n}$ containing the row-major elements of $x$.  It is a dynamic error if $x$ does not contain exactly $y_{1}\times\ldots\times y_{n}$ elements. \\
   \lstinline[mathescape]!rearrange ($c_{1}, \ldots, c_{n}$) $x$! & Rearrange the order of dimensions of the $n$-dimensional array $x$.  The reordering $c_{1}, \ldots, c_{n}$ must be a permutation of $1...n$. \\
   \lstinline[mathescape]!map $\lambda$ $x_{1}$ $\ldots$ $x_{n}$! & Apply the $n$-ary function $\lambda$ simultaneously to consecutive elements of $x_{1}\ldots{}x_{n}$, producing an array of the results.  If $\lambda$ returns $k$ values, $k$ arrays are returned. \\
+  \lstinline[mathescape]!scatter $x$ $y$ $z$! & For all $i$, write $z[i]$ to position $y[j]$ in $x$.  Consumes $x$ and semantically returns a new array.  The result is unspecified if different values are written to the same position.  Out-of-bound writes have no effect. \\
   \lstinline[mathescape]!reduce $\lambda$ ($y_{1}, \ldots, y_{n}$) $x_{1}$ $\ldots$ $x_{n}$! &
                                                                                                Perform a reduction of arrays $x_{1}, \ldots, x_{n}$ via the $2n$-ary function $\lambda$, producing $n$ values.  The values $y_{1}, \ldots, y_{n}$ constitute a neutral argument for $\lambda$.
   \\
@@ -186,6 +187,10 @@ bindings and anonymous functions possess no uniqueness attributes.
   {\lstinline!map!} & : & $\forall\bar{\alpha}^{(n)}\bar{\beta}^{(m)}. (\nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(m)}))$ \\
           & & ~~~~~~~~~~~~~~~~~ $\rightarrow \nseq{[]\alpha_i}{n}$ \\
           & & ~~~~~~~~~~~~~~~~~ $\rightarrow ([]\beta_1,\ldots,[]\beta_m)$ \\
+  {\lstinline!scatter!} & : & $\forall \nseq{\alpha}{n}.(\nseq{[]\alpha_{i}}{n})$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[]\texttt{i32}}{n})$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[]\alpha_i}{n})$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[]\beta_i}{n})$\\
   {\lstinline!reduce!} & : & $\forall\bar{\alpha}^{(n)}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\bar{\alpha}^{(n)}))$\\
           & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{n})$\\
           & & ~~~~~~~~~~ $\rightarrow \nseq{[]\alpha_i}{n}$\\

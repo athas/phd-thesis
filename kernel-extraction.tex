@@ -1,71 +1,124 @@
+\renewcommand{\G}[1]{G#1}
+
 \chapter{Kernel Extraction}
 \label{chap:kernel-extraction}
 
+This chapter presents a transformation that aims to enhance the degree
+of statically-exploitable parallelism by reorganizing imperfectly
+nested parallelism into perfect SOAC nests.  The outer levels of the
+resulting nestings correspond to \kw{map} operators, which are trivial
+to map to GPUs, and the innermost one is an arbitrary SOAC or
+sequential code.  In essence, the transformation seeks rewrite the
+program to express patterns of parallelism that have a known efficient
+implementation to GPUs.  The simplest such pattern is a perfect nest
+of \kw{map}s, where the innermost function contains arbitrary
+sequential code.  This pattern maps directly to a single GPU kernel,
+but there are other interesting patterns that correspond to
+e.g. segmented scans and reductions.
 
-\subsection{Flattening Example and Rules}
-\label{subsec:kernel-extraction}
+In a purely functional setting, Blelloch's
+transformation~\cite{blelloch1990vector} flattens all available
+parallelism, while asymptotically preserving the depth and work of the
+original nested-parallel program.  In our setting, this corresponds to
+interchanging all sequential loops outwards, and forming
+\kw{map}-nests that contain only simple scalar code.  While
+asymptotically inefficient, the approach is arguably inefficient in
+practise~\cite{bergstrom2012nested}, for example because it does not
+account for locality of reference, and pays a potentially large cost
+in memory usage to extract parallelism that may not be necessary.  For
+example, a fully flattened implementation of matrix multiplication
+requries $O(n^{3})$ storage, where the usual implementation uses only
+$O(n^{2})$.
+
+Our algorithm, presented below, builds on \kw{map}-\kw{loop}
+interchange and \kw{map} distribution, exploiting the property that it
+is always safe to interchange inwards or to distribute a parallel
+loop~\cite{Allen-Kennedy2002}.  Our algorithm attempts to exploit some
+of the efficient \textit{top-level parallelism}.  Two important
+limitations are:
+
+\begin{enumerate}
+\item We do not exploit parallelism inside \kw{if} branches, as this
+  generally requires expensive \kw{filter} operations.
+\item We terminate distribution when it would introduce irregular
+  arrays, as these obscure access patterns and prevent further
+  spatial- and temporal-locality optimizations.
+\end{enumerate}
+
+Our algorithm is less general than flattening, but generates more
+analysable code in the common case, for programs that do not require
+the generality of flattening.  This enables the optimisations covered
+in \cref{chap:tiling}.  Multi-versioned code, discussed in
+\cref{sec:multi-versioned-code}, could be used to apply full
+flattening as a fallback for those cases where moderate flattening is
+incapable of extracting sufficient parallelism.
+
+\section{Flattening Example and Rules}
+\label{sec:kernel-extraction}
 
 \begin{figure}
 \begin{subfigure}{0.48\columnwidth}
-\begin{lstlisting}
+\begin{lstlisting}[basicstyle=\scriptsize\ttfamily,numbers=none]
 let (asss, bss) =
-map
-   (\ps: ([m][m]int,[m]int) ->
-    let ass =
-    map (\p: [m]int ->
-        @let cs =@
-        @  scan (+) 0 (iota p)@
-        @let r = reduce (+) 0 cs@
-        let as = map (+r) ps
-        in as)
-      ps
-    let bs =
-    @loop (ws=ps) for i < n do@
-        let ws' =
-        map (\as w: int ->
-            let d = reduce (+) 0 as
-            let e = d + w
-            let w' = 2 * e
-             in w')
-          ass ws
-        in ws'
-    in (ass, bs))
-  pss -- pss : [m][m]int
+ map
+  (\ps: ([m][m]i32,[m]i32) ->
+   let ass =
+    map
+     (\p: [m]i32 ->
+      let cs =
+        scan (+) 0 (iota p)
+      let r = reduce (+) 0 cs
+      let as = map (+r) ps
+      in as) ps
+   let bs =
+    loop (ws=ps) for i < n do
+     let ws' =
+      map
+       (\as w: i32 ->
+        let d = reduce (+) 0 as
+        let e = d + w
+        let w' = 2 * e
+        in w') ass ws
+     in ws'
+   in (ass, bs))
+  pss
 \end{lstlisting}
 \caption{Program before distribution.}
 \label{fig:before-distrib}
 \end{subfigure}
 \begin{subfigure}{0.49\columnwidth}
-\begin{lstlisting}
+\begin{lstlisting}[basicstyle=\scriptsize\ttfamily,numbers=none]
 let rss =
-map (\ps: [m]int ->
-    map (\p: int ->
-      @let cs = scan (+) 0 (iota p)@
-      @let r = reduce (+) 0 cs@
-      in r)
-    ps) pss
+ map
+  (\ps: [m]i32 ->
+    map
+     (\p: i32 ->
+      let cs = scan (+) 0 (iota p)
+      let r = reduce (+) 0 cs
+      in r) ps) pss
 let asss =
-map (\ps rs: [m]int ->
-      map (\int (r) ->
-         map (+r) ps)
-       fs) pss rss
+ map (\ps rs: [m]i32 ->
+      map (\r -> map (+r) ps) rs)
+     pss rss
 let bss =
-@loop (wss=pss) for i < n do@
+ loop (wss=pss) for i < n do
     let dss =
-      map(\ass: [m]int ->
-          map(\as: int ->
-              reduce (+) 0 as
-        , ass), asss) in
-      map (\ws, ds: [m]int ->
-          map (\w d: int ->
-              let e = d + w in
-              let w' = 2 * e in w')
-          ws ds) wss dss
+      map (\ass: [m]i32 ->
+           map (\as: i32 ->
+                reduce (+) 0 as)
+               ass)
+          asss
+    in map (\ws, ds: [m]i32 ->
+          map (\w d: i32 ->
+               let e = d + w in
+               let w' = 2 * e in w')
+              ws ds) wss dss
 \end{lstlisting}
 \caption{Program after distribution.}
 \label{fig:after-result}
 \end{subfigure}
-\caption{Extracting kernels from a complicated nesting.}
+\caption{Extracting kernels from a complicated nesting.  We assume
+  $pss : [m][m]\texttt{i32}$.}
 \end{figure}
 
 
@@ -74,18 +127,18 @@ let bss =
 \small
 \begin{align*}
 \inference{
-\Sigma \vd \Map~\Par{\fn~\overline{x}~\rightarrow~e}~\overline{y} \Rightarrow e'
+\Sigma \vd \Map~\Par{\fn~\seq{x}~\rightarrow~e}~\seq{y} \Rightarrow e'
 }{
-\Sigma, \M~\overline{x}~\overline{y} \vd e \Rightarrow e'
+\Sigma, \M~\seq{x}~\seq{y} \vd e \Rightarrow e'
 }
 \tagsc{G1}
 \end{align*}
 
 \begin{align*}
 \inference{
-\Sigma, \M~\overline{x}~\overline{y} \vd e \Rightarrow e'
+\Sigma, \M~\seq{x}~\seq{y} \vd e \Rightarrow e'
 }{
-\Sigma \vd \Map~\Par{\fn~\overline{x}~\rightarrow~e}~\overline{y} \Rightarrow e'
+\Sigma \vd \Map~\Par{\fn~\seq{x}~\rightarrow~e}~\seq{y} \Rightarrow e'
 }
 \tagsc{G2}
 \end{align*}
@@ -101,23 +154,23 @@ let bss =
 \begin{align*}
 \inference{
   \Sigma = \Mv{x_p}{y_p},\ldots,\Mv{x_1}{y_1} \\
-  \Sigma' = \M~(\ov{x_p},\ov{a_{p-1}})~(\ov{y_p}, \ov{a_{p}}), \ldots, \M~(\ov{x_1},\ov{a_{0}})~(\ov{y_1},\ov{a_{1}}^{q_1}) \\
-  \overline{a_{p}}, \dots, \overline{a_{1}} ~\mbox{fresh~names} \\
-  \mbox{size~of~each~array~in~}\overline{a_{0}}\mbox{~invariant~to~}\Sigma \\
+  \Sigma' = \M~(\seq{x_p},\seq{a_{p-1}})~(\seq{y_p}, \seq{a_{p}}), \ldots, \M~(\seq{x_1},\seq{a_{0}})~(\seq{y_1},\seq{a_{1}}^{q_1}) \\
+  \seq{a_{p}}, \dots, \seq{a_{1}} ~\mbox{fresh~names} \\
+  \mbox{size~of~each~array~in~}\seq{a_{0}}\mbox{~invariant~to~}\Sigma \\
   \Sigma \vd e_1 \Rightarrow e_1' ~~~~ \Sigma' \vd e_2 \Rightarrow e_2'
 }{
-\Sigma \vd \Let~\ov{a_0} ~\kt{=}~e_1~\kw{in}~e_2 \Rightarrow \Let~\ov{a_p}~\kt{=}~ e_1' ~\kw{in}~e_2'
+\Sigma \vd \Let{\seq{a_0}}{e_1}{e_2} \Rightarrow \Let{\seq{a_p}}{e_1'}{e_2'}
 }
 \tagsc{G4}
 \end{align*}
 
 \begin{align*}
 \inference{
-  g = \Reduce~\Par{\fn~\ov{y}^{2*p} ~\rightarrow ~e}~\ov{n}^p \\
+  g = \Reduce~\Par{\fn~\seq{y}^{2*p} ~\rightarrow ~e}~\seq{n}^p \\
   \Sigma \vd \Map~\Par{g} ~\Par{\Transpose~z_0}\ldots\Par{\Transpose~z_{p-1}} \Rightarrow e' \\
-  f = \Map~\Par{\fn~\ov{y}^{2*p}~\rightarrow e}
+  f = \Map~\Par{\fn~\seq{y}^{2*p}~\rightarrow e}
 }{
-\Sigma \vd \Reduce~\Par{f}~\Par{\ov{\Replicate~k ~n}^p}~\ov{z}^p \Rightarrow e'
+\Sigma \vd \Reduce~\Par{f}~\Par{\seq{\Replicate~k ~n}^p}~\seq{z}^p \Rightarrow e'
 }
 \tagsc{G5}
 \end{align*}
@@ -126,21 +179,21 @@ let bss =
 \inference{
 \Sigma \vd \Rearrange~\Par{0,1+k_0,\ldots,1+k_{n-1}}~y \Rightarrow e
 }{
-\Sigma, \M~x~y \vd \Rearrange~\overline{k}^n ~ x \Rightarrow e
+\Sigma, \M~x~y \vd \Rearrange~\nseq{k}{n} ~ x \Rightarrow e
 }
 \tagsc{G6}
 \end{align*}
 
 \begin{align*}
 \inference{
-  \Sigma' = \Sigma, \M~(\ov{x},\ov{y})~(\ov{xs},\ov{ys}) \hspace{1.2cm} (\{n\}\cup\ov{q}) \cap (\ov{x},\ov{y}) = \emptyset \\
-  m = \mbox{outer~size~of~each~of~} \ov{xs} \mbox{~and~} \ov{ys}\\
+  \Sigma' = \Sigma, \M~(\seq{x},\seq{y})~(\seq{xs},\seq{ys}) \hspace{1.2cm} (\{n\}\cup\seq{q}) \cap (\seq{x},\seq{y}) = \emptyset \\
+  m = \mbox{outer~size~of~each~of~} \seq{xs} \mbox{~and~} \seq{ys}\\
   \mbox{f~contains~exploitable~(regular)~inner~parallelism}\\
-  \Sigma \vd \Loop~\Par{\ov{zs'}~\kt{=}~\ov{\Replicate~m~z_i}, \ov{ys'}~\kt{=}~\ov{ys}} \\
-    \hspace{1.8cm}\For~ i~\kt{<}~n~ \Do~\Map \Par{f~i~\ov{q}} ~\ov{xs}~\ov{ys}~\ov{ys'}~\ov{zs'} \Rightarrow e
+  \Sigma \vd \Loop~\Par{\seq{zs'}~\kt{=}~\seq{\Replicate~m~z_i}, \seq{ys'}~\kt{=}~\seq{ys}} \\
+    \hspace{1.8cm}\For~ i~\kt{<}~n~ \Do~\Map \Par{f~i~\seq{q}} ~\seq{xs}~\seq{ys}~\seq{ys'}~\seq{zs'} \Rightarrow e
 }{
-  \Sigma' \vd \begin{array}[t]{l} \Loop~\Par{\ov{z'}~\kt{=}~\ov{z},~\ov{y'}~\kt{=}~\ov{y}}~\kt{=}~ \\
-  ~~ \For~i~\kt{<}~n~ \Do~ f~i~\ov{q}~\ov{x}~\ov{y}~\ov{y'}~\ov{z} \Rightarrow e \end{array}
+  \Sigma' \vd \begin{array}[t]{l} \Loop~\Par{\seq{z'}~\kt{=}~\seq{z},~\seq{y'}~\kt{=}~\seq{y}}~\\
+  ~~ \For~i~\kt{<}~n~ \Do~ f~i~\seq{q}~\seq{x}~\seq{y}~\seq{y'}~\seq{z} \Rightarrow e \end{array}
 }
 \tagsc{G7}
 \end{align*}
@@ -148,6 +201,156 @@ let bss =
 \label{fig:flattening-rules}
 \end{figure}
 
+Figures~\ref{fig:before-distrib}~and~\ref{fig:after-result}
+demonstrate the application of our algorithm on a contrived but
+illustrative example that demonstrates many of the flattening rules
+exploited in the generation of efficient code for the various
+benchmark programs.  The original program consists of an outer
+\lstinline{map} that encloses (i) another \lstinline{map} operator
+implemented as a sequence of \lstinline{map}s, \lstinline{reduce}s,
+and \lstinline{scan}s and (ii) a loop containing a \lstinline{map}
+whose implementation is given by a \lstinline{reduce} and some scalar
+computation.  As written, only one level of parallelism (e.g., the
+outermost) can be statically mapped on GPGPU hardware. Our algorithm
+distributes the outer \lstinline{map} across the enclosed
+\lstinline{map} and \lstinline{loop} bindings, performs a
+\lstinline{map}-\lstinline{loop} interchange, and continues
+distribution.  The result consists of four perfect nests: a
+\lstinline{map-map} and \lstinline{map-map-map} nest at the outer
+level, and a \lstinline{map-map-reduce} (segmented reduction) and
+\lstinline{map-map} nest contained inside the loop.  In the first
+\lstinline{map-map} nest, the \lstinline{scan} and \lstinline{reduce}
+are sequentialized because further distribution would generate an
+irregular array, as the size \lstinline{p} of \lstinline{cs} is
+variant to the second \lstinline{map}.
+
+Figure~\ref{fig:flattening-rules} lists the rules that form the basis
+of the flattening algorithm.
+%
+We shall use $\Sigma$ to denote \emph{map nest contexts},
+which are sequences of \emph{map contexts}, written $\Mv{x}{y}$, where
+$\ov{x}$ denotes the bound variables of the map operator over the
+arrays held in $\ov{y}$.
+%Map xs ys e = forall xs in ys do e
+The flattening rules, which take the form $\Sigma \vd e \Rightarrow
+e'$, specify how a source expression $e$ may be translated into an
+equivalent target expression $e'$ in the given map nest context
+$\Sigma$. Several rules may be applied in each situation. The
+particular algorithm used by Futhark bases its decisions
+% base decisions about whether a rule should be applied
+on crude heuristics related to the structure of the map nest context
+and the inner expression.  Presently, nested \lstinline{stream_red}s are
+sequentialised, while nested \lstinline{map}s, \lstinline{scan}s, and
+\lstinline{reduce}s are parallelised.  These rules were mainly chosen
+to exercise the code generator, but sequentialising \lstinline{stream_red} is
+the right thing to do for most of the data sets we use in
+Section~\ref{chap:empirical-evaluation}.
+
+For transforming the program, the flattening algorithm
+is applied (in the empty map nest context) on each map nest in
+the program.
+%
+Rule~\G{1} (together with rule~\G{3}) allows for manifestation of the
+map nest context $\Sigma$ over $e$. Whereas rule~\G{1} can be applied
+for any $e$, the algorithm makes use of this rule only when no other
+rules apply.
+%
+Given a map nest context $\Sigma$ and an instance of a \texttt{map}
+\textsc{soac}, rule~\G{2} captures the \texttt{map} \textsc{soac} in the
+map nest context. This rule is the only rule that extends the map
+nest context.
+
+%Notice, in
+%particular, that the rule for map fission has a side condition that
+%ensures regularity of intermediate arrays.
+
+Rule~\G{4} allows for map fission
+($\map~(f\circ g) \Rightarrow \map~f\circ \map~g$),
+in the sense that the map nest context can be
+materialized first over $e_1$ and then over $e_2$ with appropriate
+additional context to allow for access to the now array-materialized
+values that were previously referenced through the let-bound variables
+$\overline{a_0}$. The rule can be applied only if the intermediate
+arrays formed by the transformation are ensured to be regular, which is
+enforced by a side condition in the rule. To avoid unnecessary
+excessive flattening on scalar computations, the \lstinline{let}-expressions
+are rearranged using a combination of \lstinline{let}-floating
+\cite{PeytonJones:1996:LMB:232627.232630} and tupling for grouping
+together scalar code in a single \lstinline{let}-construct.
+In essence, inner SOACs are natural splitting points for fission.
+For example,
+\begin{lstlisting}[belowskip=-0.8\baselineskip]
+let b = x+1
+let a = b+2
+in replicate n a
+\end{lstlisting}
+is conceptually split as
+\begin{lstlisting}[aboveskip=-0.8\baselineskip]
+let a = (let b = x+1 in b+2)
+in replicate n a
+\end{lstlisting}
+
+Rule~\G{5} allows for \kw{reduce}-\kw{map} interchange
+where it is assumed that the source neutral reduction element is a
+replicated value.  The original pattern appears in K-means (see
+Figure~\ref{fig:stream-counts}) as a reduction with a vectorized
+operator, which is inefficient on a GPU if executed as such. The
+interchange results in a segmented-reduce operator (applied on
+equally-sized segments), at the expense of transposing the input
+array(s).  This rule demonstrates a transformation of both schedule
+and (if the transposition is manifested) data of the program being
+optimized.
+
+Rule~\G{6} allows for distributing a \kw{rearrange} construct by
+rearranging the outer array (input to the map nest) with an expanded
+permutation.  The semantics of \lstinline{rearrange p a} is that it
+returns \lstinline{a} with its dimensions reordered by a
+statically-given permutation \kw{p}. For instance, the expression
+\mbox{\lstinline{rearrange (2,1,0) a}} reverses the dimensions of the
+three-dimensional array \lstinline{a}.
+%
+For convenience, we use \mbox{\lstinline{transpose a}} is syntactic
+sugar for \mbox{\lstinline{rearrange (1,0,...) a}}, which swaps the two
+  outermost dimensions.
+%
+Similar rules can be added to handle other expressions
+that have a particularly efficient formulation when distributed on
+their own, such as concatenation (not covered in this paper).
+
+Finally, rule~\G{7} implements a \lstinline{map}-\lstinline{loop}
+interchange.  The
+simple intuition is that\\
+\hspace*{0.5cm}\lstinline!map (\x -> loop (x'=x) for i < n do (f x')) xs!\\
+is equivalent to\\
+\hspace*{0.5cm}\lstinline!loop (xs'=xs) for i < n do (map f xs')!\\
+because they both produce \texttt{[f$^n$(xs[0]), $\ldots$
+  ,f$^n$(xs[m-1])]}.  The rule is sufficiently general to deal with
+all variations of variant and invariant variables in the
+\lstinline{loop} body.  The side condition in the rule ensures that
+$z \subseteq q$ are free variables and thus invariant to $\Sigma$.
+The rule is applied only if the body of the loop contains inner
+parallelism, such as maps, otherwise its application is not beneficial
+(e.g., it would change the Mandelbrot benchmark from
+\cref{sec:accelerate} to have a memory- rather than a compute-bound
+behavior).
+%
+However, rule~\G{7} is essential for efficient execution of the
+LocVolCalib benchmark, because a loop separates the outer map from
+four inner maps.
+
+We conclude by remarking that some of the choices made in the
+flattening rewrite rules about how much parallelism to exploit and how
+much to sequentialize efficiently are arbitrary, because there is no
+size that fits all. For example, we currently sequentialize a
+\lstinline{stream_red} if it is inside a \Map{} nest, but the
+algorithm can easily be made more aggressive. A more general solution
+would be to generate all possible code versions, and to discriminate
+between them at runtime based on static predicates that test whether
+the exploited parallelism is enough to fully utilize hardware.  This
+idea is discussed further in \cref{sec:multi-versioned-code}.
+
+\section{Multi-Versioned Code}
+\label{sec:multi-versioned-code}
 
 %%% Local Variables:
 %%% mode: latex

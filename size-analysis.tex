@@ -72,9 +72,14 @@ invariants are only ``assumed'', that is, they have not been verified
   \lstinline[mathescape]!rearrange ($c_{1}, \ldots, c_{n}$)! & : & $\forall\nseq{d}{n}\alpha.[d_{1}]\cdots[d_{n}]\alpha\rightarrow[d_{p(1)}]\cdots[d_{p(n)}]\alpha$ \\
             & & ~~ \text{where $p(i)$ is the result of applying the}\\
             & & ~~ \text{permutation induced by $c_{1}, \ldots, c_{n}$}. \\
-{\lstinline!map!} & : & $\forall d\ \bar{\alpha}^{(n)}\bar{\beta}^{(m)}.(\nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(m)}))$\\
-          & & ~~~~~~~~~~~~~~~~~~~~ $\rightarrow \nseq{[s]\alpha_i}{n}$\\
-          & & ~~~~~~~~~~~~~~~~~~~~ $\rightarrow (\nseq{[s]\beta_i}{m})$\\
+  {\lstinline!map!} & : & $\forall d\ \bar{\alpha}^{(n)}\bar{\beta}^{(m)}.(\nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(m)}))$\\
+            & & ~~~~~~~~~~~~~~~~~~~~ $\rightarrow \nseq{[s]\alpha_i}{n}$\\
+            & & ~~~~~~~~~~~~~~~~~~~~ $\rightarrow (\nseq{[s]\beta_i}{m})$\\
+  {\lstinline!scatter!} & : & $\forall d \nseq{x}{m} \nseq{\alpha}{n}.$\\
+          & & ~~~~~~~~~~~~~~ $(\nseq{[x_{i}]\alpha_{i}}{n})$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[d]\texttt{i32}}{n})$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[d]\alpha_i}{n})$\\
+          & & ~~~~~~~~~~ $\rightarrow (\nseq{[x_{i}]\beta_i}{m})$\\
   {\lstinline!reduce!} & : & $\forall \ d \ \bar{\alpha}^{(n)}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(n)}))$ \\
           & & ~~~~~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{n})$\\
           & & ~~~~~~~~~~~~~~ $\rightarrow \nseq{[d]\alpha_i}{n}$\\

@@ -28,6 +28,36 @@
   morestring=[b]" % defines that strings are enclosed in double quotes
 }
 
+\lstdefinelanguage{corefuthark}
+{
+  % list of keywords
+  morekeywords={
+    do,
+    else,
+    for,
+    fun,
+    if,
+    in,
+    include,
+    let,
+    loop,
+    struct,
+    then,
+    type,
+    val,
+    while,
+    with,
+    module,
+    where,
+  },
+  sensitive=true, % keywords are not case-sensitive
+  literate={\\}{\fn}{1} {->}{$\rightarrow$}{1} {<-}{$\leftarrow$}{1},
+  morecomment=[l]{--}, % l is for line comment
+  morecomment=[s]{\{-}{-\}}, % s is for start and end delimiter
+%  otherkeywords={>,<,=,<=,>=,!,*,/,-,+,|,&,||,&&,==,=>},
+  morestring=[b]" % defines that strings are enclosed in double quotes
+}
+
 % Define Colors
 \usepackage{xcolor}
 \definecolor{eclipseBlue}{RGB}{42,0.0,255}
