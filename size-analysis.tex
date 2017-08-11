@@ -3,22 +3,33 @@
 
 A great many optimisations and safety checks in Futhark depend on how
 the shape of two arrays relate to each other, and at which point the
-shape of an array can be known.  Especially the latter is important.
-Nested parallelism supports construction arrays whose \textit{value}
-is dependent on some outer parallel construct.  However, for
-\textit{regular} nested parallelism, the shapes of those arrays can be
-computed invariant to all parallel loops.  It is crucial for efficient
-execution that we can hoist the computation of such sizes out of
-parallel loops.  This requires us to reify the notion of an array
-shape, and the computation of that shape, in the IR.  In the Futhark
-compiler, we treat size computations like any other expression, which
-allows us to use our general compiler optimisation repertoire to
-optimise and simplify the computation of sizes.  We maintain the
-invariant that for \textit{any} array-typed variable in scope, each
-dimension of that array corresponds to some \lstinline{i32}-typed
-variable also in scope.  This chapter discusses how we augment the IR
-to provide this property, and how we move from the unsized IR to the
-sized IR (analogous to ``typed'' versus ``untyped'').
+shape of an array can be known.  Especially the latter is important
+for the moderate flattening transformation
+(\cref{chap:kernel-extraction}) that constitutes one of the main
+contributions of the thesis.  Nested parallelism supports the
+construction of arrays whose \textit{value} is dependent on some outer
+parallel construct.  However, for \textit{regular} nested parallelism,
+the shapes of those arrays can be computed invariant to all parallel
+loops.  It is crucial for efficient execution that we can hoist the
+computation of such sizes out of parallel loops.  This requires us to
+reify the notion of an array shape, and the computation of that shape,
+in the IR.  In the Futhark compiler, we treat size computations like
+any other expression, which allows us to use our general compiler
+optimisation repertoire to optimise and simplify the computation of
+sizes.
+
+The main contribution of this chapter is an IR design that maintains
+the invariant that for \textit{any} array-typed variable in scope,
+each dimension of that array corresponds to some \lstinline{i32}-typed
+variable also in scope.  For expressions where the shape of the result
+cannot be computed in advance (consider a \kw{filter} or a function
+call), we use a lightweight mechanism based on \textit{existential
+  types}.  This chapter also discusses how we move from the unsized IR
+to the sized IR (analogous to ``typed'' versus ``untyped''), and how
+many size calculations can subsequently be optimised away.  An
+important technique is \textit{function slicing}, which we use to
+derive functions that precompute the size of values returned by a
+function.
 
 \section{A Sized IR}
 
@@ -238,7 +249,7 @@ This is achieved by:
 
 \item Representing function's array results via
   existentially-quantified shape-dependent types.  For example, the
-  return type of of \lstinline{f} is specified as
+  return type of \lstinline{f} is specified as
   \lstinline{d.[d]f64}, indicating an existential size \lstinline{d}.
 
 \item Modifying \lstinline{let} patterns to also explicitly bind any
@@ -248,11 +259,11 @@ This is achieved by:
 
 \item For the \lstinline{map} in \lstinline{main}, we need to make a
   ``guess'' at the size of the array being returned, which we store as
-  the variable \lstinline{l}..  This guess is made by applying the
-  anonymous function to \lstinline{vsss[0]}, which produces both a
-  size and an array, from which we use just the size.  If
-  \lstinline{vsss} is empty (that is, if \lstinline{n} is zero), the
-  guess is zero.
+  the variable \lstinline{l}.  This guess is made by applying the
+  \kw{map} function to \lstinline{vsss[0]}, which produces both a size
+  and an array, from which we use just the size.  This corresponds to
+  \textit{slicing} the \kw{map} function.  If \lstinline{vsss} is
+  empty (that is, if \lstinline{n} is zero), the guess is zero.
 
   Since \lstinline{f} returns an existential result, and the lambda
   \textit{must} return an array of exactly type \lstinline{[l]f64}, we
@@ -274,7 +285,7 @@ employed to eliminate the overhead.  On
 \Cref{fig:SimplifyFShape} we see the result of inlining all
 functions, followed by straightforward simplification, dead code
 removal, and hoisting of the computation of \lstinline{c}.  The result
-is that all arrays constructed insice the \lstinline{map}s have a size
+is that all arrays constructed inside the \lstinline{map}s have a size
 that can be computed before the \lstinline{map}s are entered.  From an
 operational perspective, this lets us pre-allocate memory before
 executing the \lstinline{map}s on a GPU.  This is essential for GPU

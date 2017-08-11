@@ -19,8 +19,8 @@ new contributions:
   horizontal fusion at all.
 \item Vertical fusion of \lstinline{map} into \lstinline{scan} and
   \lstinline{map} into \lstinline{scatter}.
-\item Fusion rules for the streaming SOACs: \lstinline{stream_red},
-  \lstinline{stream_map}, and \lstinline{stream_red}.
+\item Fusion rules for the streaming SOACs \lstinline{stream_red} and
+  \lstinline{stream_map}.
 \end{enumerate}
 
 However, before we can move on to the new contributions, we must
@@ -38,7 +38,7 @@ Most fusion algorithms in the literature are unable to handle fusion
 across \lstinline{zip}/\lstinline{unzip}, and more generally the case
 where the output of a producer is used by several consumers.  The
 algorithm presented in this chapter is capable of fusing such cases
-whenever possible without duplicating computation, as demonstrated on
+if this is possible without duplicating computation, as demonstrated on
 \cref{fig:fusion-multiple-consumers}.  The linchpin of this capability
 is our choice of internal representation, in which arrays of tuples
 (and therefore \lstinline{zip}/\lstinline{unzip}) does not occur.
@@ -122,14 +122,14 @@ previous SOACs are mapped to the new ones.
   \centerline{\lstinline{reduce f x a} = \lstinline{redomap f f x a}}
 \item[\kw{scanomap}] is similar to \kw{redomap}, but performs a scan
   instead of a reduction.  The following equivalence holds:\\
-  \centerline{\lstinline{scan f x a} = \lstinline{scan f f x a}}
+  \centerline{\lstinline{scan f x a} = \lstinline{scanomap f f x a}}
 \item[\kw{stream\_par}] functions as a unification of the
   \kw{stream\_map} and \kw{stream\_red} of the source language.  As
   with \kw{redomap}, the chunk operator returns $m+l$ values, of which
   the first $m$ take part in reduction, and the latter $l$ are simply
-  returned.  One restriction is that the latter $l$ values much all be
-  arrays of size $x$, where $x$ is the size of the input chunk given
-  to the operator.
+  returned.  One restriction is that the latter $l$ values must all be
+  arrays of size $x$, where $x$ is the size of the chunk of the input
+  given to the operator.
 \item[\kw{stream\_seq}] is a SOAC used to fuse otherwise infusible
   cases, without losing potential parallelism, by performing what is
   semantically a fold over chunks of the input array.  The chunk
@@ -174,7 +174,7 @@ compiler implements \kw{filter} by a decomposition into \kw{scan} and
           & & ~~~~~~~~~~ $\rightarrow \nseq{[d]\beta_i}{n}$\\
           & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m},\nseq{[d]\gamma_{i}}{l})$ \\
   {\lstinline!stream_seq!} & : & $\forall d x \bar{\alpha}^{(m)}\bar{\beta}^{(n)}\nseq{\gamma}{l}.$\\
-          & & ~~~~~~~~~~ $\rightarrow ((x: \texttt{i32}) \rightarrow \nseq{\alpha}{m} \rightarrow \nseq{[x]\alpha_i}{m} \rightarrow (\bar{\beta}^{(m)}, \nseq{[x]\gamma}{l}))$ \\
+          & & ~~~~~~~~~~ $\rightarrow ((x: \texttt{i32}) \rightarrow \nseq{\alpha}{m} \rightarrow \nseq{[x]\beta_i}{m} \rightarrow (\bar{\beta}^{(m)}, \nseq{[x]\gamma}{l}))$ \\
           & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$\\
           & & ~~~~~~~~~~ $\rightarrow \nseq{[d]\beta_i}{n}$\\
           & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$ \\
@@ -237,9 +237,7 @@ The implementation in the Futhark compiler will currently only fuse if
 absolutely no computation is duplicated, although this is likely too
 conservative.  Duplicating cheap work, for example functions that use
 only primitive operations on scalars, is probably not harmful to
-overall performance, although we have not investigated this fully.  In
-\cref{sec:inlining-indexing}, we present a transformation that, in
-some cases, duplicates computation in order to enhance fusibility.
+overall performance, although we have not investigated this fully.
 
 In general, in the context of GPU, the tradeoff between duplicating
 computation and increasing communication is not an easy problem to
