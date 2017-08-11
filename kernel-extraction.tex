@@ -197,8 +197,8 @@ let bss =
 }
 \tagsc{G7}
 \end{align*}
-\caption{Flattening rules.}
-\label{fig:flattening-rules}
+\caption{The flattening rules that form the basis of the moderate flattening algorithm.}
+\label{fig:basic-flattening-rules}
 \end{figure}
 
 Figures~\ref{fig:before-distrib}~and~\ref{fig:after-result}
@@ -224,7 +224,7 @@ are sequentialized because further distribution would generate an
 irregular array, as the size \lstinline{p} of \lstinline{cs} is
 variant to the second \lstinline{map}.
 
-Figure~\ref{fig:flattening-rules} lists the rules that form the basis
+Figure~\ref{fig:basic-flattening-rules} lists the rules that form the basis
 of the flattening algorithm.
 %
 We shall use $\Sigma$ to denote \emph{map nest contexts},
@@ -239,12 +239,12 @@ $\Sigma$. Several rules may be applied in each situation. The
 particular algorithm used by Futhark bases its decisions
 % base decisions about whether a rule should be applied
 on crude heuristics related to the structure of the map nest context
-and the inner expression.  Presently, nested \lstinline{stream_red}s are
+and the inner expression.  Presently, nested \lstinline{stream_par}s are
 sequentialised, while nested \lstinline{map}s, \lstinline{scan}s, and
 \lstinline{reduce}s are parallelised.  These rules were mainly chosen
-to exercise the code generator, but sequentialising \lstinline{stream_red} is
+to exercise the code generator, but sequentialising \lstinline{stream_par} is
 the right thing to do for most of the data sets we use in
-Section~\ref{chap:empirical-evaluation}.
+Section~\ref{chap:empirical-validation}.
 
 For transforming the program, the flattening algorithm
 is applied (in the empty map nest context) on each map nest in
@@ -279,13 +279,13 @@ are rearranged using a combination of \lstinline{let}-floating
 together scalar code in a single \lstinline{let}-construct.
 In essence, inner SOACs are natural splitting points for fission.
 For example,
-\begin{lstlisting}[belowskip=-0.8\baselineskip]
+\begin{lstlisting}[aboveskip=-0.6\baselineskip]
 let b = x+1
 let a = b+2
 in replicate n a
 \end{lstlisting}
 is conceptually split as
-\begin{lstlisting}[aboveskip=-0.8\baselineskip]
+\begin{lstlisting}[aboveskip=-0.5\baselineskip]
 let a = (let b = x+1 in b+2)
 in replicate n a
 \end{lstlisting}
