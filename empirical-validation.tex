@@ -35,12 +35,88 @@ techniques used to obtain efficient Futhark implementations.
 
 \section{N Benchmarks from Rodinia}
 
+The speedup on Backprop seems related to a reduction that Rodinia has
+left sequential.  Running time of the training phase is roughly equal
+in Rodinia and Futhark ($\sim10~ms$).
+
+Rodinia's implementation of HotSpot uses time
+tiling~\cite{HexaTiling}, which seems to pay off on the NVIDIA GPU,
+but not on AMD. Futhark's slowdown is due to double buffering via copy
+rather than pointer switching, accounting for $30\%$ of runtime.
+
+Our speedup on K-means is due to Rodinia not parallelizing computation
+of the new cluster centers, which is semantically a segmented
+reduction.
+
+Myocyte's dataset has been expanded because its degree of parallelism
+was one (\texttt{workload}=1).  We used Rodinia's CUDA implementation
+rather than its OpenCL implementation, as the latter is not fully
+parallelised..  We attribute our speedup to automatic coalescing
+optimizations, which is tedious to do by hand on such large programs.
+
+NN speedup is due to Rodinia leaving $100$ \kw{reduce} operations for
+finding the nearest neighbors sequential on the CPU. Possibly because
+the reduce operator is atypical; it computes both the minimal value
+and the corresponding index.  Speedup is less impressive on the AMD
+GPU, due to higher kernel launch overhead---this benchmark is
+dominated by frequent launches of short kernels.
+
+For Pathfinder, Rodinia uses time tiling, which, unlike HotSpot, does
+not seem to pay off on the tested hardware.
+
 \section{M Benchmarks from Parboil}
 
 \section{Two Benchmarks from FinPar}
+\label{sec:finpar}
+
+OptionPricing from FinPar is essentially a
+\lstinline{map}-\lstinline{reduce}-composition.  The benchmark primarily
+measures how well the Futhark compiler sequentialises excess
+parallelism inside the complex \lstinline{map} function.
+
+LocVolCalib from FinPar is an outer \lstinline{map} containing a
+sequential \lstinline{for}-loop, which itself contains several more
+\lstinline{map}s.  Exploiting all parallelism requires the compiler to
+interchange the outer \lstinline{map} and the sequential loop.  The
+slowdown on the AMD GPU is due to transpositions, inserted to fix
+coalescing, being relatively slower than on the NVIDIA GPU.
+
 
 \section{L Benchmarks from Accelerate}
 \label{sec:accelerate}
+
+The four benchmarks Crystal, Fluid, Mandelbrot, and N-body are from
+Accelerate.  The N-body simulation comprises a width-$N$ map where
+each element performs a fold over each of the $N$ bodies.
+
+\section{Impact of Optimisations}
+
+Impact was measured by turning individual optimisations off and
+re-running benchmarks on the NVIDIA GPU.  We report only where
+the impact is non-neglible.
+
+Fusion has an impact on K-means ($\times1.42$), LavaMD
+($\times4.55$), Myocyte ($\times1.66$), SRAD ($\times1.21$), Crystal
+($\times10.1$), and LocVolCalib ($\times9.4$).  Without fusion,
+OptionPricing, N-body, and MRI-Q fail due to increased
+storage requirements.
+
+In the absence of in-place updates, we would have to implement
+K-means as on Figure~\ref{fig:parallel-counts}---the resulting
+program is slower by $\times8.3$.  Likewise, LocVolCalib
+would have to implement its central \lstinline{tridag} procedure via a
+less efficient \lstinline{scan}-\lstinline{map} composition, causing a
+$\times1.7$ slowdown.  OptionPricing uses an inherently sequential
+Brownian Bridge computation that is not expressible without in-place
+updates.
+
+The coalescing transformation has an impact on K-means
+($\times9.26$), Myocyte ($\times4.2$), OptionPricing ($\times 8.79$),
+and LocVolCalib ($\times 8.4$).
+%
+Loop tiling has an impact on LavaMD ($\times 1.35$), MRI-Q
+($\times1.33$), and N-body ($\times 2.29$).
+
 
 %%% Local Variables:
 %%% mode: latex

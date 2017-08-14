@@ -52,6 +52,7 @@
   },
   sensitive=true, % keywords are not case-sensitive
   literate={\\}{\fn}{1} {->}{$\rightarrow$}{1} {<-}{$\leftarrow$}{1},
+  moredelim=**[is][\color{red}]{@}{@},
   morecomment=[l]{--}, % l is for line comment
   morecomment=[s]{\{-}{-\}}, % s is for start and end delimiter
 %  otherkeywords={>,<,=,<=,>=,!,*,/,-,+,|,&,||,&&,==,=>},
@@ -124,14 +125,16 @@
 \newcommand{\For}{\kw{for}}
 \newcommand{\Map}{\kw{map}}
 \newcommand{\Reduce}{\kw{reduce}}
+\newcommand{\Redomap}{\kw{redomap}}
 \newcommand{\Scan}{\kw{scan}}
 \newcommand{\Transpose}{\kw{transpose}}
-\newcommand{\Let}[3]{\kw{let}~#1~\mbox{\texttt{=~}}#2~\kw{in}~#3}
+\newcommand{\Let}[3]{\kw{let}~#1~\mbox{\texttt{=}}~#2~\kw{in}~#3}
 \newcommand{\If}[3]{\kw{if}~#1~\kw{then}~#2~\kw{else}~#3}
 \newcommand{\vd}{\vdash}
 \newcommand{\Rearrange}{\kw{rearrange}}
 \newcommand{\Replicate}{\kw{replicate}}
 \newcommand{\Par}[1]{\mathtt{(}#1\mathtt{)}}
+\newcommand{\Set}[1]{\{#1\}}
 \newcommand{\StreamMap}{\kw{stream\_map}}
 \newcommand{\StreamRed}{\kw{stream\_red}}
 \newcommand{\StreamPar}{\kw{stream\_par}}

@@ -1,6 +1,6 @@
 \renewcommand{\G}[1]{G#1}
 
-\chapter{Kernel Extraction}
+\chapter{Moderate Flattening and Kernel Extraction}
 \label{chap:kernel-extraction}
 
 This chapter presents a transformation that aims to enhance the degree
@@ -53,7 +53,7 @@ in \cref{chap:tiling}.  Multi-versioned code, discussed in
 flattening as a fallback for those cases where moderate flattening is
 incapable of extracting sufficient parallelism.
 
-\section{Flattening Example and Rules}
+\section{Example of Moderate Flattening}
 \label{sec:kernel-extraction}
 
 \begin{figure}
@@ -121,10 +121,34 @@ let bss =
   $pss : [m][m]\texttt{i32}$.}
 \end{figure}
 
+Figures~\ref{fig:before-distrib}~and~\ref{fig:after-result}
+demonstrate the application of our algorithm on a contrived but
+illustrative example that demonstrates many of the flattening rules
+exploited in the generation of efficient code for the various
+benchmark programs.  The original program consists of an outer
+\lstinline{map} that encloses (i) another \lstinline{map} operator
+implemented as a sequence of \lstinline{map}s, \lstinline{reduce}s,
+and \lstinline{scan}s and (ii) a loop containing a \lstinline{map}
+whose implementation is given by a \lstinline{reduce} and some scalar
+computation.  As written, only one level of parallelism (e.g., the
+outermost) can be statically mapped on GPGPU hardware. Our algorithm
+distributes the outer \lstinline{map} across the enclosed
+\lstinline{map} and \lstinline{loop} bindings, performs a
+\lstinline{map}-\lstinline{loop} interchange, and continues
+distribution.  The result consists of four perfect nests: a
+\lstinline{map-map} and \lstinline{map-map-map} nest at the outer
+level, and a \lstinline{map-map-reduce} (segmented reduction) and
+\lstinline{map-map} nest contained inside the loop.  In the first
+\lstinline{map-map} nest, the \lstinline{scan} and \lstinline{reduce}
+are sequentialized because further distribution would generate an
+irregular array, as the size \lstinline{p} of \lstinline{cs} is
+variant to the second \lstinline{map}.
 
+\section{Rules for Moderate Flattening}
 
 \begin{figure}
-\small
+\sempart{Basic Flattening Rules}{\Sigma \vd e \Rightarrow e}
+
 \begin{align*}
 \inference{
 \Sigma \vd \Map~\Par{\fn~\seq{x}~\rightarrow~e}~\seq{y} \Rightarrow e'
@@ -197,32 +221,17 @@ let bss =
 }
 \tagsc{G7}
 \end{align*}
+
+\begin{align*}
+  \inference{
+  f, \seq{v}, \seq{x}~\textrm{chosen appropriately}
+  }{
+  \Sigma \vd \textit{any SOAC} \Rightarrow \StreamSeq~f~\seq{v}~\seq{x}
+  } \tagsc{G8}
+\end{align*}
 \caption{The flattening rules that form the basis of the moderate flattening algorithm.}
 \label{fig:basic-flattening-rules}
 \end{figure}
-
-Figures~\ref{fig:before-distrib}~and~\ref{fig:after-result}
-demonstrate the application of our algorithm on a contrived but
-illustrative example that demonstrates many of the flattening rules
-exploited in the generation of efficient code for the various
-benchmark programs.  The original program consists of an outer
-\lstinline{map} that encloses (i) another \lstinline{map} operator
-implemented as a sequence of \lstinline{map}s, \lstinline{reduce}s,
-and \lstinline{scan}s and (ii) a loop containing a \lstinline{map}
-whose implementation is given by a \lstinline{reduce} and some scalar
-computation.  As written, only one level of parallelism (e.g., the
-outermost) can be statically mapped on GPGPU hardware. Our algorithm
-distributes the outer \lstinline{map} across the enclosed
-\lstinline{map} and \lstinline{loop} bindings, performs a
-\lstinline{map}-\lstinline{loop} interchange, and continues
-distribution.  The result consists of four perfect nests: a
-\lstinline{map-map} and \lstinline{map-map-map} nest at the outer
-level, and a \lstinline{map-map-reduce} (segmented reduction) and
-\lstinline{map-map} nest contained inside the loop.  In the first
-\lstinline{map-map} nest, the \lstinline{scan} and \lstinline{reduce}
-are sequentialized because further distribution would generate an
-irregular array, as the size \lstinline{p} of \lstinline{cs} is
-variant to the second \lstinline{map}.
 
 Figure~\ref{fig:basic-flattening-rules} lists the rules that form the basis
 of the flattening algorithm.
@@ -256,7 +265,7 @@ for any $e$, the algorithm makes use of this rule only when no other
 rules apply.
 %
 Given a map nest context $\Sigma$ and an instance of a \texttt{map}
-\textsc{soac}, rule~\G{2} captures the \texttt{map} \textsc{soac} in the
+SOAC, rule~\G{2} captures the \texttt{map} SOAC in the
 map nest context. This rule is the only rule that extends the map
 nest context.
 
@@ -335,22 +344,174 @@ parallelism, such as maps, otherwise its application is not beneficial
 behavior).
 %
 However, rule~\G{7} is essential for efficient execution of the
-LocVolCalib benchmark, because a loop separates the outer map from
-four inner maps.
+LocVolCalib benchmark (\cref{sec:finpar}), because a loop separates
+the outer map from four inner maps.
 
 We conclude by remarking that some of the choices made in the
 flattening rewrite rules about how much parallelism to exploit and how
 much to sequentialize efficiently are arbitrary, because there is no
-size that fits all. For example, we currently sequentialize a
-\lstinline{stream_red} if it is inside a \Map{} nest, but the
-algorithm can easily be made more aggressive. A more general solution
-would be to generate all possible code versions, and to discriminate
-between them at runtime based on static predicates that test whether
-the exploited parallelism is enough to fully utilize hardware.  This
-idea is discussed further in \cref{sec:multi-versioned-code}.
+size that fits all.  For example, we currently sequentialize a
+\StreamPar{} if it is inside a \Map{} nest, but the algorithm can
+easily be made more aggressive.  To see the problem, consider an
+expression that computes the sum of rows of a matrix:\\
+\hspace*{0.5cm}\lstinline{map (\xs -> reduce (+) 0 xs) xss}\\
+Assume that \lstinline{xss} is of shape $n\times{}m$.  If $n$ is
+sufficiently large (tens of thousands on a GPU), then it is most
+efficient to turn the \kw{reduce} into a sequential loop.  If $n$ is
+very small, then perhaps it is best to sequentialise the \kw{map}, and
+keep the \kw{reduce} parallel.  Or perhaps we must exploit the
+parallelism of both the \kw{map} and the \kw{reduce} to fully saturate
+the parallel capacity of the target hardware.  Since $n$ and $m$ are
+not known at compile-time, we cannot generate code that is optimal for
+all cases.
+
+A more general solution would be to generate all three possible code
+versions, and to discriminate between them at runtime based on dynami
+predicates that test whether the exploited parallelism is enough to
+fully utilize hardware.  This idea is discussed further below.
 
 \section{Multi-Versioned Code}
 \label{sec:multi-versioned-code}
+
+The flattening rules of the preceding section contain are able to
+directly decompose \kw{map}-nestings via loop distribution.  However,
+they are not in general able to exploit parallelism nested within the
+functional argument to a non-\kw{map} SOAC.  Some rules, for example
+G5 that performs \kw{reduce}-\kw{map} interchange, expose \kw{map}s
+which can then be further handled by the moderate flattening
+algorithm.  This section presents further rules that decompose SOACs
+into \kw{map}s and other SOACs.  Furthermore, we also introduce a rule
+for \textit{multi-versioned code}, by which a single SOAC may be
+flattened in two different ways, with either of the two alternatives
+picked at runtime via a branch.  While the Futhark compiler contains a
+prototype implementation of multi-versioned code, it is not yet used
+by default.  Hence, the ideas in this section are not as empirically
+proven as the rest of the thesis.
+
+
+\begin{figure}
+\sempart{More Flattening Rules}{\Sigma \vd e \Rightarrow e}
+
+\begin{align*}
+  \inference{
+  \Sigma \vd e \Rightarrow e'_1\\
+  \Sigma \vd e \Rightarrow e'_2 \\
+  e'_{1} \neq e'_{2} \\
+  v\mbox{ is fresh}
+}{
+  \Sigma \vd e \Rightarrow \Let{v}{\textit{predicate}}{\If{v}{e'_{1}}{e'_{2}}}
+} \tagsc{E1}
+\end{align*}
+
+\begin{align*}
+\inference{
+  \nseq{a}{n}~\nseq{b}{m}~\nseq{c}{n}~\mbox{are fresh} \\
+  f' = f~\nseq{v}{n} \\
+  op_{1} \equiv \Map~f'~\seq{x}\sp
+  op_{2} \equiv \Reduce~\oplus~(\nseq{v}{n})~\nseq{a}{n}\\
+  \Sigma \vd \Let{\nseq{a}{n}~\nseq{b}{m}}{op_{1}}{\Let{\nseq{c}{n}}{op_{2}}{(\nseq{c}{n},\nseq{b}{m})}} \Rightarrow e'
+}{
+\Sigma \vd \Redomap~\oplus~f~(\nseq{v}{n})~\seq{x} \Rightarrow e'
+} \tagsc{E2}
+\end{align*}
+
+\begin{align*}
+  \inference{
+  \nseq{a}{n}~\nseq{b}{m}~\nseq{c}{n}~\mbox{are fresh} \\
+  op_{1} \equiv \Map~(\textrm{unchunk}(n,m,f))~\seq{x}\sp
+  op_{2} \equiv \Reduce~\oplus~(\nseq{v}{n})~\nseq{a}{n}\\
+  \Sigma \vd \Let{\nseq{a}{n}~\nseq{b}{m}}{op_{1}}{\Let{\nseq{c}{n}}{op_{2}}{(\nseq{c}{n},\nseq{b}{m})}} \Rightarrow e'
+  }{
+  \Sigma \vd \StreamPar~\oplus~f~\seq{x} \Rightarrow e'
+  } \tagsc{E3}
+\end{align*}
+
+\begin{align*}
+  \inference{
+  w~\textrm{is size of any}~x \\
+  \Sigma \vd \Let{c}{w}{\nseq{\kw{let}~v_{i}~=~x_{i}}{k}~\kw{in}~e_{f}} \Rightarrow e'
+  }{
+  \Sigma \vd \StreamSeq~(\FnU{c~\nseq{v}{k}}{e_{f}})~(\nseq{v}{n})~\nseq{x}{k} \Rightarrow e'
+  } \tagsc{E4}
+\end{align*}
+
+\caption{Flattening rules that are more aggressive in exploiting inner
+  parallelism.  The definition of \textrm{unchunk} can be found on
+  \cref{fig:unchunking}.}
+\label{fig:more-flattening-rules}
+\end{figure}
+
+\begin{figure}
+
+  \begin{align*}
+    \textrm{unchunk}(n, m, \Fn{(\nseq{\tau}{n},\nseq{[c]\tau}{m})}{c~\nseq{v}{k}}{e}) =
+    & \fn \nseq{v'}{k}: (\nseq{\tau}{n},\nseq{\tau}{m}) \rightarrow \\
+    & \quad \kw{let}~c~=~1\\
+    & \quad \nseq{\kw{let}~v_{i}~=~[v'_{i}]}{k} \\
+    & \quad \kw{let}~\nseq{a}{n}~\nseq{b}{m}~=~e \\
+    & \quad \nseq{\kw{let}~b'_{i}~=~b_{i}[0]}{m} \\
+    & \quad \kw{in}~\nseq{a}{n}~\nseq{b'}{m}
+  \end{align*}
+  \caption{Turning a chunk function into a non-chunked function by
+    setting the chunk size to unit, and turning the resulting
+    unit-size map-out results into single values.}
+  \label{fig:unchunking}
+\end{figure}
+
+Multi-versioned code does not change the overall framework of moderate
+flattening.  \Cref{fig:more-flattening-rules} simply provides
+additional rules that are more aggressive in decomposing SOACs into
+constituent parts.  The most crucial rule is E1, which states that if
+some expression $e$ can be flattened in two distinct ways $e'_{1}$ and
+$e'_{2}$, then $e$ can be flattened to an \kw{if} expression that uses
+some runtime \textit{predicate} to determine which of $e'_{1}$ or
+$e'_{2}$ to apply.  We do not specify the form of the predicate in
+detail here.  One common case is that it is some comparison of the
+amount of parallelism exploited by $e'_{1}$ versus some runtime-given
+constant that characterises the hardware the program is executing on.
+Determining the right form of the predicates, and the constants they
+may employ, is in practise a form of \textit{auto-tuning}.
+
+Rule E2 describes how a \kw{redomap} can be taken apart into a
+\kw{map} and a \kw{reduce}, which is then (potentially) further
+flattened.  The \kw{map} uses a modified function $f'$, in which we
+fix the first $n$ parameters of the original function $f$
+(corresponding to the accumulator) to the neutral value.  Since
+\kw{redomap} returns both reduced and mapped results, we are careful
+to only pass the former to the \kw{reduce}.  An almost identical rule
+can be defined for \kw{scanomap}.
+
+Rule E3 is similar to E2, but applies to \StreamPar{}, and recovers
+available all parallelism by splitting into a \kw{map} and a
+\kw{reduce}.  The main difference compared to E2 is that computing the
+function for \kw{map} is somewhat more complicated, as shown on
+\cref{fig:unchunking}.
+
+Rule E4 is used to exploit any parallelism inside of a \StreamSeq{}.
+This is done by fixing the chunk size $c$ to the full size $w$ of the
+input arrays, and then inserting the function body.
+
+\section{Kernel Extraction}
+
+The moderate flattening algorithm, as presented in this chapter, does
+not directly transform SOACs into flat-parallel kernels suitable for
+GPU execution.  Instead, it merely rearranges the SOACs into simpler
+forms that can be directly recognised by a simple pattern-matcher,
+which is then responsible for generating GPU kernels.  We will not
+describe this operation in detail, as it pertains to straightforward
+but tedious book-keeping, but some details are worth mentioning.
+
+In the implementation, there is no distinction between moderate
+flattening and kernel extraction: it is interleaved in the same pass.
+Conceptually, when rule G1 first fires, it will sequentialise the
+expression $e$, and then manifest the \textit{entire} map context
+$\Sigma$ at once, in the form of a flat parallel kernel.
+
+Not all kernels are extracted from the simple form of a \kw{map} nest
+containing a sequential function.  Other patterns that give rise to a
+GPU kernel are:
+
+
 
 %%% Local Variables:
 %%% mode: latex

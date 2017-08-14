@@ -263,6 +263,7 @@ computation may in some cases be preferable.
 
 \newpage
 \section{Fusion Rules}
+\label{sec:fusionalgebra}
 
 The rules describe the fusion of two SOACs with associated patterns,
 termed $A$ and $B$, where $A$ produces some arrays that are inputs to
@@ -588,7 +589,8 @@ sequential \kw{do}-loop around it:
 let ys_blank = ... -- an array of the same size as ys
 let zs_blank = ... -- an array of the same size as zs
 let ys zs =
-  loop (a ys_out zs_out) = (0, ys_blank, zs_blank) for i < n do
+  loop (a ys_out zs_out) =
+       (0, ys_blank, zs_blank) for i < n do
     let c = 1
     let xs' = xs[i:i+c]
     let xs'' = scanomap (+) (+) 0 xs'

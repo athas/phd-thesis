@@ -1272,9 +1272,243 @@ allows type checking to rely on simple intra-procedural analysis, both
 in the callee and in the caller, as described in the following
 sections.
 
-
 \subsection{Streaming SOACs}
 \label{sec:streaming-soacs}
+
+Most of the array combinators supported by Futhark are familiar to
+users of existing functional languages.  However, we found it useful
+to add two novel SOACs that directly address our focus on efficient
+sequentialisation.  This section introduces the \textit{streaming
+  SOACs}, \StreamRed{} and \StreamMap{}, by demonstrating their
+application to $k$-means clustering and generation of Sobol numbers.
+The idea behind the streaming SOACs is to allow the programmer to
+provide an efficient sequential algorithm which is applied in parallel
+to separate \textit{chunks} of the input, with the per-chunk results
+combined via a programmer-provided function.  This is useful when the
+hand-written sequential algorithm is more efficient than simply
+executing the parallel algorithm sequentially.
+
+\subsubsection{$k$-means clustering}
+
+In multidimensional cluster analysis, one widely used algorithm is
+called $k$-means analysis.  The goal is to assign $n$ points in a
+$d$-dimensional space to one of $k$ clusters, with each point
+belonging to the cluster with the closest centre.  The centre of a
+cluster is the mean of all points belonging to the cluster.  Often,
+$k$ is small (maybe $5$), while $d$ can be larger ($27$ in one of our
+data sets), and $n$ usually much larger (hundreds of thousands).  The
+algorithm is typically implemented by initially assigning points
+randomly to clusters, then recomputing cluster means and re-assigning
+points until a fixed point is reached.  In this section, we explain
+how one part of the algorithm---the computation of cluster
+centres---can be efficiently expressed using \StreamRed{}, and
+its performance advantage over a traditional
+\texttt{map}-\texttt{reduce}-formulation.
+
+As a first approximation---and also as an introduction to Futhark---we
+will discuss a (mostly) sequential solution of the problem.  This will
+also be a useful building block in our final solution.  The code is
+shown on Figure~\ref{fig:sequential-means}.  On lines 1--3 we define a
+function for adding $d$-dimensional points, which we represent as
+vectors of floating-point values.  Element-wise addition is done by
+passing both vectors to \texttt{map} with the addition function as the
+operator.  The meaning of the asterisk on the return type will be
+explained shortly.
+
+\begin{figure}
+\begin{lstlisting}
+let add_centroids [d] (x: [d]f32) (y: [d]f32): [d]f32 =
+  map (+) (zip x y)
+
+let cluster_sums_seq [k] [n] [d]
+                     (counts: [k]i32)
+                     (points: [n]([d]f32,i32)): *[k][d]f32 =
+  loop (acc = replicate k (replicate d 0.0)) for (p,c) in points do
+    let p' = map (/f32(counts[c])) p
+    in acc with [c] <- add_centroids acc[c] p'
+\end{lstlisting}
+\caption{Sequential calculation of means.}
+\label{fig:sequential-means}
+\end{figure}
+
+On lines 8--13, we define the main loop.  This loop proceeds by
+maintaining an accumulator \texttt{acc} that contains the cluster
+centres as they have been computed thus far.  The initial value is
+constructed via the \texttt{replicate} array constructor, whose first
+argument is the number of times to replicate the second argument.  In
+this case, two nested \texttt{replicate}s are used to construct a
+two-dimensional array.  We then iterate across all points, and for
+each point we add its contribution to the corresponding cluster.
+
+Line 12, which updates \texttt{acc}, is particularly interesting, as
+it performs an \textit{in-place update}.  Semantically, we construct a
+new array that is a copy of \texttt{acc}, except that the value at the
+given index has been replaced by the result of the call to
+\texttt{add\_centroids}, and bind this array to a new variable named
+\texttt{acc} (shadowing the old).  However, we are guaranteed that no
+copying takes place, and that the cost is proportional only to the
+size of the value we are writing (an array of size $d$), rather than
+the array we are updating (of size $k\times{}d$).  This property is
+verified by the compiler during type-checking using an intraprocedural
+algorithm based on conservative alias analysis.  If the ``old'' value
+of \texttt{acc} is used on any potential execution path following the
+in-place update, the compiler will signal an error.
+
+To verify the safety of function calls, explicit \textit{uniqueness
+  annotations}, inspired by uniqueness
+types~\cite{clean-uniqueness-types,barendsen1996uniqueness}, are used.
+Any function parameter may be marked with an asterisk, which indicates
+that the function has been given ownership of the corresponding
+value---the caller will never use it again---and it can thus be
+updated in-place without violating referential transparency.
+Similarly, a uniqueness attribute is given for the return type in line
+1, which specifies that the result of \texttt{add\_centroids} must be
+unique---that is, it will not be aliased with any of the (non-unique)
+parameters of the function.  This system allows us to write (simple)
+imperative-style code in an efficient way, while keeping the language
+purely functional.
+
+This code forms the sequential implementation.  While a small amount
+of \texttt{map}-parallelism is present in the \texttt{map} operations
+on size $d$-arrays, the main bulk of the work is the outer loop of $n$
+iterations.  Even though the implementation performs $O(n\cdot{}d)$
+work, the mostly sequential execution is not satisfactory.
+
+A fully parallel implementation is shown in
+Figure~\ref{fig:parallel-means}.  The algorithm computes, for each
+point, an \textit{increment matrix}, which is an array of type
+\texttt{[k][d]f32} containing all zeroes, except at the row
+corresponding to the cluster for the point in question.  This
+computation is done on lines 6--9.  In-place updates are used only in
+a trivial form.  The result is an array of matrices, which we then sum
+on lines 9--12 to get the final result.  The \texttt{rearrange}
+construct produces a view of the given
+array where the dimensions have been reordered by the given permutation.  For example, if\\
+\centerline{\texttt{b = rearrange (1,2,0) a},}\\
+then\\
+\centerline{\texttt{b[i0,i1,i2] == a[i1,i2,i0]}.}\\
+In the program, the \texttt{rearrange} construct is used to bring the
+dimension we wish to reduce across innermost, which allows us to avoid
+a reduction where the operator operates on large arrays.
+
+\begin{figure}
+\begin{lstlisting}[basicstyle=\small\ttfamily,numbers=left]
+let cluster_sums_par [k] [n] [d] (counts: [k]i32)
+                                 (points: [n]([d]f32,i32)): *[k][d]f32 =
+  let increments: [n][k][d]i32 =
+        map (\(p, c) ->
+          let a = replicate k (replicate d 0.0)
+          let a[c] = map (/f32 counts[c]) p
+          in a) points
+  let increments': [k][d][n]i32 = rearrange (1,2,0) increments
+  in map (\x -> map (\y -> reduce (+) 0.0 y) x) increments'
+\end{lstlisting}
+  \caption{Parallel calculation of means (types of \texttt{increments}
+    and \texttt{increments'} annotated for clarity).}
+\label{fig:parallel-means}
+\end{figure}
+
+This implementation exploits all degrees of parallelism in the
+problem.  Unfortunately, it is not work efficient.  Constructing the
+increment matrix involves $O(n\cdot{}k\cdot{}d)$ work, as does its
+eventual reduction, while the sequential version is $O(n\cdot{}d)$.
+If executed on a system capable of exploiting all available
+parallelism, this might be an acceptable tradeoff, but real hardware
+is limited in the amount of parallelism it can take advantage of.  We
+need a language construct that can expose enough parallelism to take
+full advantage of the machine, but that will run efficient sequential
+code within each thread.  The \StreamRed{} SOAC provides
+just this functionality.
+
+The \StreamRed{} construct builds on the property that any fold
+with an associative operator $\odot$ can be rewritten as a fold over
+chunks of the input, followed by a fold over the per-chunk results:
+\[
+   \texttt{fold}\ \odot\ xs\ =\ \texttt{fold}\ \odot\ (\texttt{map}\ (\texttt{fold}\ \odot)\ (\texttt{chunk}\ xs))
+\]
+By selecting the number of chunks such that we obtain enough
+parallelism by the outer \texttt{map}, we can implement the innermost
+fold as a work-efficient sequential function.  In Futhark, we let the
+programmer specify this \textit{chunk function} directly.
+
+As shown in Figure~\ref{fig:stream-means}, \StreamRed{} is given
+the associative reduction operator (lines 5--6), together with the
+\textit{chunk function} (lines 7--9).  Because we wish to process two
+arrays---both \texttt{points} and \texttt{membership}---we use
+\texttt{zip} to combine the two arrays into one array of pairs (line
+10).  In this case, the reduction operator is matrix addition, and the
+chunk function applies the sequential function previously shown in
+Figure~\ref{fig:sequential-means}.
+
+\begin{figure}
+\begin{lstlisting}
+let cluster_sums_stream [k] [n] [d] (counts: [k]i32)
+                                    (points: [n][d]f32)
+                                    (membership: [n]i32): [k][d]f32 =
+  stream_red
+    (\(acc: [k][d]f32) (elem: [k][d]f32) ->
+       map add_centroids acc elem)
+    (cluster_sums_seq counts)
+    (zip points membership)
+\end{lstlisting}
+\caption{Chunked parallel calculation of means.}
+\label{fig:stream-means}
+\end{figure}
+
+It is the programmer's responsibility to ensure that the provided
+reduction function is associative, and that the result of
+\StreamRed{} is the same no matter how the input is partitioned
+among chunks.
+
+The \StreamRed{} formulation can be automatically transformed into the
+fully parallel implementation from Figure~\ref{fig:parallel-means} by
+setting the chunk size to 1, or into the sequential implementation
+from Figure~\ref{fig:sequential-means} by setting the chunk size to
+the full size of the input (followed by simplification).  It thus
+allows the compiler or runtime system to generate code that best fits
+the problem and target machine.  The compiler is free to exploit the
+nested parallelism inside both the reduction function and the fold
+function.  In general, there is no \textit{one size fits all}, and
+different parallelisation patterns are best for different data sets.
+Handling this issue is future work (see
+\cref{sec:multi-versioned-code}), and for now the Futhark compiler
+uses various hardcoded heuristics to determine how parallelisation is
+best done (\cref{chap:kernel-extraction}).  For this program, the
+reduction function will be fully parallelised as a segmented
+reduction, and the body of the chunk function will be sequentialised.
+
+The performance of the \StreamRed{} version compared to explicitly
+parallel and equential code is shown in
+Table~\ref{tab:streaming-perf}.  We see that the fully parallel
+version running on a GPU is in fact slower than the sequential
+version, because it does significantly more work.  The \StreamRed{}
+version performs well both when compiled to parallel code, and when
+compiled to sequential code.
+
+\begin{table}
+  \centering
+  \begin{tabular}{llrr}
+    \textbf{Program} & \textbf{Version}  & \textbf{Runtime} & \textbf{Speedup} \\
+\multirow{4}{*}{Cluster means} & Chunked (parallel) & 17.6ms & \multirow{2}{*}{$\times7.6$} \\
+& Fully parallel & 134.1ms & \\\cline{2-4}
+& Chunked (sequential) & 98.3ms & \multirow{2}{*}{$\times0.92$} \\
+& Fully sequential & 90.7ms & \\\hline
+
+\multirow{4}{*}{Sobol numbers} & Chunked (parallel) & 3.9ms & \multirow{2}{*}{$\times11.13$} \\
+& Fully parallel & 43.4ms & \\\cline{2-4}
+& Chunked (sequential) & 129.7ms & \multirow{2}{*}{$\times1.0$} \\
+& Fully sequential & 129.1ms & \\
+  \end{tabular}
+  \caption{Speedup of chunking SOACs versus fully sequential and
+    fully parallel implementations.  For comparing sequential
+    performance, a compiler generating single-threaded CPU code has
+    been used and the code runs on an Intel Xeon E6-2570.  For
+    comparing parallel performance, OpenCL code is generated and
+    executed on an NVIDIA Tesla K40 GPU.  We generate $30,000,000$
+    Sobol numbers, and compute cluster means with
+    $k=5$, $n=10,000,000$, and $d=3$.}
+  \label{tab:streaming-perf}
+\end{table}
 
 %%% Local Variables:
 %%% mode: latex

@@ -92,24 +92,24 @@ $$
     p & ::= & (x_{1} : \tau_{1})~\ldots~(x_{n} : \tau_{n})  & \mbox{(\lstinline{let} or $\lambda$ pattern)} \\
     \hat{p} & ::= & (x_{1} : \utau_{1})~\ldots~(x_{n} : \utau_{n})  & \mbox{(Function pattern)} \\
     \\
-    fun & ::= & \mbox{\Fun{$f$}{$\hat{p}$}{$\utau$}{$b$}} ~~& ~~\mbox{(Named function)} \\
+    fun & ::= & \mbox{\Fun{$f$}{$\hat{p}$}{$\utau$}{$e$}} ~~& ~~\mbox{(Named function)} \\
     P & ::= & \mbox{$\epsilon$ ~ $|$ ~ $fun$ ~ $P$} & \mbox{(Program)} \\
     \\
-    b & ::= & \mbox{\texttt{($x_{1},\ldots,x_{n}$)}} & \mbox{($n$-tuple)}\\
+    e & ::= & \mbox{\texttt{($x_{1},\ldots,x_{n}$)}} & \mbox{($n$-tuple)}\\
       & | & \mbox{\lstinline[mathescape]!let\ $p$ =\ $e$ in\ $b$!} & \mbox{(Let binding)}\\
-    e & ::= & k & \mbox{(Constant)} \\
+      & | & k & \mbox{(Constant)} \\
       & | & x & \mbox{(Variable)} \\
       & | & x \odot{} x & \mbox{(Scalar binary operator)}\\
-      & | & \mbox{\lstinline[mathescape]!if\ $x$ then\ $b$ else\ $b$!} & \mbox{(Branch)} \\
+      & | & \mbox{\lstinline[mathescape]!if\ $x$ then\ $e$ else\ $e$!} & \mbox{(Branch)} \\
       & | & \mbox{\texttt{$x$[$x_{1},\ldots,x_{n}$]}} & \mbox{(Array indexing)}\\
       & | & \mbox{\lstinline[mathescape]!$x$ with [$x_{1},\ldots,x_{n}$] <-\ $x$!} &\mbox{(In-place update)}\\
       & | & \mbox{\lstinline[mathescape]!loop ($\hat{p}$)=($x_{1},\ldots,x_{n}$)!}  &  \mbox{(Loop)} \\
-      &   & \mbox{\lstinline[mathescape]!\ for\ $x$ <\ $x$ do\ $b$!}\\
+      &   & \mbox{\lstinline[mathescape]!\ for\ $x$ <\ $x$ do\ $e$!}\\
       & | & f~x_{1}~\ldots~x_{n} & \mbox{(Function call)}\\
       & | & \emph{op}~a_{1}~\ldots~a_{n} & \mbox{(Operator call)} \\
     a & ::= & x & \mbox{(Simple argument)} \\
       & |   & (x_{1}, \ldots, x_{n}) & \mbox{(Tuple argument)} \\
-      & |   & (\Fn{\tty}{\Par{p_{0}} \ldots \Par{p_{n}}}{e}) & \mbox{(Function argument)}
+      & |   & (\Fn{\tty}{p}{e}) & \mbox{(Function argument)}
   \end{array}
   $$
 
@@ -140,20 +140,20 @@ details include:
   \lstinline{filter}, and so on. Moreover, named functions may only be
   defined at top-level.  Recursion is not permitted.
 \end{itemize}
-``Body'' expressions ($b$) in the intermediate language are in
-A-normal form~\cite{Sabry:1992:RPC:141478.141563}.  That is, they
-consist of a sequence of \lstinline{let}-bindings that always ends in
-a tuple of variable names.  Tuple-typed variables do not exist in the
-IR, except as a syntactical construct for some operators.  A let-bound
-pattern ($p$) consists of one or more variables and associated types
-that bind the result of a non-body expression ($e$); intuitively
-equivalent to a tuple pattern in the source language.  Types are
-syntactically differentiated into two sorts: $\tau$, without
-uniqueness attributes, and $\utau$, which permit an optional
-uniqueness attribute (an asterisk).  Uniqueness attributes are only
-used when specifying the parameter and return types of top-level
-functions and \lstinline{for}-loops---patterns in \lstinline{let}
-bindings and anonymous functions possess no uniqueness attributes.
+Expressions ($e$) in the intermediate language are in A-normal
+form~\cite{Sabry:1992:RPC:141478.141563}.  That is, all subexpressions
+are variable names (except for the special cases \kw{loop}, \kw{if},
+and \kw{let}).  Tuple-typed variables do not exist in the IR, except
+as a syntactical construct for some operators.  A let-bound pattern
+($p$) consists of one or more variables and associated types that bind
+the result of an expression ($e$); intuitively equivalent to a tuple
+pattern in the source language.  Types are syntactically
+differentiated into two sorts: $\tau$, without uniqueness attributes,
+and $\utau$, which permit an optional uniqueness attribute (an
+asterisk).  Uniqueness attributes are only used when specifying the
+parameter and return types of top-level functions and
+\lstinline{for}-loops---patterns in \lstinline{let} bindings and
+anonymous functions possess no uniqueness attributes.
 
 
 \begin{figure}
@@ -262,7 +262,7 @@ $\tau_1~x_1,\cdots,\tau_n~x_n$, we write $\Gamma,p$ to denote the
 typing environment $\Gamma,x_1:\tau_1,\cdots,x_n:\tau_n$.
 
 Typing rules for the source language are given in
-Figures~\ref{fig:srcTypeRules} and \ref{fig:srcTypeRulesExps}. The
+Figures~\ref{fig:srcTypeRules} and \ref{fig:srcTypeRulesExps}.  The
 rules allow inferences among sentences of the following forms:
 
 \begin{description}
@@ -273,7 +273,7 @@ rules allow inferences among sentences of the following forms:
 \item[$\Gamma \vda a : \tau / \ft$,] read ``under the assumptions
 $\Gamma$, the operator argument $a$ has type $\tau$ or function type
 $\ft$.''
-\item[$\Gamma \vdb b : \rho$,] read ``under the assumptions $\Gamma$,
+\item[$\Gamma \vd b : \rho$,] read ``under the assumptions $\Gamma$,
   the expression $e$ has tuple type $\rho$.''
 \item[$\Gamma \vdP P : \rho$,] read ``under the assumptions
 $\Gamma$, the program $P$ has tuple type $\rho$.''
@@ -288,7 +288,7 @@ $\Gamma$, the program $P$ has tuple type $\rho$.''
 
 \fracc{}{\Gamma \vda x : \Gamma(x)}
 
-\fracc{\vdp p : \tty \sp \Gamma,p \vdb b : \tty'}{\Gamma \vda \Fn{\tty'}{\Par{p}}{b}: \tty \rightarrow \tty'}
+\fracc{\vdp p : \tty \sp \Gamma,p \vd b : \tty'}{\Gamma \vda \Fn{\tty'}{p}{b}: \tty \rightarrow \tty'}
 
 \fracc{}{\vdp (x_1, \ldots, x_n) : (\Gamma(x_1), \ldots, \Gamma(x_n))}
 
@@ -298,9 +298,9 @@ $\Gamma$, the program $P$ has tuple type $\rho$.''
 
 \sempart{Programs}{\Gamma \vdP P}
 
-\fracc{\vdhp \hat{p} : (\tau_1, \ldots, \tau_n) \sp \Gamma,\hat{p} \vdb b : \tty \\
+\fracc{\vdhp \hat{p} : (\tau_1, \ldots, \tau_n) \sp \Gamma,\hat{p} \vd e : \tty \\
 \Gamma(g) = \tau_1 \rightarrow \ldots \rightarrow \tau_n \rightarrow \tau_{n+1}  \sp  \Gamma \vdP P}
-{\Gamma \vdP \Fun{$f$}{$\hat{p}$}{$\utty_2$}{$b$}~P}
+{\Gamma \vdP \Fun{$f$}{$\hat{p}$}{$\utty_2$}{$e$}~P}
 
 \fracc{}{\Gamma \vdP \epsilon}
 
@@ -309,27 +309,31 @@ $\Gamma$, the program $P$ has tuple type $\rho$.''
 \end{figure}
 
 \begin{figure}[bt]
-\sempart{Expressions}{\Gamma \vdb b : \rho}
-\fracc{}{\Gamma \vdb (x_1,\cdots,x_n) : (\Gamma(x_1),\cdots,\Gamma(x_n))}
+\sempart{Expressions}{\Gamma \vd e : \rho}
+\fracc{}{\Gamma \vd (x_1,\cdots,x_n) : (\Gamma(x_1),\cdots,\Gamma(x_n))}
 
-\fracc{\Gamma(y) = []\tau \sp \Gamma(s) = \texttt{i32} \sp \Gamma,x:\tau \vdb b : \rho}
-{\Gamma \vdb \Let{x:\tau}{y[s]}{b} : \rho}
+\fracc{\Gamma(y) = []\tau \sp \Gamma(s) = \texttt{i32} \sp \Gamma,x:\tau \vd e : \rho}
+{\Gamma \vd \Let{x:\tau}{y[s]}{e} : \rho}
 
-\fracc{\textrm{ConstType}(\emph{ct}) = \tau \sp \Gamma, x:\tau \vdb b : \rho}{\Gamma \vdb \Let{x:\tau}{\emph{c}}{b} : \rho}
+\fracc{\textrm{ConstType}(\emph{ct}) = \tau \sp \Gamma, x:\tau \vd e : \rho}{\Gamma \vd \Let{x:\tau}{\emph{c}}{e} : \rho}
 
-\fracc{\Gamma \vda a_i : \etau_i \sp i = [0;n[ \\
-\textrm{TySch}(\emph{op}) \geq (\bar{\etau}^{(n)}) \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vdb b : \rho'}
-{\Gamma \vdb \Let{p}{\emph{op}~\bar{a}^{(n)}}{b} : \rho'}
+\fracc{\Gamma \vda a_i : \etau_i \sp i \in \Set{1, \ldots, n}\\
+\textrm{TySch}(\emph{op}) \geq (\bar{\etau}^{(n)}) \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vd e : \rho'}
+{\Gamma \vd \Let{p}{\emph{op}~\bar{a}^{(n)}}{e} : \rho'}
 
-\fracc{\Gamma(x_i) = \tau_i \sp i = [0;n[ \\
-\textrm{lookup}_{\textrm{fun}}(f) = \tau_1 \rightarrow \cdots \rightarrow \tau_n \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vdb b : \rho'}
-{\Gamma \vdb \Let{p}{f~x_{1}~\ldots~x_n}{b} : \rho'}
+\fracc{\Gamma(x_i) = \tau_i \sp i \in \Set{1, \ldots, n} \\
+\textrm{lookup}_{\textrm{fun}}(f) = \tau_1 \rightarrow \cdots \rightarrow \tau_n \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vd e : \rho'}
+{\Gamma \vd \Let{p}{f~x_{1}~\ldots~x_n}{e} : \rho'}
 
-\fracc{\Gamma(s) = \texttt{bool} \sp \Gamma \vdb b_1 : \rho \sp \Gamma \vdb b_2 : \rho \\
-\vdp p : \rho \sp \Gamma,p \vdb b : \rho'}
-{\Gamma \vdb \Let{p}{\If{s}{b_1}{b_2}}{b} : \rho'}
+\fracc{\Gamma(s) = \texttt{bool} \sp \Gamma \vd e_1 : \rho \sp \Gamma \vd e_2 : \rho \\
+\vdp p : \rho \sp \Gamma,p \vd e_3 : \rho'}
+{\Gamma \vd \Let{p}{\If{s}{e_1}{e_2}}{e_3} : \rho'}
 
-\caption{Typing rules for expressions in Futhark's core IR.}
+\caption{Typing rules for expressions in Futhark's core IR.  For
+  simplicity, we assume that the only expressions that occur after
+  ``\kw{in}'' is another \kw{let}-binding, a variable name, or a
+  tuple, meaning that all other expressions are always bound to a
+  pattern.}
 \label{fig:srcTypeRulesExps}
 \end{figure}
 
@@ -340,7 +344,6 @@ $\Gamma$, the program $P$ has tuple type $\rho$.''
 \subsection{Alias Analysis}
 
 \newcommand{\expAliases}[3]{#1 \vdash #2 \Rightarrow #3}
-\newcommand{\bodyAliases}[3]{#1 \vdash_{b} #2 \Rightarrow #3}
 \newcommand{\aliases}[1]{\textrm{aliases}(#1)}
 \newcommand{\seqOccurences}[3]{#1 \gg #2 : #3}
 
@@ -359,29 +362,27 @@ The context $\Sigma$ maps variables in scope
 to their aliasing sets.
 
 \begin{figure}
-\sempart{Body aliases}{\bodyAliases{\Sigma}{e}{\langle \sigma_{1}, \ldots, \sigma_{n} \rangle}}
+\sempart{Expression aliases}{\expAliases{\Sigma}{e}{\langle \sigma_{1}, \ldots, \sigma_{n} \rangle}}
 
 \begin{equation*}
 \inference{
 }{
-  \bodyAliases{\Sigma}{(x_{1}, \ldots, x_{n})}{\langle \{ x_{1} \} \cup \Sigma(x_{1}), \ldots,  \{ x_{n} \} \cup \Sigma(x_{n}) \rangle}
+  \expAliases{\Sigma}{(x_{1}, \ldots, x_{n})}{\langle \{ x_{1} \} \cup \Sigma(x_{1}), \ldots,  \{ x_{n} \} \cup \Sigma(x_{n}) \rangle}
 }
 \tagsc{Alias-Tuple}
 \end{equation*}
 
 \begin{equation*}
 \inference{
-  \expAliases{\Sigma}{e}{\langle \nseq{\sigma}{n} \rangle}
+  \expAliases{\Sigma}{e_{1}}{\langle \nseq{\sigma}{n} \rangle}
   \\
-  \bodyAliases{\Sigma, x_{i} \mapsto \sigma_{i}}{b}{\langle \nseq{\sigma'}{n} \rangle}
+  \expAliases{\Sigma, x_{i} \mapsto \sigma_{i}}{e_{2}}{\langle \nseq{\sigma'}{n} \rangle}
 }{
-  \bodyAliases{\Sigma}{\text{\lstinline[mathescape]!let\ $\nseq{(x:\tau)}{n}$ =\ $e$ in\ $b$!}}
+  \expAliases{\Sigma}{\Let{\nseq{(x:\tau)}{n}}{e_{1}}{e_{2}}}
   {\langle \nseq{\sigma'}{n} \rangle \setminus \{\nseq{x}{n}\}}
 }
 \tagsc{Alias-LetPat}
 \end{equation*}
-
-\sempart{Expression aliases}{\expAliases{\Sigma}{e}{\langle \sigma_{1}, \ldots, \sigma_{n} \rangle}}
 
 \begin{equation*}
 \inference{
@@ -409,11 +410,11 @@ to their aliasing sets.
 
 \begin{equation*}
 \inference{
-  \bodyAliases{\Sigma}{b_{2}}{\langle s^{2}_{1}, \ldots, s^{2}_{n}\rangle}
+  \expAliases{\Sigma}{e_{2}}{\langle s^{2}_{1}, \ldots, s^{2}_{n}\rangle}
   &
-  \bodyAliases{\Sigma}{b_{3}}{\langle s^{3}_{1}, \ldots, s^{3}_{n}\rangle}
+  \expAliases{\Sigma}{e_{3}}{\langle s^{3}_{1}, \ldots, s^{3}_{n}\rangle}
 }{
-  \expAliases{\Sigma}{\text{\lstinline[mathescape]!if\ $x_{1}$ then\ $b_{2}$ else\ $b_{3}$!}}
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!if\ $x_{1}$ then\ $e_{2}$ else\ $e_{3}$!}}
   {\langle s^{2}_{1} \cup s^{3}_{1}, \ldots, s^{2}_{n} \cup s^{3}_{n}\rangle}
 }
 \tagsc{Alias-If}
@@ -462,10 +463,10 @@ to their aliasing sets.
     \\
     \expAliases{\Sigma}{x_{1}}{\langle \sigma \rangle}
     \sp
-    \bodyAliases{\Sigma, x_{1} \mapsto \sigma}{b}{\langle \sigma' \rangle}
+    \expAliases{\Sigma, x_{1} \mapsto \sigma}{e}{\langle \sigma' \rangle}
 }{
 \expAliases{\Sigma}
-{\text{\lstinline[mathescape]!loop ($x_{1}: \tau$) =\ $y_{2}$ for\ $z_{1}$ <\ $z_{2}$ do\ $b$!}}
+{\text{\lstinline[mathescape]!loop ($x_{1}: \tau$) =\ $y_{2}$ for\ $z_{1}$ <\ $z_{2}$ do\ $e$!}}
 {\langle \sigma' \setminus \{x_{1}\} \rangle}
 }\tagsc{Alias-DoLoop-Nonunique}
 \end{equation*}
@@ -474,7 +475,7 @@ to their aliasing sets.
   \inference{
 }{
 \expAliases{\Sigma}
-{\text{\lstinline[mathescape]!loop ($x_{1}: \texttt{*}\tau$) =\ $y_{2}$ for\ $z_{1}$ <\ $z_{2}$ do\ $b$!}}
+{\text{\lstinline[mathescape]!loop ($x_{1}: \texttt{*}\tau$) =\ $y_{2}$ for\ $z_{1}$ <\ $z_{2}$ do\ $e$!}}
 {\langle \emptyset  \rangle}
 }\tagsc{Alias-DoLoop-Unique}
 \end{equation*}
@@ -534,7 +535,7 @@ to their aliasing sets.
 \begin{equation*}
 \inference{
 }{
-  \expAliases{\Sigma}{\text{\lstinline[mathescape]!map ($\lambda p$:\ $(\nseq{\tau}{m}) \rightarrow b$)\ $\nseq{x}{n}$!}}
+  \expAliases{\Sigma}{\text{\lstinline[mathescape]!map ($\lambda p$:\ $(\nseq{\tau}{m}) \rightarrow e$)\ $\nseq{x}{n}$!}}
   {\langle \nseq{\emptyset}{m} \rangle}
 }
 \tagsc{Alias-Map}
@@ -735,7 +736,7 @@ unique.
   {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
   {\langle\mathcal{C}_{3},\mathcal{O}_{3}\rangle}
 }{
-  \inPlaceSafe{\text{\lstinline[mathescape]!let ($v_{1}, \ldots, v_{n}$) = $e_{1}$ in\ $e_{2}$!}}
+  \inPlaceSafe{\Let{v_{1}~\ldots~v_{n}}{e_{1}}{e_{2}}}
   {\mathcal{C}_{3}}{\mathcal{O}_{3}\rangle}
 }
 \tagsc{Safe-LetPat}
