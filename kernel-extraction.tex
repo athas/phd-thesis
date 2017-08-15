@@ -222,13 +222,6 @@ variant to the second \lstinline{map}.
 \tagsc{G7}
 \end{align*}
 
-\begin{align*}
-  \inference{
-  f, \seq{v}, \seq{x}~\textrm{chosen appropriately}
-  }{
-  \Sigma \vd \textit{any SOAC} \Rightarrow \StreamSeq~f~\seq{v}~\seq{x}
-  } \tagsc{G8}
-\end{align*}
 \caption{The flattening rules that form the basis of the moderate flattening algorithm.}
 \label{fig:basic-flattening-rules}
 \end{figure}
@@ -496,10 +489,14 @@ input arrays, and then inserting the function body.
 The moderate flattening algorithm, as presented in this chapter, does
 not directly transform SOACs into flat-parallel kernels suitable for
 GPU execution.  Instead, it merely rearranges the SOACs into simpler
-forms that can be directly recognised by a simple pattern-matcher,
-which is then responsible for generating GPU kernels.  We will not
-describe this operation in detail, as it pertains to straightforward
-but tedious book-keeping, but some details are worth mentioning.
+forms that are passed to a simple pattern matcher, which recognises
+forms of \textit{top-level} parallelism, and transforms it to an
+explicitly flat kernel representation of GPU kernels.  In this
+context, top-level parallelism is a SOAC that is not embedded inside
+the function of another SOAC.  We will not describe this operation, or
+the full kernel representation used by the Futhark compiler, in
+detail, as it pertains to straightforward but tedious book-keeping,
+but some details are worth mentioning.
 
 In the implementation, there is no distinction between moderate
 flattening and kernel extraction: it is interleaved in the same pass.
@@ -511,7 +508,36 @@ Not all kernels are extracted from the simple form of a \kw{map} nest
 containing a sequential function.  Other patterns that give rise to a
 GPU kernel are:
 
+\begin{itemize}
+\item \kw{redomap} or \kw{scanomap} can be transformed into two GPU
+  kernels via the techniques used in
+  \cref{sec:calculus-implementation}.
+\item \StreamPar{} can be transformed into two GPU kernels similarly
+  to a \kw{redomap}.  Any parallelism inside the functional arguments
+  is sequentialised.
+\item \kw{redomap} or \kw{scanomap} perfectly nested within one or
+  more \kw{map}s can be transformed into kernels implementing
+  segmented reduction or prefix scan.  The number of kernels depends
+  on the exact implementation strategy, which is outside the scope of
+  this thesis.  The implementation strategy for segmented reductions
+  used by the Futhark compiler is presented in
+  \cite{Futhark:segredomap}, which is to appear in early September of
+  2017.
+\item \kw{scatter} can be transformed directly into a single GPU
+  kernel.
+\end{itemize}
 
+The bodies of the kernels produced by kernel extraction remains
+Futhark code, and kernel extraction maintains the original structure
+of the sequential code.  Importantly, even though nested SOACs may not
+have had their potential for parallelism exploited, they remain
+high-level descriptions of loops, which can be used for further
+optimisation.  We shall see examples in \cref{chap:tiling}.
+
+Later in the compiler, the high-level kernel representation is
+transformed into a low-level imperative IR, and from there to actual
+OpenCL code.  However, these topics are outside the scope of the
+thesis.
 
 %%% Local Variables:
 %%% mode: latex
