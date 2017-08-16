@@ -8,22 +8,59 @@ obtaining high performance.  Furthermore, while CPUs have multiple
 layers of automatic caching to help mitigate the effect of the memory
 wall, GPUs typically have only a single very small level-1 cache.
 This chapter presents two novel optimisations that improves the memory
-access patterns of Futhark programs.  \Cref{sec:automatic-coalescing}
-shows how arrays traversed in a kernel can have their representation
-in memory modified to ensure that the traversal is efficient.  This
-form of optimisation, which changes not just the \textit{code}, but
+access patterns of Futhark programs, by optimising both spatial and temporal locality of reference.
+
+\Cref{sec:automatic-coalescing} shows how arrays traversed in a kernel
+can have their representation in memory modified to ensure that the
+traversal is efficient.  This form of optimisation for spatial
+locality of reference, which changes not just the \textit{code}, but
 also the \textit{data}, is unusual for a compiler.
-\Cref{sec:automatic-tiling} shows a technique for loop tiling that
-uses the local memory of the GPU as a cache to minimise the amount of
-traffic to global memory.  While loop tiling is an established
-optimisation technique, our approach can handle even indirect
-accesses.  These are not supported by conventional techniques for loop
-tiling, including polyhedral approaches such as the ones discussed in
+\Cref{sec:automatic-tiling} shows a technique for temporal locality of
+reference, via loop tiling, that uses the local memory of the GPU as a
+cache to minimise the amount of traffic to global memory.  While loop
+tiling is an established optimisation technique, our approach can
+handle even indirect accesses.  These are not supported by
+conventional techniques for loop tiling, including polyhedral
+approaches such as the ones discussed in
 \cite{chatarasi2015polyhedral}.
 
 To express the optimisations we have to extend the core Futhark IR,
-yet again, with a few more operations.  These are shown on
-\cref{fig:lor-constructs}.
+yet again, with a few more operations.  Their types are shown on
+\cref{fig:lor-constructs}, and their semantics below.
+
+\begin{description}
+\item[\kw{manifest} ($\nseq{c}{n}$) $x$] is used to force a particular
+  representation of an $n$-dimensional array in memory.  The
+  permutation ($c_{1}, \ldots, c_{n}$) indicates the order in
+  which dimensions should occur.  Thus, for the two-dimensional case,\\
+  \centerline{\mbox{\lstinline{manifest (0,1) xss}}}\\
+  corresponds to a row-major
+  (the default) copy of the array \lstinline{xss}, while\\
+  \centerline{\mbox{\lstinline{manifest (1,0) xss}}}\\
+  is a column-major copy.  Note that the type of the result of
+  \kw{manifest} is the same as of the input array.  The only change is
+  in how the array is located in memory, and thus the memory address
+  computed when indexing an element at a given index.  As with
+  \kw{rearrange}, the permutation must be a compile-time constant.
+  The \kw{manifest} construct differs from \kw{rearrange} in that
+  \kw{manifest} creates an actual array in memory, while
+  \kw{rearrange} is merely a symbolic index space transformation.
+\item[\kw{kernel} ($\nseq{d}{n}$)
+  $(\Fn{\nseq{\tau}{m}}{\nseq{v}{n}}{e})$] models a simple
+  $n$-dimensional GPU kernel, loosely corresponding to a flattened
+  form of $n$ \kw{map}-nets, where nest $i$ has size $d_{i}$.
+  Semantically, the kernel function is executed for every thread, and
+  passed $n$ \textit{thread indices}, one for every dimension.  If the
+  kernel function returns $m$ values, then the \kw{kernel} construct
+  as a whole returns $m$ arrays, each of of shape
+  $[d_{1}]\cdots[d_{n}]$.  This corresponds to each thread returning a
+  single value.
+\item[\kw{local} $c$ $x$] semantically returns a copy of $x$.
+  Operationally, the intent is to copy the array $x$ to local memory
+  via collective copying by those threads that differ in their thread
+  index in dimension $c$ (1-indexed).  The subtleties of this
+  construct is detailed further below.
+\end{description}
 
 \begin{figure}[hbt]
   \begin{tabular}{lcl}
@@ -33,14 +70,9 @@ yet again, with a few more operations.  These are shown on
               & & $\rightarrow (\nseq{\texttt{i32}}{n} \rightarrow (\nseq{\alpha}{m}))$ \\
               & & $\rightarrow (\nseq{[d_{1}]\cdots[d_{n}]\alpha}{m})$ \\
     \kw{local}~$c$ & : & $\forall d\alpha.\rightarrow [d]\alpha \rightarrow [d]\alpha$ \\
-    \StreamGroup{}
-              &:& $\forall d x \bar{\alpha}^{(m)}\bar{\beta}^{(n)}\nseq{\gamma}{l}.$\\
-              & & ~~~~~~~~~~ $\rightarrow ((x: \texttt{i32}) \rightarrow \nseq{\alpha}{m} \rightarrow \nseq{[x]\beta_i}{m} \rightarrow (\bar{\beta}^{(m)}, \nseq{[x]\gamma}{l}))$ \\
-              & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$\\
-              & & ~~~~~~~~~~ $\rightarrow \nseq{[d]\beta_i}{n}$\\
-              & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$
 \end{tabular}
-  \caption{New constructs used to express kernel-level locality of reference optimisations.}
+\caption{The types of the language constructs used to express
+  kernel-level locality of reference optimisations.}
   \label{fig:lor-constructs}
 \end{figure}
 
@@ -52,78 +84,232 @@ performance.  Several of the benchmarks discussed in
 \cref{chap:empirical-validation}, such as FinPar's LocVolCalib,
 Accelerate's $n$-body, and Rodinia's CFD, $k$-means, Myocyte, and
 LavaMD, exhibit kernels in which one or several innermost dimensions
-of the mapped arrays are processed sequentially inside the kernel.  In
-the context of our flattening algorithm, this typically corresponds to
-the case where rule \G{1} has been applied with $e$ being a SOAC.
-This nested SOAC is transformed to a \StreamSeq{}; removing
-parallelism, but retaining access pattern information.
+of arrays are processed sequentially inside the kernel.  In the
+context of the moderate flattening algorithm, this typically
+corresponds to the case where rule \G{1} has been applied with $e$
+being a SOAC.  For this discussion, we assume that the nested SOAC is
+transformed to a \StreamSeq{}; removing parallelism, but retaining
+access pattern information.
 
 A naive translation of a nested \lstinline{stream_seq} would lead to
 consecutive threads accessing global memory with a stride equal to the
 size of the inner (non-parallel) array dimensions, which may generate
-one-order-of-magnitude slowdowns.
+one-order-of-magnitude slowdowns on a GPU.
 %
 The Futhark compiler solves this by, intuitively, transposing the
-non-parallel dimensions of the array innermost, and the same for the
-result and all temporary arrays created inside the kernel.\footnote{
-  The common case corresponds to directly mapped arrays, but we also
-  perform simple index analysis to support common explicitly-indexed
-  accesses.  }  This approach is guaranteed to resolve coalescing if
-the sequential-dimension indices are invariant to the parallel array
-dimensions. For example, consider the following expression:
+non-parallel dimensions of the array outermost, and the same for the
+result and all intermediate arrays created inside the kernel.  For
+this thesis, we only discuss the first case, of arrays that are
+sequentially iterated inside a kernel, as the others are not a
+question of transforming an AST, but simply a question of how we
+allocate arrays in the first place.  Our approach is guaranteed to
+resolve coalescing if the sequential-dimension indices are invariant
+to the parallel array dimensions. For example, consider the following
+expression:
 \begin{lstlisting}[xleftmargin=0.5cm,numbers=none]
 kernel (n) (\i -> stream_seq f (0) xss[i])
 \end{lstlisting}
-Assuming the inner reduction is implemented sequentially, the expression is optimized
-by changing the representation of \texttt{xss} to be column major (the
-default is row major), via transposition in memory, as follows:
+Assuming that \lstinline{f} performs a sequential in-order traversal
+of its input, the expression is optimized by changing the
+representation of \texttt{xss} to be column major (the default is row
+major), via transposition in memory, as follows:
+
 \begin{lstlisting}[xleftmargin=0.5cm,numbers=none]
 let xss' = manifest (1,0) xss
 in kernel (n) (\i -> stream_seq f (0) xss'[i])
 \end{lstlisting}
 
-\noindent
 The type of \texttt{xss'} is the same as that of \texttt{xss}.  The
-representation of an array is recorded as a symbolic composition of
-affine transformations, which needs to be examined to determine in
-what way the source array should be transposed to achieve coalesced
-accesses.
+difference between \texttt{xss} and \texttt{xss'} can be seen by
+computing the flat index corresponding to an index expression.
+Suppose \texttt{xss} has shape $[n][m]$, $i$ is the parallel (thread)
+index, $j$ is the counter of a sequential loop, and $\textrm{flat}(x)$
+is a function that returns a one-dimensional view of an array $x$;
+then
+\[
+  \texttt{xss}[i][j] = \textrm{flat}(xss)[i\cdot{}m+j]
+\]
+versus
+\[
+  \texttt{xss'}[i][j] = \textrm{flat}(xss')[j\cdot{}m+i].
+\]
+It is clear that the latter gives rise to coalesced memory accesses,
+while the former does not (assuming non-pathological values of $m$).
+
+Concretely, the compiler inspects index expressions $x[\nseq{y}{n}]$
+inside of kernels, where $x$ is a rank $m$ array that is created prior
+to the kernel.  The inspection may yield a permutation $\nseq{c}{m}$
+that is used to construct an array
+\[
+  x' = \kw{manifest}~(\nseq{c}{m})~x
+\]
+after which $x$ is replaced by $x'$ in the original index expression.
+Two patterns are recognised by the inspection:
+
+\begin{description}[style=nextline]
+\item[Complete Index]
+
+  The indices $\nseq{y}{n}$ are a permutation $\nseq{c}{m}$ of the
+  thread indices.  We then copy the array with permutation
+  $\nseq{c}{m}$.  An example is a kernel
+\begin{lstlisting}[xleftmargin=0.5cm,numbers=none]
+kernel (n,m) (\i j -> xss[j][i] + 2)
+\end{lstlisting}
+which is transformed into
+\begin{lstlisting}[xleftmargin=0.5cm,numbers=none]
+let xss' = manifest (1,0) xs
+in kernel (n,m) (\i j -> xss'[j][i] + 2)
+\end{lstlisting}
+
+For this example, we could also have transposed the kernel dimensions
+themselves, followed by transposing the result:
+\begin{lstlisting}[xleftmargin=0.5cm,numbers=none]
+let r = kernel (m,n) (\j i -> xss'[j][i] + 2)
+in rearrange (1,0) r
+\end{lstlisting}
+This saves on memory traffic, since \kw{rearrange} is a non-manifest
+index space transformation.  However, this transformation affects the
+memory layout of the result of the kernel, which may result in
+non-coalesced accesses in later expressions.  As a result, we prefer
+using \kw{manifest}, which has purely local effects.
+
+Note that the pattern also applies to the case where the found
+permutation is the identity permutation.  A useful optimisation is to
+remove those \kw{manifest}s where it can be determined that the array
+is already in the desired representation, either because of a
+\kw{rearrange} that was already present in the source program, or
+because the optimal representation is row-major, which is generally
+the default for Futhark expressions.
+
+\item[Incomplete Index]
+
+  The indices $\nseq{y}{n}$ do not fully index the array ($n<m$), and
+  at least one of the indices is variant to the thread indices.  An
+  array index $y_{i}$ is variant to a thread index if there is a
+  (conservatively estimated) data dependency from one of the thread
+  indices passed to the kernel function to $y_{i}$.  In such cases,
+  manifest with the permutation $(n,\ldots,m-1,0,\ldots,n-1)$,
+  corresponding to interchanging the sequentially traversed dimensions
+  outermost.
+
+  The (potentially wrong) assumption is that the dimensions that are
+  not indexed will be traversed sequentially.  It remains future work
+  to perform a more detailed analysis of how the resulting array slice
+  is traversed.
+
+  The requirement that at least one of $\nseq{y}{n}$ must be
+  thread-variant is to avoid the pattern triggering on cases where an
+  array is being indexed identically by all threads, such as
+  \lstinline{xss[0]}.  Such indexes do not give rise to non-coalesced
+  memory access.
+\end{description}
+
+Note that the transformation is on index expressions, not on arrays.
+The same array \lstinline{xss} may be indexed in different ways within
+the same kernel, and each distinct index expression may give rise to a
+unique new \kw{manifest} array.
+
+\subsection{Viability of the Optimisation}
+
+This optimisation requires additional runtime work and extra memory
+space to perform transpositions before the kernel is invoked.  The
+Futhark compiler presently always applies the optimisation whenever it
+detects an array indexing of the appropriate form.  A relevant
+question to ask is whether there are cases where this is not an
+optimisation, but rather a \textit{pessimisation}.  The short answer:
+in some cases, yes, but usually not.
+
+First we remark that transpositions are quite fast on GPUs; running at
+close to the speed of a memory copy.  Therefore, even in pathological
+cases where where one of the dimensions is unit, or the inner
+sequential loop is so short that the uncoalesced accesses have no
+great impact, the cost of the transpositions is not catastrophic.
+
+A greater concern is having to allocate extra memory to store the
+transposed copies.  In the worst case, this may require temporarily
+migrating the original arrays to CPU memory in order to fit the new
+copies.  The CPU-GPU bandwidth is very low (current PCIe 4.0 x16 runs
+at 31.51GiB/s in the best case), so this could lead to significant
+slowdown.  In the future, we intend to investigate how to
+``back-propagate'' the \kw{manifest} operations to the point at where
+the array is originally created, and store it in the desired
+representation in the first place.
 
 \section{Automatic Loop Tiling}
 \label{sec:automatic-tiling}
 
-The compiler also performs simple block \textit{tiling} of parallel
-dimensions, which is driven by recognizing arrays that are used as
-input to \lstinline{stream_seq} constructs \textit{and} are invariant
-to one of the parallel dimensions.  For example, the code
+The Futhark compiler performs simple block \textit{tiling} in cases
+where several threads are traversing the same array.  The tiling
+algorithm transforms traversal to be over \textit{chunks} of the
+input, where each chunk is collectively copied to local memory before
+it is traversed.  The result is that the number of accesses to global
+memory are reduced.
+
+The algorithm is driven by recognizing arrays that are used as input
+to \lstinline{stream_seq} constructs \textit{and} are invariant to at
+least one of the kernel dimensions.  The tiling algorithm proceeds by
+traversing the body of a \kw{kernel} and looking for an appropriate
+\StreamSeq{} instance, which is then transformed using either
+\textit{one-dimensional} or \textit{two-dimensional} tiling, as
+detailed below.  In both cases, the \StreamSeq{} is transformed into
+two nested \StreamSeq{}s, with the outer one iterating across chunks,
+and the inner iterating across a single chunk.  We tile at most one
+\StreamSeq{} for a kernel, as each instance of tiling may impose
+constraints on the group size of the GPU kernel, and it is not clear
+whether multiple instances of tiling would lead to conflicting
+constraints.
+
+In the following, we say that an array is variant to a parallel
+dimension if there is no data dependency between the array and the
+thread index corresponding to that dimension.  To simplify the
+exposition, we are ignoring a significant amount of tedious complexity
+with computing GPU group sizes and handling cases where the tiled
+arrays have sizes that are not divisible with the optimal tile size.
+
+\subsection{One-Dimensional Tiling}
+
+One-dimensional tiling is performed when the input arrays of a
+\StreamSeq{} are invariant to the same dimension.
+
+For example, the kernel
 \begin{lstlisting}[xleftmargin=0.5cm]
 kernel (n) (\i -> stream_seq (f i) (ne) ps)
 \end{lstlisting}
 
 \noindent exhibits such an optimization opportunity for the streamed
-array \lstinline{ps}, and is transformed into:
+array \lstinline{ps}, as it is invariant the first (and only)
+dimension, and is transformed into:
 
 \begin{lstlisting}[xleftmargin=0.5cm]
-kernel (n) (\i -> stream_group
+kernel (n) (\i -> stream_seq
                     (\q a (ps': [q]int) ->
-                      let ps'' = local 0 ps'
+                      let ps'' = local 1 ps'
                       in stream_seq (f i) (a) ps'')
                     (ne)
                     ps)
 \end{lstlisting}
 
-\noindent where \lstinline{ps''} is a fast memory\footnote{Called
-  \textit{local memory} in OpenCL, and \textit{shared memory} in
-  CUDA.} array created by collective copying (\kw{local}), and used
-instead of \lstinline{ps'} in \lstinline{f}.  The size \lstinline{q}
-is determined (at runtime) to be the group size used for this kernel,
-such that the array \lstinline{ps''} will fit in the fast memory.
-This example essentially illustrates the structure of the $n$-body
-benchmark discussed in \cref{sec:empirical-evaluation}.
+\noindent where \lstinline{ps''} is a local memory array created by
+collective copying (\kw{local}), and used instead of \lstinline{ps'}
+in \lstinline{f}.  The size \lstinline{q} is determined (at runtime)
+to be the group size used for this kernel, such that the array
+\lstinline{ps''} will fit in local memory.  When tiling along a
+dimension $i$ ($1$ in the above example), it must be ensured that each
+consecutive \lstinline{q} threads along that dimension belong to the
+same GPU group.  This is done by setting the group size to unit along
+all non-tiled dimensions.
 
-Futhark also supports two-dimensional tiling where two streamed arrays
-are invariant to different parallel dimensions.  A matrix
-multiplication that exhibits the pattern appears as follows.
+One-dimensional tiling is used for the $n$-body benchmark discussed in
+\cref{sec:rodinia}.  Note that the dimensionality of the kernel need
+not be restricted to one for one-dimensional tiling to apply.
+\Cref{sec:lavamd-tiling} contains an example of one-dimensional tiling
+applied in a two-dimensional kernel.
+
+\subsection{Two-Dimensional Tiling}
+
+Futhark also supports two-dimensional tiling, where two streamed
+arrays are invariant to different parallel dimensions.  A matrix
+multiplication that exhibits the pattern appears as follows:
 
 \begin{lstlisting}[xleftmargin=0.5cm]
 let yss' = rearrange (1,0) yss
@@ -145,16 +331,17 @@ in kernel (n,l) (\i j ->
 \vspace{1em}
 
 The chunk function \lstinline{f} is computes the dot product of its
-two input arrays and adds it to the accumulator.  The arrays
-\lstinline{xs} and \lstinline{ys} are both invariant to at least one
-dimension of the kernel, so they can be tiled as follows:
+two input arrays and adds it to the accumulator.  Prior to kernel
+extraction, the \StreamSeq{} was in the form of a \kw{redomap}.  The
+arrays \lstinline{xs} and \lstinline{ys} are both invariant to at
+least one dimension of the kernel, so they can be tiled as follows:
 
 \begin{lstlisting}[xleftmargin=0.5cm]
 let yss' = rearrange (1,0) yss
 in kernel (n,l) (\i j ->
      let xs = xss[i]
      let ys = yss'[j]
-     in stream_group g (0) xs ys
+     in stream_seq g (0) xs ys
 \end{lstlisting}
 \begin{minipage}[t]{0.1\linewidth}
   \begin{flushright}
@@ -162,13 +349,21 @@ in kernel (n,l) (\i j ->
   \end{flushright}
 \end{minipage}
 \begin{minipage}[t]{0.8\linewidth}
-\lstinline{g = \c acc xs' ys' ->}\\
-\lstinline{      let xs'' = local 1 xs'}\\
-\lstinline{      let ys'' = local 0 ys'}\\
+\lstinline{g = \q acc xs' ys' ->}\\
+\lstinline{      let xs'' = local 2 xs'}\\
+\lstinline{      let ys'' = local 1 ys'}\\
 \lstinline{      in stream_seq f acc xs'' ys''}\\
 \lstinline{f = }\textit{as before}
 \end{minipage}
 \vspace{1em}
+
+Operationally, the \lstinline{local 2} (or \lstinline{local 1})
+expression creates a two-dimensional array in local memory, which is
+then immediately indexed with the local thread ID along dimension $1$
+(or $2$), resulting in a one-dimensional array.
+
+\subsection{A Complicated Instance of Tiling}
+\label{sec:lavamd-tiling}
 
 The LavaMD benchmark from \cref{sec:rodinia} exhibits an interesting
 tiling pattern, in which the to-be-tiled array is the result of an
@@ -202,7 +397,7 @@ kernel (n,l) (\i j ->
   loop (outer_acc) = (...) for l < k do
     let j' = f l j
     let xs = xss[j']
-    in stream_group g (0) outer_acc xs)
+    in stream_seq g (0) outer_acc xs)
 \end{lstlisting}
 \begin{minipage}[t]{0.1\linewidth}
   \begin{flushright}
@@ -213,7 +408,7 @@ kernel (n,l) (\i j ->
 \lstinline{f l j = let p = if 0 < l then ps[l,j] else j}\\
 \lstinline{        in js[p]}\\
 \lstinline{g = \q acc xs' ->}\\
-\lstinline{     let xs'' = local 1 xs'}\\
+\lstinline{     let xs'' = local 2 xs'}\\
 \lstinline{     in stream_seq (h i) acc xs''}\\
 \lstinline{h i = }\textit{some function}
 \end{minipage}

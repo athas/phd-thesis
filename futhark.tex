@@ -72,14 +72,12 @@
 \lstset{
   language={futhark},
   basicstyle=\ttfamily, % Global Code Style
-  captionpos=b, % Position of the Caption (t for top, b for bottom)
   extendedchars=true, % Allows 256 instead of 128 ASCII characters
   tabsize=2, % number of spaces indented when discovering a tab
   columns=fixed, % make all characters equal width
   keepspaces=true, % does not ignore spaces to fit width, convert tabs to spaces
   showstringspaces=false, % lets spaces in strings appear as real spaces
-  breaklines=true, % wrap lines if they don't fit
-  numbers=left, % show line numbers at the left
+  numbers=none, % do not show line numbers at the left
   numberstyle=\small\ttfamily, % style of the line numbers
   commentstyle=\slshape\bfseries\color{eclipseGreen}, % style of comments
   keywordstyle=\bfseries, % style of keywords
@@ -116,7 +114,9 @@
     stream_group,
   },
   emphstyle=\ttfamily\bfseries,
-  moredelim=**[is][\color{red}]{@}{@}
+  moredelim=**[is][\color{red}]{@}{@},
+  aboveskip=-0.1\baselineskip,
+  belowskip=\baselineskip,
 }
 
 \newcommand{\kt}[1]{\textsf{#1}}
