@@ -450,6 +450,53 @@ let f (m: i32) (k: i32) (vss: [m][k]f64): d.[d]f64 =
   \label{fig:FShapeSlice}
 \end{figure}
 
+\section{Related Work}
+
+An important piece of related work is the work on the FISh \cite{fish}
+programming language, which uses partial evaluation and program
+specialization for resolving shape information at compile time.  The
+semantics of FISh guarantees that this is possible.  Futhark uses
+approximately the same strategy, but extends it to handle constructs
+such as \kw{filter}, at the cost of no longer being able to fully
+resolve shape informatation statically in all cases.
+
+Much work has also gone into investigating expressive type systems,
+based on dependent types, which allow for expressing more accurately,
+the assumptions of higher-order operators for array operations
+\cite{AgdaAccellerate,Trojahner:2008,Trojahner2009643}. Compared to
+the present work, such type systems may give the programmer certainty
+about particular execution strategies implemented by a backend
+compiler. The expressiveness, however, comes at a price. Advanced
+dependent type systems are often very difficult to program and
+modularity and reusability of library routines require the end
+programmer to grasp, in detail, the underlying, often complicated,
+type system.  Computer algebra systems~\cite{AXIOM,AldorCAH} have also
+provided for a long time a compelling application of dependent types
+in order to express accurately the rich mathematical structure of
+applications, but inter-operating across such systems remains a
+significant challenge~\cite{mapal_synasc,alma:ISSAC}.
+
+A somewhat orthogonal approach has been to extend the language
+operators such that size and bounds checking invariants always
+hold~\cite{ElsmanDybdal:Array:2014}, the downfall being that
+non-affine indexing might appear.  The Futhark strategy is instead to
+rely on advanced program analysis and compilation techniques to
+implement a pay-as-you-go scheme for programming massively parallel
+architectures.
+
+Another strand of related work is the work on effect systems for
+region-based memory management \cite{mlkit_retrospective}, in
+particular, the work on multiplicity inference and region
+representation analysis in terms of physical-size inference
+\cite{vejlstrup94,btv96}. Whereas the goal of multiplicity inference
+is to determine an upper bound to the number of objects stored into a
+region at runtime, physical-size inference seeks to compute an upper
+bound to the number of bytes stored in a single write. Compared to the
+present work, multiplicity inference and physical-size inference are
+engineered to work well for common objects such as pairs and closures,
+but the techniques work less well with objects whose sizes are
+determined dynamically.
+
 %%% Local Variables:
 %%% mode: latex
 %%% TeX-master: "thesis"

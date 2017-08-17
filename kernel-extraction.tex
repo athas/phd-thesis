@@ -539,6 +539,72 @@ transformed into a low-level imperative IR, and from there to actual
 OpenCL code.  However, these topics are outside the scope of the
 thesis.
 
+\section{Related Work}
+
+Futhark builds on previous work in type systems and parallel
+compilation techniques. Recent
+work~\cite{Steuwer:2015:GPP:2858949.2784754} shows that stochastic
+combinations of rewrite rules opens the door to autotuning.  Work has
+been done on designing purely functional representations for OpenCL
+kernels~\cite{Steuwer:2017:LFD:3049832.3049841}, which could in
+principle be targeted by our moderate flattening algorithm.  The
+Futhark compiler presently uses a similar (but simpler)
+representation, the full details of which are outside the scope of
+this thesis.
+
+Halide~\cite{Halide} uses a stochastic approach for finding optimal
+schedules for fusing stencils by a combination of tiling, sliding
+window and work replication.  This is complementary to Futhark, which
+does not optimise stencils, nor uses autotuning techniques, but could
+benefit from both.  In comparison, Futhark supports arbitrary nested
+parallelism and flattening transformation, together with streaming
+SOACs that generically encode strength-reduction invariants.
+sequentialization strategy).
+
+Delite uses rewrite rules to optimize locality in NUMA
+settings~\cite{DeliteNUMA} and proposes
+techniques~\cite{DeliteNestedPar} for handling simple cases of nested
+parallelism on GPUs by mapping inner parallelism to CUDA block and
+warp level.  We use transposition to handle coalescing
+(see~\cref{chap:tiling}), and, to our knowledge, no other compiler
+matches our AST-structural approach to kernel extraction, except for
+those that employ full flattening, such as
+NESL~\cite{blelloch1994implementation,bergstrom2012nested}, which
+often introduces inefficiencies and does not support in-place updates.
+%
+Data-only flattening~\cite{Bergstrom:2013:DFN:2442516.2442525} shows
+how to convert from nested to flat representation of \textit{data},
+without affecting program structure.  This would be a required step in
+extending Futhark to exploit irregular parallelism.  In comparison,
+Futhark flattens some of the top-level parallelism \textit{control},
+while preserving the inner structure and opportunities for
+locality-of-reference optimizations.
+
+Imperative GPU compilation techniques rely on low-level index
+analysis ranging from pattern-matching
+heuristics~\cite{InformalTiling,Lime} to general modeling
+of affine transformations by polyhedral analysis~\cite{PolyPluto2,PolyhedralOpt}.
+%
+Since such analyses often fight the language, solutions rely on user
+annotations to improve accuracy. For example, OpenMP annotations can
+be used to enable transformations of otherwise unanalyzable
+patterns~\cite{chatarasi2015polyhedral}, while
+PENCIL~\cite{PencilPACT} provides a restricted C99-like low-level
+language that allows the (expert) user to express the parallelism of
+loops and provide additional information about memory access patterns
+and dependencies.
+
+The moderate flattening transformation resembles the tree-of-bands
+construction~\cite{PolyPluto2} in that it semantically builds on
+interchange and distribution, but we use rules that directly exploit
+properties of the language. For example, imperative approaches would
+implement a reduction with a vectorized operator via a histogram-like
+computation~\cite{RedPencil}, which is efficient only when the
+histogram size is small.  In comparison, rule G5 on
+\cref{fig:basic-flattening-rules} transforms a reduction with a
+vectorized operator to a (regular) segmented reduction, which always
+has an efficient implementation.
+
 %%% Local Variables:
 %%% mode: latex
 %%% TeX-master: "thesis"

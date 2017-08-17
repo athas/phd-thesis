@@ -639,6 +639,67 @@ size, there is no data dependencies between them, and there are no
 uniqueness issues that would prevent the result of fusion from being
 safe.
 
+\section{Related Work}
+
+Loop fusion is an old technique, dating back at least to the
+seventies~\cite{cheatham1977programming}, with the treatment of loop
+fusion in a parallel setting being covered
+in~\cite{midki1990issues}. In imperative languages, the word
+``fusion'' typically does not refer to producer-consumer fusion, but
+to a complimentary technique, in which two sequential loops that do
+not depend on each other can fused into a single loop.  Single
+Assignment C~\cite{grelck2006sac} incorporated this in a functional
+language.
+
+Data-Parallel Haskell (DPH)~\cite{Chak06DPH} makes use of
+aggressive inlining and rewrite rules to perform fusion, including
+expressing array operations in terms of
+streams~\cite{coutts2007rewriting}, which have previously been shown
+to be easily fusable.  While DPH obtains good results, rewrite rules
+are quite limited -- they are an inherently local view of the
+computation, and would be unable to cope with limitations in the
+presence of in-place array updates, and whether the result of an array
+operation is used multiple times.  The Glasgow Haskell Compiler itself
+also bases its list fusion on rewrite rules and cross-module
+inlining~\cite{jones2001playing}.
+
+The Repa~\cite{keller2010regular} approach to fusion is based on a
+delayed representation of arrays, which models an array as a function
+from index to value.  With this representation, fusion happens
+automatically through function composition, although this can cause
+duplication of work in many cases.  To counteract this, Repa lets the
+user {\em force} an array, by which it is converted from the
+delayed representation to a traditional sequence of values.  The pull
+arrays of Obsidian~\cite{claessen2012expressive} use a similar
+mechanism.
+
+Accelerate~\cite{mcdonell2013optimising} uses an elaboration of the
+delayed arrays representation from Repa, and in particular manages to
+avoid duplicating work.  All array operations have a uniform
+representation as constructors for delayed arrays, on which fusion is
+performed by tree contraction.  Accelerate supports multiple arrays as
+input to the same array operation (using a \texttt{zipWith} construct).
+Although arrays are usually used at least twice (once for getting the
+size, once for the data), it does not seem that they can handle the difficult
+case where the output of an array operation is used as input to two
+other array operations.
+
+NESL has been extended with a GPU backend~\cite{bergstrom2012nested},
+for which the authors note that fusion is critical to the performance
+of the flattened program.  Their approach is to use a form of
+copy-propagation on the intermediary code, and lift the resulting
+functions to work on entire arrays.  Their approach only works for
+what we would term \kw{map}-\kw{map} fusion, however.
+
+The \textit{with}-loops of SaC can fulfill the same role as
+\kw{redomap}~\cite{Grelck:2005:WFD:2172471.2172483}, although the
+fusion algorithm in which they are used is very different: in SaC,
+producer-consumer and horizontal fusion is combined in a general
+framework of \textit{with-loop fusion}.  The \textit{with}-loops can
+not, however, fulfill the role taken by \StreamSeq{} or \StreamPar{}
+in permitting efficient sequentialisation.
+
+
 %%% Local Variables:
 %%% mode: latex
 %%% TeX-master: "thesis"

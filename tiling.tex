@@ -420,6 +420,25 @@ is the ability to compute which kernel dimensions \lstinline{j'} is
 invariant to, which is reasonably simple in a pure language such as
 Futhark.
 
+\section{Related Work}
+
+The thrust of this chapter is not to argue that Futhark's scheme for
+tiling and achieving coalesced memory accesses are superior to other
+techniques.  Rather, have merely shown that the moderate flattening
+algorithm does not actively \textit{prevent} us from performing such
+optimisations, as is the case for full flattening.
+
+For example, in comparison to Futhark, imperative
+analyses~\cite{InformalTiling,PolyPluto2} are superior at performing
+all kinds of tiling, for example hexagonal time
+tilling~\cite{HexaTiling} and achieving memory coalescing by
+semantically transposing arrays on the fly (via tiling).
+%
+However, non-affine array indexes may restrict applicability: for
+example indirect-array accesses would prevent them from optimising
+memory coalescing for the OptionPricing benchmark (\cref{sec:finpar}),
+where Futhark's simpler, transposition-based approach succeeds.
+
 %%% Local Variables:
 %%% mode: latex
 %%% TeX-master: "thesis"
