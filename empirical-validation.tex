@@ -33,7 +33,7 @@ Futhark code compares to the performance of the original reference
 implementations.  In some cases, we also discuss the programming
 techniques used to obtain efficient Futhark implementations.
 
-\section{N Benchmarks from Rodinia}
+\section{Eleven Benchmarks from Rodinia}
 \label{sec:rodinia}
 
 The speedup on Backprop seems related to a reduction that Rodinia has
@@ -65,7 +65,7 @@ dominated by frequent launches of short kernels.
 For Pathfinder, Rodinia uses time tiling, which, unlike HotSpot, does
 not seem to pay off on the tested hardware.
 
-\section{M Benchmarks from Parboil}
+\section{Four Benchmarks from Parboil}
 
 \section{Two Benchmarks from FinPar}
 \label{sec:finpar}
@@ -83,7 +83,7 @@ slowdown on the AMD GPU is due to transpositions, inserted to fix
 coalescing, being relatively slower than on the NVIDIA GPU.
 
 
-\section{L Benchmarks from Accelerate}
+\section{Six Benchmarks from Accelerate}
 \label{sec:accelerate}
 
 The four benchmarks Crystal, Fluid, Mandelbrot, and N-body are from
