@@ -73,7 +73,7 @@ by the language semantics.
 In this thesis, we bridge the imperative and functional approaches: we
 seek to exploit only that parallelism which is necessary or easily
 accessible, and we work on the foundation of an explicitly parallel
-language.  We are inspired by the systematic approach of flattening,
+language.    We are inspired by the systematic approach of flattening,
 but we wish to employ full flattening only as a last resort, when
 absolutely all parallelism must be exploited.  Our goal is pragmatic.
 We wish to write Futhark programs in a high-level hardware-agnostic
@@ -120,8 +120,9 @@ statically determined~\cite{fish}, or requires extensive annotation by
 the programmer~\cite{brady2013idris,bove2009dependent}.  Our technique
 for size inference is a pragmatic design that does not restrict the
 language (by forbidding for example filtering), but also does not
-require any annotations on behalf of the programmer.  We do this by
-using a simple form of existential types.
+require any annotations on behalf of the programmer, although it can
+benefit from this.  We do this by using a simple form of existential
+types.
 
 \paragraph{Third Contribution}
 
@@ -170,9 +171,12 @@ compiler on a a set of $23$ nontrivial problems adapted from published
 benchmark suites.  $17$ of the benchmarks are compared to hand-written
 implementations, but we also include six programs ported from
 Accelerate~\cite{mcdonell2013optimising}, a mature Haskell library for
-parallel array programming.  Our results show that the Futhark
-compiler generates code that performs comparably with hand-written
-code in most cases, and generally outperforms Accelerate.
+parallel array programming. Our results show that the Futhark compiler
+generates code that performs comparably with hand-written code in most
+cases, and generally outperforms Accelerate.  The results indirectly
+validate the low overhead of size analysis, and also show the impact
+of both uniqueness types and the various optimisations performed by
+the Futhark compiler.
 
 \paragraph{Sixth Contribution}
 
@@ -199,12 +203,14 @@ algorithms.
 
 At a high level, we argue that techniques from imperative compilers
 can be lifted to a functional and explicitly parallel setting, where
-analyses are more scalable.  We prove that using these techniques, a
-compiler can be written that generates highly performant code for
-non-contrived programs.  We demonstrate the resulting performance
-compared to hand-written code (\cref{chap:empirical-validation}),
-where Futhark in most cases approaches or even exceeds the performance
-of hand-written low-level code.
+analyses are driven by high-level properties of language constructs,
+rather than complex and low-level analysis, and hence prove more
+robust.  We prove that using these techniques, a compiler can be
+written that generates highly performant code for non-contrived
+programs.  We demonstrate the resulting performance compared to
+hand-written code (\cref{chap:empirical-validation}), where Futhark in
+most cases approaches or even exceeds the performance of hand-written
+low-level code.
 
 Most of this work has previously been published in FHPC
 2013~\cite{henriksen2013t2}, FHPC 2014~\cite{henriksen2014size}, ARRAY
