@@ -1,75 +1,206 @@
 \chapter{Introduction}
 
-TODO:
+% \begin{itemize}
+% \item scope and philosophical level of how our approach is placed compared to imperative approaches
 
-\begin{itemize}
-\item scope and philosophical level of how our approach is placed compared to imperative approaches
+% \item show the vision
 
-\item show the vision
+% \item futhark source language examples and introduction
 
-\item futhark source language examples and introduction
+% \item show how techniques from imperative compilers become easier in a functional setting
 
-\item show how techniques from imperative compilers become easier in a functional setting
+% \item talk about all kinds of promising techniques, followed by a compiler that can actually do some of them.
 
-\item talk about all kinds of promising techniques, followed by a compiler that can actually do some of them.
-\end{itemize}
+% \item important contributions:
+
+%   \begin{itemize}
+%   \item moderate flattening/data-sensitive
+%   \item bridging pragmatic/imperative (loop distribution/common-case
+%     parallelism) and functional approaches (flattening)
+%   \item blelloch: all parallelism (but inefficient)
+%   \item futhark: some top-level parallelism + loc of ref opts
+%   \item challenging to moderate blelloch's algorithm
+%   \item nested parallelism
+%   \item simple in-place updates in the presence of parallelism
+%   \item in-place updates similar to SSA
+%   \item generality; could apply to non-Futhark
+%   \item All other optimisations/analyses (e.g. size analysis)
+%     motivated to moderate flattening
+%   \item Must defend every contribution
+%   \item size analysis: a pragmatic way of inferring
+%     array shapes in a way that does not require user annotations; 'fish' automatically infers but restricts the language, other things are general but requires extensive annotations (idris).
+%   \item extension of fusion: must not compromise parallelism or efficient sequentialisation; new operators.  Compare to Accelerate, SaC, Lift, polyhedral
+%   \item uniqueness type formalisation: linear types, clean.  Applied to parallel constructs.
+%   \item closing: show that techniques from imperative compilers can be lifted to a functional setting, which makes analyses more scalable
+%   \end{itemize}
+
+% \item forward pointers
+% \end{itemize}
 
 This thesis describes the design and implementation of
 \textit{Futhark}, a data parallel functional programming language.
 Futhark is a small programming language that is superficially similar
-to known functional languages such as OCaml and Haskell, but with
-restrictions and extensions meant to permit compilation into efficient
-parallel code.  While this thesis contains techniques that could be
-applied in other settings, Futhark has been the overarching context
-for my work.  We demonstrate the applicability and efficiency of the
-techniques by their application in the Futhark compiler, and the
-performance of the resulting code.  Apart from serving as a vehicle
-for compiler research, Futhark is also a programming language that is
-useful in practice for high-performance parallel programming.
+to established functional languages such as OCaml and Haskell, but
+with restrictions and extensions meant to permit compilation into
+efficient parallel code.  While this thesis contains techniques that
+could be applied in other settings, Futhark has been the overarching
+context for our work.  We demonstrate the applicability and efficiency
+of the techniques by their application in the Futhark compiler, and
+the performance of the resulting code.  Apart from serving as a
+vehicle for compiler research, Futhark is also a programming language
+that is useful in practice for high-performance parallel programming.
 
-The remainder of this introductory chapter introduces the challenges
-posed by modern high-performance parallel computers.  We will discuss
-that while conventional imperative languages once benefited greatly
-from their relatively close similarity to the hardware, the divide
-behind their conceptual model and the realities of hardware is now
-ever widening.  We will show the advantages of a high-level explicitly
-parallel programming model, both for expressing parallel algorithms,
-as well as for compilation to efficient low-level code.  We will
-discuss how techniques considered \textit{heroic effort} in a compiler
-for an imperative language become tractable when applied in the
-functional setting.
+It is the task of the compiler to map the high-level portable
+parallelism to low-level parallel code that can be executed by some
+machine.  For example, a parallel language may support \textit{nested}
+parallelism, while most machines efficiently support only
+\textit{flat} parallelism.  When writing a program in data parallel
+language, the program tends to contain a large amount of parallelism;
+frequently much more than what is necessary to fully exploit the
+target machine.
 
-\Cref{chap:calculus} introduces a formal array calculus that
-serves as inspiration for Futhark.  Various rewrite rules are shown
-and justified.  \Cref{chap:hardware} discusses a simplified but
-performance-faithful model of contemporary GPU hardware, and shows
-how the primitive combinators of the previous chapter can be mapped
-efficiently to low-level code.
+In the field of functional programming, we find Blelloch's
+\textit{full flattening algorithm}~\cite{blelloch1994implementation},
+which shows how to transform \textit{all} parallelism in program
+written in a nested data-parallel language to flat parallelism.  While
+full flattening is guaranteed to preserve the asymptotic cost and
+parallelism of the program, its practical performance is often poor,
+because some of the parallelism may be costly to exploit and
+unnecessary in practise.  An example of this could be parallel code
+hidden behind branches.
 
-The second part of the thesis discusses various analyses,
-transformations, and optimisations carried out by the Futhark
-compiler.  These constitute my main contributions.
-\Cref{chap:size-analysis} shows a technique for array shape
-analysis based on slicing and existential types (previously published
-at FHPC 2014~\cite{henriksen2014size}).  \Cref{chap:fusion}
-presents the fusion algorithm employed by the fusion compiler ---
-parts have been published in FHPC 2013~\cite{henriksen2013t2}, my
-master's thesis~\cite{henriksen2014exploiting}, FHPC
-2016~\cite{Futhark:redomap}, and PLDI
+In the field of parallelising compilers for imperative languages, we
+find techniques that tend to exploit only easily accessible top-level
+parallelism.  Typically only ``embarassingly parallel'' loops where
+every iteration is independent, corresponding to a ``map'' operation
+in functional languages, are parallelised.  While the resulting code
+tends to be efficient, the programming model lacks flexibility.  More
+powerful techniques exist~\cite{PolyhedralOpt}, but they are not
+systematic, as while compilers for parallel languages operates
+directly from the guarantees provided by the language semantics,
+parallelising compilers for imperative languages often rely on
+intensive and complicated analyses to detect the parallelism in the
+first place.
+
+In this thesis, we bridge the imperative and functional approaches: we
+seek to exploit only that parallelism which is necessary or easily
+accessible, and we work on the foundation of an explicitly parallel
+language.  Our goal is pragmatic.  We wish to write Futhark programs
+in a high-level hardware-agnostic and modular style, using nested
+parallelism where convenient.  The compiler should then translate the
+Futhark programs to low-level GPU whose run-time performance rivals
+that of hand-written code.
+
+\paragraph{First Contribution}
+
+Our key contribution is \textit{moderate flattening}
+(\cref{chap:kernel-extraction}).  This algorithm, which is inspired by
+both full flattening and loop distribution, is capable of restricting
+itself to exploiting only that parallelism which is cheap to access,
+or more aggressively exploit more of the available parallelism.
+Excess parallelism is turned into efficient sequential code, with
+enough structure retained to perform important locality-of-reference
+optimisations (\cref{sec:tiling}).  The moderate flattening algorithm
+is also capable of improving the degree of available parallelism by
+rewriting the program.  For example, loop interchange is used to move
+parallel loop levels next to each other, even if they were separated
+by a sequential loop in the source program.
+
+The moderate flattening algorithm is capable of data-sensitive
+parallelisation, where the optimal depth of parallelisation depends
+not just on the static structure of the program, but also on the
+problem size encountered at run-time.  For example, we may have two
+parallel loops, where executing the second in parallel carries
+significant overhead.  If the outer loop contains enough parallel
+iterations to fully saturate the machine, then it is better to execute
+the inner loop sequentially.  On the other hand, if the outer loop
+contains comparatively few iterations, then it may be worth paying the
+overhead of also executing the innermost loop in parallel.  This
+decision cannot be made at compile-time, and thus the compiler should
+produce code for both versions, and pick between them at run-time,
+based on the problem size.
+
+\paragraph{Second Contribution}
+
+The moderate flattening algorithm requires significant infrastructure
+to function.  One contribution here is a technique for \textit{size
+  inference} on multidimensional arrays (\cref{chap:size-analysis})
+that gives us the property that for every array in the program, there
+is a variable (or constant) that describes the size of each dimension
+of the array.  This allows the compiler to reason about the variance
+of arrays in a symbolic and simple way.  There are some operations
+where the size of an array cannot in general be known in advance (such
+as filtering).  In these cases, we use a simple form of existential
+types.  Our technique for size inference is a pragmatic design that
+does not restrict the language (by forbidding for example filtering),
+but also does not require any annotations on behalf of the programmer
+(as in for example dependently typed languages).
+
+\paragraph{Third Contribution}
+
+We present an extension to existing work on automatic loop fusion
+(\cref{chap:fusion}).  The primary novelty is the creation of new
+array combinators that permit a great degree of fusibility.  Because
+of the moderate flattening technique, the fusion algorithm cannot know
+whether some piece of code will eventually be parallelised or
+sequentialised.  We present constructs that have good fusion
+properties, but also allow both the recovery of all parallelism, and
+the transformation into efficient sequential code.  These are not
+properties provided by prior work on fusion.  We also show how
+``horizontal'' fusion can be considered a special case of ``vertical''
+(producer/consumer) fusion, given sufficiently powerful combinators.
+
+\paragraph{Fourth Contribution}
+
+We present a system of uniqueness types (\cref{sec:uniqueness-types})
+and a corresponding formalisation~(\cref{sec:uniqueness-formalism})
+that permits a limited form of in-place updates, without compromising
+functional purity or parallel semantics.  While more powerful
+uniqueness type systems~\cite{clean-uniqueness-types}, and affine and
+linear
+types~\cite{Tov:2011:PAT:1926385.1926436,Fahndrich:2002:AFP:543552.512532}
+are known, ours is the first application that directly addresses
+\texttt{map}-style parallel constructs, and shows how in-place updates
+can be supported without making evaluation order observable.  Our
+model of in-place updates is similar to static single assignment form
+(SSA), and maintains explicit data dependencies in the compiler IR.
+We show that the addition of uniqueness types does not overly burden
+the implementation of compiler optimisations.
+
+The next chapter introduces the challenges posed by modern
+high-performance parallel computers.  We will discuss that while
+conventional imperative languages once benefited greatly from their
+relatively close similarity to the hardware, the divide behind their
+conceptual model and the realities of hardware is now ever widening.
+We will show the advantages of a high-level explicitly parallel
+programming model, both for expressing parallel algorithms, as well as
+for compilation to efficient low-level code.  We will discuss how
+techniques considered \textit{heroic effort} in a compiler for an
+imperative language become tractable when applied in the functional
+setting.
+
+\Cref{chap:calculus} introduces a formal array calculus that serves as
+inspiration for Futhark.  Various rewrite rules are shown and
+justified.  \Cref{chap:hardware} discusses a simplified but
+performance-faithful model of contemporary GPU hardware, and shows how
+the primitives of the array calculus can be mapped efficiently to
+low-level code.
+
+\paragraph{Closing}
+
+At a high level, we argue that techniques from imperative compilers
+can be lifted to a functional and explicitly parallel setting, where
+analyses are more scalable.  We prove that using these techniques, a
+compiler can be written that generates highly performant code for
+non-contrived programs.  We demonstrate the resulting performance
+compared to hand-written code (\cref{chap:empirical-validation}),
+where Futhark in most cases approaches or even exceeds the performance
+of hand-written low-level code.
+
+Most of this work has previously been published in FHPC
+2013~\cite{henriksen2013t2}, FHPC 2014~\cite{henriksen2014size}, FHPC
+2016~\cite{Futhark:redomap,} and PLDI
 2017~\cite{henriksen2017futhark}.
-\Cref{chap:kernel-extraction} shows an algorithm that uses
-primarily loop distribution to transforming regular nested parallelism
-into flat parallelism.  The main novelty is that information (such as
-access patterns) is not destroyed to the degree seen in previous
-techniques.  \Cref{chap:tiling} shows an implementation of
-automatic \textit{loop tiling} that exploits just this information.
-These two chapters are based on work previously published at PLDI
-2017~\cite{henriksen2017futhark}.
-\Cref{chap:empirical-validation} contains a performance
-analysis of Futhark on more than a dozen established benchmarks.
-Finally, \cref{chap:interoperability} discusses how to invoke
-Futhark code from programs written in other languages, with Python
-used as the case study.
 
 %%% Local Variables:
 %%% mode: latex
