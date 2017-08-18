@@ -1,0 +1,17 @@
+Common subdirectories: rodinia_3.1/bin and rodinia_3.1-patched/bin
+Common subdirectories: rodinia_3.1/common and rodinia_3.1-patched/common
+Common subdirectories: rodinia_3.1/cuda and rodinia_3.1-patched/cuda
+Common subdirectories: rodinia_3.1/data and rodinia_3.1-patched/data
+Common subdirectories: rodinia_3.1/opencl and rodinia_3.1-patched/opencl
+Common subdirectories: rodinia_3.1/openmp and rodinia_3.1-patched/openmp
+Common subdirectories: rodinia_3.1/others and rodinia_3.1-patched/others
+diff -u rodinia_3.1/README rodinia_3.1-patched/README
+--- rodinia_3.1/README	2015-12-13 04:42:33.000000000 +0100
++++ rodinia_3.1-patched/README	2017-08-18 16:51:01.948417664 +0200
+@@ -1,3 +1,6 @@
++NOTICE: this tree has been modified by the futhark-ppopp17 Makefile
++to add consistent timing to some benchmark implementations.
++
+ Rodinia Benchmark Suite 3.1
+ ===========================
+ 
