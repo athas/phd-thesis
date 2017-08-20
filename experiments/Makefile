@@ -351,6 +351,6 @@ benchmark_noinplace_LocVolCalib: futhark-benchmarks
 
 clean:
 	rm -rf rodinia_3.1
-	cd futhark-benchmarks && git clean -f
+	(cd futhark-benchmarks && git clean -f) || true
 	rm -rf runtimes
 	rm -rf input/*
