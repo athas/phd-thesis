@@ -1227,8 +1227,43 @@ let matmul [n][m][p]
 Futhark also supports two somewhat more exotic features, both of which
 are introduced for performance reasons.  These are discussed below.
 
-\subsection{Uniqueness Types}
+\subsection{In-Place Updates}
 \label{sec:uniqueness-types}
+
+While Futhark is a data-parallel language, and expects programs to
+exhibit large amounts of parallelism, it also supports the
+implementation of limited imperative algorithms in an efficient
+manner.  Specifically, Futhark supports \textit{in-place updates},
+which allows one to create an array that is semantically a copy of
+another array, but with new values at specified positions.  This can
+be done in a purely functional manner by simply copying the array, but
+this means that the cost of the update is proportional to the size of
+the array, not the part that we are updating.  With an in-place
+update, we pay only for the part of the array that we are updating.
+This section describes how Futhark supports in-place updates without
+violating the referential purity that we depend on for safe parallel
+programming.
+
+Before further discussion, we must justify why in-place updates are
+needed.  Our motivation is twofold.  First, it is not uncommon for a
+parallel program to consist of a number of parallel loops surrounding
+an inner sequential code.  The simplest expression of this pattern is
+applying a function \lstinline{f}, that internally performs side
+effects but is externally pure, on every element of an array.  It is
+just as important that the inner sequential code is efficient, as it
+is that we execute the outer loop in parallel.  Both influence the
+final program performance.
+
+Our second piece of motivation is the notion of efficient
+sequentialisation.  In \cref{sec:streaming-soacs} we shall see
+language constructs that permit the programmer to describe a
+computation comprising both an efficient sequential part, as well as a
+description of how to combine sequentially produced results in
+parallel.  The utility of such language constructs hinge entirely on
+the ability to actually express said efficient sequential code.
+In-place updates are key to this ability.
+
+\subsubsection{Uniqueness Types}
 
 In-place updates are supported in Futhark through a type-system
 feature called \textit{uniqueness types}, which is similar to, but
@@ -1236,18 +1271,41 @@ simpler than the system found in
 Clean~\cite{clean-uniqueness-types,barendsen1996uniqueness}, where the
 primary motivation is modeling IO.  Our use is reminiscent of the
 ownership types of Rust~\cite{rust}.  Alongside a relatively simple
-(conservative) aliasing analysis in the type checker, this approach is
-sufficient to determine at compile time whether an in-place
-modification is safe, and signal an error otherwise.  We introduce
-uniqueness types through the example below, which shows a function
-declaration: {\small
+conservative and intra-procedural aliasing analysis in the type
+checker, this approach is sufficient to determine at compile time
+whether an in-place modification is safe, and signal an error
+otherwise.
+
+This section describes uniqueness types in intuitive terms.  A more
+precise formalisation on the Futhark core language can be found in
+\cref{sec:uniqueness-formalism}.  An important concept used in our
+uniqueness type system is \textit{aliasing}.  Each array-typed
+variable is associated with a set of other variables in scope, which
+it may alias.  Operationally, aliasing models the possibility that two
+arrays are backed by the same memory location.  A freshly created
+array (as by \kw{map} or an array literal) has no aliases.  Some
+language constructs, like array slicing, may produce arrays that are
+aliased with the source array.  The result of \kw{if} aliases the
+union of the aliases of both branches.
+
+When an array is modified in-place, all of its aliases are marked as
+unusable, and a compile-time error occurs if they are used afterwards.
+This prevents the in-place modification from being observable, except
+due to its performance effects.  The larger problem is how to ensure
+safety in the interprocedural case, which is where uniqueness types
+enter the picture.
+
+We now introduce uniqueness types through the example below, which
+shows a function definition:
+
 \begin{lstlisting}
-let modify (n: int) (a: @*@[n]int) (i: int) (x: [n]int): @*@[n]int =
+let modify [n] (a: *[n]int) (i: int) (x: [n]int): *[n]int =
   a with [i] <- (a[i] + x[i])
 \end{lstlisting}
-} A call \lstinline{modify n a i x} returns \lstinline{a}, but where
+
+A call \lstinline{modify a i x} returns \lstinline{a}, but where
 \lstinline{a[i]} has been increased by \lstinline{x[i]}.  In the
-parameter declaration \lstinline{a: *[n]int}, the asterisk
+parameter declaration \lstinline{(a: *[n]int)}, the asterisk
 (\lstinline{*}) means that \lstinline{modify} has been given
 ``ownership'' of the array \lstinline{a}. The caller of
 \lstinline{modify} will never reference array \lstinline{a} after the
@@ -1255,23 +1313,21 @@ call.  As a consequence, \lstinline{modify} can change the element at
 index \lstinline{i} in place, without first copying the array;
 i.e. \lstinline{modify} is free to do an in-place modification.
 Further, the result of \lstinline{modify} is also unique---the
-\lstinline{*} in the return type declares that the function will not
-share elements with any of the non-unique parameters (it might share
-elements with \lstinline{a} but not with \lstinline{x}).
-%other visible variables,
-Finally, the call \lstinline!modify n a i x! is valid if neither
-\lstinline{a} nor any variable that \textit{aliases} \lstinline{a} is
-used on any execution path following the call to \lstinline{modify}.
-
+\lstinline{*} in the return type declares that the function result
+will not be aliased with any of the non-unique parameters (it might
+alias \lstinline{a} but not with \lstinline{x}). Finally, the call
+\lstinline!modify n a i x! is valid if neither \lstinline{a} nor any
+variable that aliases \lstinline{a} is used on any execution path
+following the call to \lstinline{modify}.
 
 We say that an array is \textit{consumed} when it is the source of an
 in-place update or is passed as a unique parameter to a function call;
-for instance, \lstinline{a} is consumed in the expression \lstinline{a with [i] <- x}.
-Past the consumption point, neither \lstinline{a} nor its aliases may
-be used again.  From an implementation perspective, this contract
-allows type checking to rely on simple intra-procedural analysis, both
-in the callee and in the caller, as described in the following
-sections.
+for instance, \lstinline{a} is consumed in the expression
+\mbox{\lstinline{a with [i] <- x}}.  Past the consumption point,
+neither \lstinline{a} nor its aliases may be used again.  From an
+implementation perspective, this contract is what allows type checking
+to rely on simple intra-procedural analysis, both in the callee and in
+the caller, as described in the following sections.
 
 \subsection{Streaming SOACs}
 \label{sec:streaming-soacs}
