@@ -12,6 +12,7 @@ RODINIA_BENCHMARKS=srad hotspot nn backprop cfd kmeans lavaMD pathfinder myocyte
 ACCELERATE_BENCHMARKS=fluid mandelbrot nbody crystal tunnel
 FINPAR_BENCHMARKS=LocVolCalib_small LocVolCalib_medium LocVolCalib_large OptionPricing_small OptionPricing_medium OptionPricing_large
 PARBOIL_BENCHMARKS=mri-q sgemm stencil tpacf
+OPENCL_BENCHMARKS=srad hotspot nn backprop cfd kmeans lavaMD pathfinder lud $(PARBOIL_BENCHMARKS) $(FINPAR_BENCHMARKS)
 
 .PHONY: clean speedup.pdf runtimes.tex
 
