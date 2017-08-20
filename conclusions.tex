@@ -1,10 +1,65 @@
-\chapter{Conclusions}
+\chapter{Related Work and Conclusions}
 
 \section{Related Work}
 \label{sec:relatedwork}
 
+There is a rich body of literature on embedded array languages
+and libraries targetting GPUs. Imperative solutions include
+Copperhead~\cite{Copperhead}, Accelerator~\cite{MSaccelerator},
+and deep-learning DSLs, such as Theano~\cite{Theano} and
+Torch~\cite{Torch7}.
+
+Purely functional languages include
+Accelerate~\cite{mcdonell2013optimising},
+Obsidian~\cite{claessen2012expressive}, and
+NOVA~\cite{collins2014nova}.  These languages support neither
+arbitrary nested regular parallelism, nor explicit indexing and
+efficient sequential code inside their parallel constructs.
+
+A number of dataflow languages aim at efficient GPU compilation.
+StreamIt supports a number of static optimizations on various
+hardware, for example, GPU
+optimizations~\cite{Hormati:2011:SPS:1950365.1950409} include
+memory-layout selection (shared/global memory), resolving
+shared-memory bank conflicts, increasing the granularity of
+parallelism by vertical fusion, and untilizing unused registers by
+software prefetching and loop unrolling, while multicore
+optimizations~\cite{Gordon:2006:ECT:1168857.1168877} are aimed at
+finding the right mix of task, data and pipeline parallelism.
+
+Finally, we note that Futhark is not intended as a general-purpose
+language, but rather it is aimed at (i) expressing computational
+kernels, which can then be linked with applications written in
+mainstream languages, and, at (ii) being used as a code-generation
+target for high-level DSLs.  Such a usage was demonstrated by an
+experiment~\cite{ElsmanDybdal:Array:2014,Henriksen:2016:AGT:2975991.2975997}
+in which a subset of APL was compiled to Futhark, executed on GPU, and
+used from Python for visualization purposes.
+
 \section{Conclusions}
 \label{sec:conclusions}
+
+We have presented a fully automatic optimizing compiler for Futhark, a
+pure functional array language.  In particular, we have demonstrated
+(i) how to support in-place updates in Futhark's type system, (ii) how
+second-order array combinators can express symbolically both all
+available parallelism and efficient sequentialization alternatives,
+and (iii) how to fuse the program aggressively and then how to
+decompose it yet again into kernels in a manner that can improve the
+amount of efficient (common-case) parallelism.
+
+We have validated our approach on $21$ benchmark programs, which are
+compiled to GPU code via OpenCL. Compared to reference
+implementations, the performance ranges from $\times0.21$ slowdown to
+$\times13$ speedup, and is competitive on average.
+%
+Our results show that while the ease of high-level structural
+transformation permitted by a functional language is powerful,
+attention must still be paid to low-level issues such as communication
+costs and memory access patterns.
+
+We have made the developed compiler and all benchmark programs freely
+available for reproduction, study, or further development.
 
 %%% Local Variables:
 %%% mode: latex

@@ -267,6 +267,7 @@ with computing GPU group sizes and handling cases where the tiled
 arrays have sizes that are not divisible with the optimal tile size.
 
 \subsection{One-Dimensional Tiling}
+\label{sec:one-dimensional-tiling}
 
 One-dimensional tiling is performed when the input arrays of a
 \StreamSeq{} are invariant to the same dimension.
@@ -306,6 +307,7 @@ not be restricted to one for one-dimensional tiling to apply.
 applied in a two-dimensional kernel.
 
 \subsection{Two-Dimensional Tiling}
+\label{sec:two-dimensional-tiling}
 
 Futhark also supports two-dimensional tiling, where two streamed
 arrays are invariant to different parallel dimensions.  A matrix
