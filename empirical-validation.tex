@@ -191,14 +191,27 @@ The speedup on Backprop seems related to a reduction that Rodinia has
 left sequential.  Running time of the training phase is roughly equal
 in Rodinia and Futhark ($\sim10~ms$).
 
-Rodinia's implementation of HotSpot, a stencil code, uses time
-tiling~\cite{HexaTiling}, which seems to pay off on the NVIDIA GPU,
-but not on AMD.  On the NVIDIA GPU, the majority of Futhark's slowdown
-is due to how memory management is done for the arrays involved in the
-time series loop in the stencil.  The reference implementation uses
-double buffering via pointer switching, which is a common technique,
-but the Futhark compiler copies the entire intermediate result
-instead.  These copies account for $30\%$ of runtime.
+Rodinia's implementation of HotSpot, a two-dimensional stencil code,
+uses time tiling~\cite{HexaTiling}, which seems to pay off on the
+NVIDIA GPU, but not on AMD.  On the NVIDIA GPU, the majority of
+Futhark's slowdown is due to how memory management is done for the
+arrays involved in the time series loop in the stencil.  At a high
+level, the stencil is a sequential loop containing a nested \kw{map}
+over the $m\times{}m$ iteration space:
+
+\begin{lstlisting}
+loop s = s0 for i < n do
+  let s' = map (\i -> map (f s i) [0...m-1]) [0...m-1]
+  in s'
+\end{lstlisting}
+
+Two distinct memory blocks are necessary, because several elements of
+\lstinline{s} are combined to construct one element of \lstinline{s'}.
+The reference implementation uses two pre-allocated buffers, and
+switches between them by swapping the pointers.  This is a common
+technique for implementing stencils.  Instead of swapping pointers,
+The Futhark compiler copies the entire intermediate result instead,
+and these copies account for $30\%$ of runtime.
 
 Our speedup on $k$-means is due to Rodinia not parallelising
 computation of the new cluster centres, which is semantically a
