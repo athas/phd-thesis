@@ -340,7 +340,7 @@ intended for relatively small and simple high-performance programs,
 which can form the computational core of a larger program written in a
 conventional language.  The restrictions imposed by the need for
 inter-operability with mainstream productivity languages are
-elaborated in Chapter~\ref{chap:interoperability}.
+elaborated in \cref{sec:interoperability}.
 
 A reasonable high-level programming model for parallel computers is
 one based on \textit{bulk operations}, where we program in terms of
@@ -1237,12 +1237,12 @@ manner.  Specifically, Futhark supports \textit{in-place updates},
 which allows one to create an array that is semantically a copy of
 another array, but with new values at specified positions.  This can
 be done in a purely functional manner by simply copying the array, but
-this means that the cost of the update is proportional to the size of
-the array, not the part that we are updating.  With an in-place
-update, we pay only for the part of the array that we are updating.
-This section describes how Futhark supports in-place updates without
-violating the referential purity that we depend on for safe parallel
-programming.
+this would cause the asymptotic cost of the update to be proportional
+to the full size of the array, not just the part that we are updating.
+With an in-place update, we pay only for the part of the array that we
+are updating.  This section describes how Futhark supports in-place
+updates without violating the functional purity that we depend on for
+safe parallel programming.
 
 Before further discussion, we must justify why in-place updates are
 needed.  Our motivation is twofold.  First, it is not uncommon for a
@@ -1263,11 +1263,26 @@ parallel.  The utility of such language constructs hinge entirely on
 the ability to actually express said efficient sequential code.
 In-place updates are key to this ability.
 
+The main language construct that permits array update is quite simple:
+
+\begin{lstlisting}
+  a with [i] <- v
+\end{lstlisting}
+
+This expression semantically produces an array that is identical to
+\lstinline{a}, except with the element at position \lstinline{i}
+replaced by \lstinline{v}.  The compiler then verifies that no alias
+of \lstinline{a} (including \lstinline{a}) is used on any execution
+path following the in-place update.  If the compiler had to perform a
+full copy of \lstinline{a}, the asymptotic cost would be $O(n)$ (where
+$n$ is the size of \lstinline{a}).  Using an in-place update, the cost
+is $O(1)$ (assuming that \lstinline{v} has constant size).
+
 \subsubsection{Uniqueness Types}
 
-In-place updates are supported in Futhark through a type-system
-feature called \textit{uniqueness types}, which is similar to, but
-simpler than the system found in
+The safety of in-place updates is supported in Futhark through a
+type-system feature called \textit{uniqueness types}.  This system is
+similar to, but simpler, than the system found in
 Clean~\cite{clean-uniqueness-types,barendsen1996uniqueness}, where the
 primary motivation is modeling IO.  Our use is reminiscent of the
 ownership types of Rust~\cite{rust}.  Alongside a relatively simple
@@ -1299,7 +1314,8 @@ We now introduce uniqueness types through the example below, which
 shows a function definition:
 
 \begin{lstlisting}
-let modify [n] (a: *[n]int) (i: int) (x: [n]int): *[n]int =
+let modify [n] (a: *[n]int) (i: int)
+               (x: [n]int): *[n]int =
   a with [i] <- (a[i] + x[i])
 \end{lstlisting}
 
@@ -1329,6 +1345,57 @@ implementation perspective, this contract is what allows type checking
 to rely on simple intra-procedural analysis, both in the callee and in
 the caller, as described in the following sections.
 
+\subsubsection{Parallel Scatter}
+
+The in-place update construct thus seen is satisfactory for sequential
+programming.  However, the system of uniqueness types also lets us
+define an efficient construct for \textit{parallel scatter}.  A
+scatter operation, whose nomenclature is taken from vector processing,
+takes an array \lstinline{a}, a array of indices \lstinline{js},
+and a array of values \lstinline{vs}, and writes each value to the
+position in the array given by the corresponding index.  The operation
+can be explained in imperative pseudocode as follows:
+
+\begin{lstlisting}[language=Python]
+  for i in 0...n-1:
+    a[js[i]] = vs[i]
+\end{lstlisting}
+
+\noindent In Futhark, the \kw{scatter} construct is used as follows:
+
+\begin{lstlisting}
+  scatter a js vs
+\end{lstlisting}
+
+Semantically, \kw{scatter} returns a new array.  We treat the array
+\lstinline{a} as consumed, which operationally permits the compiler to
+perform the operation in-place, thus making the cost of \kw{scatter}
+proportional to the size of \lstinline{vs}, not \lstinline{a}.
+
+The \kw{scatter} construct is fully parallel, and therefore it is
+unspecified what happens if we try to write distinct values to the
+same index.  Other parallel languages, for example
+Accelerate~\cite{mcdonell2013optimising}, contain a variation of
+\kw{scatter} that requires the specification of an associative and
+commutative combination function, which is used to combine duplicate
+writes.  While this carries nontrivial extra run-time overhead, it
+makes the construct safer and more flexible, and will likely be added
+to Futhark in the future.
+
+The \kw{scatter} construct is primarily used as an ``escape hatch''
+for encoding irregular problems that are not a good fit for any of the
+conventional SOACs.  An example is discussed in
+\cref{sec:bfs-benchmarking}.
+
+In vector programming, \kw{scatter} is often paired with a matching
+``gather'' construct.  There is no need for this in Futhark, as a
+gather is easily expressible as a \kw{map} over an index space, as
+follows:
+
+\begin{lstlisting}
+  map (\i -> a[i]) is
+\end{lstlisting}
+
 \subsection{Streaming SOACs}
 \label{sec:streaming-soacs}
 
@@ -1348,7 +1415,7 @@ executing the parallel algorithm sequentially.
 \subsubsection{$k$-means clustering}
 
 In multidimensional cluster analysis, one widely used algorithm is
-called $k$-means analysis.  The goal is to assign $n$ points in a
+$k$-means analysis.  The goal is to assign $n$ points in a
 $d$-dimensional space to one of $k$ clusters, with each point
 belonging to the cluster with the closest centre.  The centre of a
 cluster is the mean of all points belonging to the cluster.  Often,
@@ -1358,107 +1425,117 @@ algorithm is typically implemented by initially assigning points
 randomly to clusters, then recomputing cluster means and re-assigning
 points until a fixed point is reached.  In this section, we explain
 how one part of the algorithm---the computation of cluster
-centres---can be efficiently expressed using \StreamRed{}, and
-its performance advantage over a traditional
-\texttt{map}-\texttt{reduce}-formulation.
+centres---can be efficiently expressed using \StreamRed{}, and its
+performance advantage over a traditional
+\kw{map}-\kw{reduce}-formulation.  The problem is taken from the
+$k$-means benchmark from the Rodinia benchmark suite~\cite{5306797},
+which is discussed further in \cref{chap:empirical-validation}.
 
-As a first approximation---and also as an introduction to Futhark---we
-will discuss a (mostly) sequential solution of the problem.  This will
-also be a useful building block in our final solution.  The code is
-shown on Figure~\ref{fig:sequential-means}.  On lines 1--3 we define a
-function for adding $d$-dimensional points, which we represent as
+As a first approximation---and also as further introduction to
+Futhark---we will discuss a (mostly) sequential solution of the
+problem.  This will also be a useful building block in our final
+solution.  The code is shown on \cref{fig:sequential-means}.  On lines
+\ref{line:add_centroids_begin}--\ref{line:add_centroids_end} we define
+a function for adding $d$-dimensional points, which we represent as
 vectors of floating-point values.  Element-wise addition is done by
-passing both vectors to \texttt{map} with the addition function as the
-operator.  The meaning of the asterisk on the return type will be
-explained shortly.
+passing both vectors to \kw{map} with the addition function as the
+operator.  We mark the return value as unique, meaning that it does
+not alias either of the input parameters.  The need for this will be
+apparent shortly.
 
 \begin{figure}
-\begin{lstlisting}
-let add_centroids [d] (x: [d]f32) (y: [d]f32): [d]f32 =
-  map (+) (zip x y)
+\begin{lstlisting}[numbers=left,escapechar=|]
+let add_centroids [d] (x: [d]f32, y: [d]f32)
+                      : *[d]f32 = |\label{line:add_centroids_begin}|
+  map (+) (zip x y) |\label{line:add_centroids_end}|
 
 let cluster_sums_seq [k] [n] [d]
                      (counts: [k]i32)
-                     (points: [n]([d]f32,i32)): *[k][d]f32 =
-  loop (acc = replicate k (replicate d 0.0)) for (p,c) in points do
-    let p' = map (/f32(counts[c])) p
-    in acc with [c] <- add_centroids acc[c] p'
+                     (points: [n]([d]f32,i32))
+                     : [k][d]f32 =
+  loop (acc = replicate k (replicate d 0.0))
+    for (p,c) in points do |\label{line:clustersumsseqloop_begin}|
+      let p' = map (/f32(counts[c])) p
+      in acc with [c] <- add_centroids acc[c] p' |\label{line:clustersumsseqloop_end}|
 \end{lstlisting}
 \caption{Sequential calculation of means.}
 \label{fig:sequential-means}
 \end{figure}
 
-On lines 8--13, we define the main loop.  This loop proceeds by
-maintaining an accumulator \texttt{acc} that contains the cluster
-centres as they have been computed thus far.  The initial value is
-constructed via the \texttt{replicate} array constructor, whose first
-argument is the number of times to replicate the second argument.  In
-this case, two nested \texttt{replicate}s are used to construct a
-two-dimensional array.  We then iterate across all points, and for
-each point we add its contribution to the corresponding cluster.
+On lines
+\ref{line:clustersumsseqloop_begin}--\ref{line:clustersumsseqloop_end},
+we define the main loop.  This loop proceeds by maintaining an
+accumulator \texttt{acc} that contains the cluster centres as they
+have been computed thus far.  The initial value is constructed via the
+\kw{replicate} array constructor, whose first argument is the number
+of times to replicate the second argument.  In this case, two nested
+\kw{replicate}s are used to construct a two-dimensional array.  We
+then iterate across all points, and for each point we add its
+contribution to the corresponding cluster.
 
-Line 12, which updates \texttt{acc}, is particularly interesting, as
-it performs an \textit{in-place update}.  Semantically, we construct a
-new array that is a copy of \texttt{acc}, except that the value at the
-given index has been replaced by the result of the call to
-\texttt{add\_centroids}, and bind this array to a new variable named
-\texttt{acc} (shadowing the old).  However, we are guaranteed that no
-copying takes place, and that the cost is proportional only to the
-size of the value we are writing (an array of size $d$), rather than
-the array we are updating (of size $k\times{}d$).  This property is
-verified by the compiler during type-checking using an intraprocedural
-algorithm based on conservative alias analysis.  If the ``old'' value
-of \texttt{acc} is used on any potential execution path following the
-in-place update, the compiler will signal an error.
+Line \ref{line:clustersumsseqloop_end}, which updates \texttt{acc}, is
+particularly interesting, as it performs an in-place update.
+Semantically, we construct a new array that is a copy of \texttt{acc},
+except that the value at the given index has been replaced by the
+result of the call to \texttt{add\_centroids}, and bind this array to
+a new variable named \texttt{acc} (shadowing the old).  However, we
+are guaranteed that no copying takes place, and that the cost is
+proportional only to the size of the value we are writing (an array of
+size $d$), rather than the array we are updating (of size
+$k\times{}d$).  It is important that we know that the result of
+\lstinline{add_centroids} cannot alias its arguments,
+\lstinline{acc[c]} or \lstinline{p'}, and this is exactly the property
+that is ensured by marking the return value of
+\lstinline{add_centroids} as unique.  If the return value of
+\lstinline{add_centroids} \textit{did} alias the \lstinline{acc}
+array, then the in-place update into \lstinline{acc} might not be
+safe, as we would be simultaneously reading and writing from the same
+array.
 
-To verify the safety of function calls, explicit \textit{uniqueness
-  annotations}, inspired by uniqueness
-types~\cite{clean-uniqueness-types,barendsen1996uniqueness}, are used.
-Any function parameter may be marked with an asterisk, which indicates
-that the function has been given ownership of the corresponding
-value---the caller will never use it again---and it can thus be
-updated in-place without violating referential transparency.
-Similarly, a uniqueness attribute is given for the return type in line
-1, which specifies that the result of \texttt{add\_centroids} must be
-unique---that is, it will not be aliased with any of the (non-unique)
-parameters of the function.  This system allows us to write (simple)
-imperative-style code in an efficient way, while keeping the language
-purely functional.
+The \lstinline{cluster_sums_seq} function forms the sequential
+implementation of cluster summation.  While a small amount of
+\kw{map}-parallelism is present in the function
+\lstinline{add_centroids}, the main bulk of the work is the outer loop
+of $n$ iterations.  Even though the implementation performs
+$O(n\cdot{}d)$ work, which is efficient, the sequential depth is $n$,
+which is not satisfactory.
 
-This code forms the sequential implementation.  While a small amount
-of \texttt{map}-parallelism is present in the \texttt{map} operations
-on size $d$-arrays, the main bulk of the work is the outer loop of $n$
-iterations.  Even though the implementation performs $O(n\cdot{}d)$
-work, the mostly sequential execution is not satisfactory.
-
-A fully parallel implementation is shown in
-Figure~\ref{fig:parallel-means}.  The algorithm computes, for each
-point, an \textit{increment matrix}, which is an array of type
-\texttt{[k][d]f32} containing all zeroes, except at the row
-corresponding to the cluster for the point in question.  This
-computation is done on lines 6--9.  In-place updates are used only in
-a trivial form.  The result is an array of matrices, which we then sum
-on lines 9--12 to get the final result.  The \texttt{rearrange}
-construct produces a view of the given
+A fully parallel implementation is shown in \cref{fig:parallel-means}.
+The algorithm computes, for each point, an \textit{increment matrix},
+which is an array of type \lstinline{[k][d]f32} containing all zeroes,
+except at the row corresponding to the cluster for the point in
+question.  This computation is done on lines
+\ref{line:cluster_sums_par_map_begin}--\ref{line:cluster_sums_par_map_end}.
+In-place updates are used only in a trivial form.  The result is an
+array of matrices, which we then sum on lines
+\ref{line:cluster_sums_par_sum_begin}--\ref{line:cluster_sums_par_sum_end}
+to get the final result.  The \kw{rearrange} construct produces a view
+of the given
 array where the dimensions have been reordered by the given permutation.  For example, if\\
-\centerline{\texttt{b = rearrange (1,2,0) a},}\\
+\centerline{\lstinline{b = rearrange (1,2,0) a},}\\
 then\\
-\centerline{\texttt{b[i0,i1,i2] == a[i1,i2,i0]}.}\\
-In the program, the \texttt{rearrange} construct is used to bring the
+\centerline{\lstinline{b[i0,i1,i2] == a[i1,i2,i0]}.}\\
+In the program, the \kw{rearrange} construct is used to bring the
 dimension we wish to reduce across innermost, which allows us to avoid
-a reduction where the operator operates on large arrays.
+a reduction where the operator operates on large
+arrays.\footnote{\Cref{chap:kernel-extraction} shows how the compiler
+  can do this automatically, but here we do it by hand for clarity.}
 
 \begin{figure}
-\begin{lstlisting}[basicstyle=\small\ttfamily,numbers=left]
-let cluster_sums_par [k] [n] [d] (counts: [k]i32)
-                                 (points: [n]([d]f32,i32)): *[k][d]f32 =
-  let increments: [n][k][d]i32 =
+\begin{lstlisting}[numbers=left,escapechar=|]
+let cluster_sums_par [k] [n] [d]
+                     (counts: [k]i32)
+                     (points: [n]([d]f32,i32))
+                     : *[k][d]f32 =
+  let increments: [n][k][d]i32 = |\label{line:cluster_sums_par_map_begin}|
         map (\(p, c) ->
           let a = replicate k (replicate d 0.0)
-          let a[c] = map (/f32 counts[c]) p
-          in a) points
-  let increments': [k][d][n]i32 = rearrange (1,2,0) increments
-  in map (\x -> map (\y -> reduce (+) 0.0 y) x) increments'
+          in a with [c] < map (/f32 counts[c]) p)
+             points |\label{line:cluster_sums_par_map_end}|
+  let increments': [k][d][n]i32 =
+    rearrange (1,2,0) increments |\label{line:cluster_sums_par_sum_begin}|
+  in map (\x -> map (\y -> reduce (+) 0.0 y) x)
+         increments' |\label{line:cluster_sums_par_sum_end}|
 \end{lstlisting}
   \caption{Parallel calculation of means (types of \texttt{increments}
     and \texttt{increments'} annotated for clarity).}
@@ -1467,15 +1544,16 @@ let cluster_sums_par [k] [n] [d] (counts: [k]i32)
 
 This implementation exploits all degrees of parallelism in the
 problem.  Unfortunately, it is not work efficient.  Constructing the
-increment matrix involves $O(n\cdot{}k\cdot{}d)$ work, as does its
-eventual reduction, while the sequential version is $O(n\cdot{}d)$.
-If executed on a system capable of exploiting all available
-parallelism, this might be an acceptable tradeoff, but real hardware
-is limited in the amount of parallelism it can take advantage of.  We
-need a language construct that can expose enough parallelism to take
-full advantage of the machine, but that will run efficient sequential
-code within each thread.  The \StreamRed{} SOAC provides
-just this functionality.
+increment matrix involves
+$O(n\cdot{}k\cdot{}d)$ work, as does its eventual reduction, while the
+sequential version requires only
+$O(n\cdot{}d)$ work.  If executed on a system capable of exploiting
+all available parallelism, this might be an acceptable tradeoff, but
+real hardware is limited in the amount of parallelism it can take
+advantage of.  We need a language construct that can expose enough
+parallelism to take full advantage of the machine, but that will run
+efficient sequential code within each thread.  The \StreamRed{} SOAC
+provides just this functionality.
 
 The \StreamRed{} construct builds on the property that any fold
 with an associative operator $\odot$ can be rewritten as a fold over
@@ -1488,25 +1566,30 @@ parallelism by the outer \texttt{map}, we can implement the innermost
 fold as a work-efficient sequential function.  In Futhark, we let the
 programmer specify this \textit{chunk function} directly.
 
-As shown in Figure~\ref{fig:stream-means}, \StreamRed{} is given
-the associative reduction operator (lines 5--6), together with the
-\textit{chunk function} (lines 7--9).  Because we wish to process two
+As shown in \cref{fig:stream-means}, \StreamRed{} is given the
+associative reduction operator (lines
+\ref{cluster_sums_stream_op_begin}--\ref{cluster_sums_stream_op_begin}),
+together with the \textit{chunk function} (line
+\ref{cluster_sums_stream_chunk}).  Because we wish to process two
 arrays---both \texttt{points} and \texttt{membership}---we use
-\texttt{zip} to combine the two arrays into one array of pairs (line
-10).  In this case, the reduction operator is matrix addition, and the
-chunk function applies the sequential function previously shown in
-Figure~\ref{fig:sequential-means}.
+\kw{zip} to combine the two arrays into one array of pairs (line
+\ref{cluster_sums_stream_zip}).  In this case, the reduction operator
+is matrix addition, and the chunk function applies the sequential
+\lstinline{cluster_sums_seq} function (partially applied to
+\lstinline{counts}) previously shown in \cref{fig:sequential-means}.
 
 \begin{figure}
-\begin{lstlisting}
-let cluster_sums_stream [k] [n] [d] (counts: [k]i32)
-                                    (points: [n][d]f32)
-                                    (membership: [n]i32): [k][d]f32 =
+\begin{lstlisting}[numbers=left,escapechar=|]
+let cluster_sums_stream [k] [n] [d]
+                        (counts: [k]i32)
+                        (points: [n][d]f32)
+                        (membership: [n]i32)
+                        : [k][d]f32 =
   stream_red
-    (\(acc: [k][d]f32) (elem: [k][d]f32) ->
-       map add_centroids acc elem)
-    (cluster_sums_seq counts)
-    (zip points membership)
+    (\(x: [k][d]f32) (y: [k][d]f32) -> |\label{cluster_sums_stream_op_begin}|
+       map add_centroids (zip x y)) |\label{cluster_sums_stream_op_end}|
+    (cluster_sums_seq counts)  |\label{cluster_sums_stream_chunk}|
+    (zip points membership) |\label{cluster_sums_stream_zip}|
 \end{lstlisting}
 \caption{Chunked parallel calculation of means.}
 \label{fig:stream-means}
@@ -1535,12 +1618,11 @@ reduction function will be fully parallelised as a segmented
 reduction, and the body of the chunk function will be sequentialised.
 
 The performance of the \StreamRed{} version compared to explicitly
-parallel and equential code is shown in
-Table~\ref{tab:streaming-perf}.  We see that the fully parallel
-version running on a GPU is in fact slower than the sequential
-version, because it does significantly more work.  The \StreamRed{}
-version performs well both when compiled to parallel code, and when
-compiled to sequential code.
+parallel and equential code is shown in \cref{tab:streaming-perf}.  We
+see that the fully parallel version running on a GPU is in fact slower
+than the sequential version, because it does significantly more work.
+The \StreamRed{} version performs well both when compiled to parallel
+code, and when compiled to sequential code.
 
 \begin{table}
   \centering
@@ -1566,6 +1648,113 @@ compiled to sequential code.
     $k=5$, $n=10,000,000$, and $d=3$.}
   \label{tab:streaming-perf}
 \end{table}
+
+\subsubsection{Sobol Sequences}
+\label{sec:sobolsequences}
+
+\begin{figure}
+\begin{lstlisting}[numbers=left]
+let gray_code (x: i32): i32 =
+  (x >> 1) ^ x
+
+let test_bit (x: i32) (ind: i32): bool =
+  (x & (1 << ind)) == (1 << ind)
+
+let sobol_ind [n] (dir_v: [n]i32) (x: i32): i32 =
+  let reldv_vals = map (\dv i ->
+                         if test_bit (gray_code x) i
+                         then dv else 0)
+                       dir_v [1..<n]
+  in reduce (^) 0 reldv_vals
+
+let sobol_ind [n] _r(dir_v: [n]i32) (x: i32): f32 =
+  f32 (sobol_ind dir_v x) / (2.0 ** f32 n)
+
+let sobol_par [n] (k: i32) (dir_v: [n]i32): f32 =
+  let sobol_nums =
+    map (sobol_ind_r dir_v) (map (+1) (iota k))
+  in reduce (+) 0.0 sobol_nums
+\end{lstlisting}
+\caption{\kw{map}-parallel calculation of Sobol numbers.}
+\label{fig:parallel-sobol}
+\end{figure}
+
+This section introduces the \StreamMap{} SOAC.  The goal is the same
+as previously: we wish to formulate our program in a way that gives
+the compiler freedom to exploit exactly as much parallelism as is
+profitable on the target hardware.
+
+The problem is as follows: we wish to generate $n$ entries from a
+Sobol sequence~\cite{Sobol}, and compute their sum.  Sobol sequences
+are quasi-random low-discrepancy sequences frequently used in
+Monte-Carlo algorithms.  While the summation is contrived, the need to
+efficiently generate Sobol sequences comes from the OptionPricing
+benchmark presented in \cref{sec:finpar}.  Sobol numbers can be
+computed by a \kw{map}-parallel formula, or by a cheaper (recurrence)
+one, but which requires \kw{scan}~\cite{FinPar:TACO}.  This property
+can be expressed elegantly with \StreamMap{}, whose function accepts
+an input chunk, and must produce an output chunk of the same size.
+Chunks are processed in parallel.  For this program, the chunk
+function applies the \kw{map}-parallel formula once, then applies the
+\kw{scan} formula.
+
+\begin{figure}
+\begin{lstlisting}[numbers=left]
+let index_of_least_significant_0 (x: i32): i32 =
+  loop (i = 0) while i < 32 && ((x>>i)&1) != 0 do i + 1
+
+let rec_m [n] (dir_v: [n]i32) (i: i32): i32 =
+  let bit = index_of_least_significant_0 i
+  in dir_v[bit]
+
+let sobol_chunk [n]
+                (dir_v: [n]i32)
+                (x: i32)
+                (chunk: i32)
+                : [chunk]f32 =
+  let sob_beg  = sobol_ind dir_v (x+1)
+  let contrbs  = map (\i -> if i==0 then sob_beg
+                                    else rec_m dir_v (i+x))
+                     [0..<chunk]
+  let vct_ints = scan (^) 0 contrbs
+  in map (\y -> f32 y / (2.0 ** f32 n)) vct_ints
+
+let sobol_stream [n] (k: i32) (dir_v: [n]i32): f32 =
+  let sobol_nums = stream_map
+                     (\(xs: [chunk]i32): [chunk]f32 ->
+                        sobol_chunk dir_v xs[0] chunk)
+                     [0..<k]
+  in reduce (+) 0.0 sobol_nums
+\end{lstlisting}
+\caption{Chunked calculation of Sobol numbers.}
+\label{fig:streamed-sobol}
+\end{figure}
+
+An implementation of the \texttt{map}-parallel formula to a sequence
+of
+$k$ Sobol numbers is shown in \cref{fig:parallel-sobol}.  The
+\texttt{[1..<n]} expression creates an array of the integers from
+$0$ to \texttt{n-1}, and the precise Sobol sequence generated is
+defined by the \textit{direction vector} \texttt{dir\_v}.  The
+independent formula works by essentially performing a
+\kw{map}-\kw{reduce} computation for every Sobol number, with the
+number of iterations being the size of the direction vector.
+Typically, this number is fairly small (e.g., $31$) as it is limited
+to the number of bits in an integer.
+
+An implementation of the recurrent formula is shown in
+\cref{fig:streamed-sobol}.  Notice that for each chunk, we first apply
+the function \texttt{sobol\_ind} to compute the first Sobol number,
+then apply a combination of \kw{map} and \kw{scan} to compute the rest
+of the chunk.  While \kw{map} and \kw{scan} are parallel operators,
+the compiler will sequentialise them during code generation, and
+instead use the chunk size to control how much parallelism to exploit.
+
+Note that the two formulae are algorithmically very different.  There
+is little chance that a compiler can efficiently derive one from the
+other.  The performance of the StreamMap{} version compared to
+explicitly parallel and sequential code is shown in
+\cref{tab:streaming-perf}.
 
 \section{Interoperability}
 \label{sec:interoperability}

@@ -145,6 +145,7 @@ irregular array, as the size \lstinline{p} of \lstinline{cs} is
 variant to the second \lstinline{map}.
 
 \section{Rules for Moderate Flattening}
+\label{sec:moderate-flattening-rules}
 
 \begin{figure}
 \sempart{Basic Flattening Rules}{\Sigma \vd e \Rightarrow e}
@@ -292,16 +293,15 @@ let a = (let b = x+1 in b+2)
 in replicate n a
 \end{lstlisting}
 
-Rule~\G{5} allows for \kw{reduce}-\kw{map} interchange
-where it is assumed that the source neutral reduction element is a
-replicated value.  The original pattern appears in K-means (see
-Figure~\ref{fig:stream-counts}) as a reduction with a vectorized
-operator, which is inefficient on a GPU if executed as such. The
-interchange results in a segmented-reduce operator (applied on
-equally-sized segments), at the expense of transposing the input
-array(s).  This rule demonstrates a transformation of both schedule
-and (if the transposition is manifested) data of the program being
-optimized.
+Rule~\G{5} allows for \kw{reduce}-\kw{map} interchange where it is
+assumed that the source neutral reduction element is a replicated
+value.  The original pattern appears in $k$-means (see
+\cref{fig:stream-means}) as a reduction with an array operator, which
+is inefficient on a GPU if executed as such. The interchange results
+in a segmented-reduce operator (applied on equally-sized segments), at
+the expense of transposing the input array(s).  This rule demonstrates
+a transformation of both schedule and (if the transposition is
+manifested) data of the program being optimized.
 
 Rule~\G{6} allows for distributing a \kw{rearrange} construct by
 rearranging the outer array (input to the map nest) with an expanded
