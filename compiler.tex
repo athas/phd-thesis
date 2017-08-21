@@ -26,6 +26,16 @@
 
 \chapter{Overview and Uniqueness Types}
 
+This chapter contains three primary elements: First, an overview of
+the compiler design, which an emphasis on how the program is
+transformed as it proceeds through the pipeline
+(\cref{sec:compiler-design}).  Second, a simplified Futhark core
+language that will be used in the following chapters to describe the
+operations performed by the Futhark compiler
+(\cref{sec:futhark-core-ast}).  Third, a formalisation of the
+uniqueness type system expressed on the core language
+(\cref{sec:uniqueness-formalism}).
+
 The simplification engine encompasses well established optimisations
 such as inlining, copy propagation, constant folding,
 common-subexpression elimination, dead-code elimination, and hoisting
@@ -40,7 +50,194 @@ that the asymptotic complexity (in number of operations) of the
 original program is preserved, but rely on the simplification engine
 to reduce the overhead to be negligible in the common case.
 
-\section{Abstract Syntax}
+\section{Compiler Design}
+\label{sec:compiler-design}
+
+The Futhark compiler is implemented in Haskell, and is designed as a
+conventional syntax-directed translator.  The compiler is comprised as
+a number of \textit{passes}, which can be seen as functions that
+accept a program as input, and produce a program as output.  Some
+passes perform rewrites ofp a program in some representation, while
+other passes lower the program to a more specialised or lower-level
+representation.
+
+The compiler contains two different compiler pipelines; one for
+generating a sequential program, and one for generating a program with
+parallel code.  Parallelism in the generated code is expressed as
+OpenCL~\cite{Stone:2010:OPP:622179.1803953} kernels.  While OpenCL is
+a hardware-agnostic API, and we generate portable OpenCL code, many of
+the optimisations we perform make assumptions that are specific to
+GPUs.  We might not achieve desired performance if we executed the
+generated OpenCL code on, for example, FPGAs or other such exotic
+platforms.  We have, however, noted decent performance on multicore
+CPUs, but this is not a direction we shall investigate in this thesis.
+
+The initial passes of the sequential and parallel pipelines are
+identical, but they differ after a certain point.  In this section,
+and the thesis as a whole, we will focus on the parallel compilation
+pipeline, as it is by far the more complicated of the two.
+
+The pipeline proceeds with the following passes in order as follows:
+
+\begin{description}
+\item[Internalisation and Desugaring] The source Futhark
+language is translated into the core language
+(\cref{sec:futhark-core-ast}).  In particular, all tuples are
+flattened, and arrays of tuples are transformed into tuples of arrays,
+as shown on \ref{fig:calc-tuple-transform}.  This is also the pass
+where where size inference is performed (\cref{chap:size-analysis}).
+
+\item[Inlining and Dead Function Removal] All functions are
+inlined.  As the Futhark language presently does not support recursive
+functions, this is always possible.  This may result in significant
+growth in code size, and so future work should investigate more
+conservative approaches.  Inlining is critical to making subsequent
+optimisations possible, however.  On GPUs, our main target platform,
+all functions inside kernels are automatically inlined in any case, so
+we do not lose much by inlining at the Futhark-level sas well.
+
+\item[SOAC Fusion] SOACs in a producer-consumer relationship, or
+simply adjacent and looping over arrays of identical size, are fused
+(\cref{chap:fusion}).
+
+\item[Kernel Extraction] A moderate flattening algorithm is
+applied to the program, which transforms nests of SOACS into
+flat-parallel kernels (\cref{chap:kernel-extraction}).  The kernels
+produced here are not yet low-level GPU kernels, but a higher-level
+representation that still abstracts many details, in particular issues
+of memory allocation.  Nested parallelism is gone after this pass.
+
+\item[Coalescing Fixes] The kernels generated in the previous
+pass are inspected, and non-coalesced array access patterns are
+resolved by semantically transposing the arrays in question
+(\cref{sec:automatic-coalescing}).
+
+\item[Loop Tilng] Loop tiling is performed inside the generated
+kernels (\cref{sec:automatic-tiling}).  This is the last pass we
+discuss in detail in this thesis---the remainder are concerned with
+various technical minutiae, which, while extremely time-consuming and
+challenging to implement, are of lesser scientific importance.
+
+\item[Memory Allocation] Explicit allocations are inserted in
+the program, in a scheme similar to region
+inference~\cite{mlkit_retrospective}.  Every array becomes associated
+with a ``memory block'', the allocation of which can be hoisted out of
+the recurrence or branch where the array itself is constructed.  To
+handle cases where pre-allocation is not possible (such as a loop
+where the array size changes for every iteration), the
+existential-types mechanism also employed for size inference
+(\cref{chap:size-analysis}) is used.  The ability for the compiler to
+manipulate memory allocations as program constructs is important.  We
+use this to arrange the program such that all memory is pre-allocated
+before entering GPU kernels, inside which allocation is not supported.
+
+\item[Double Buffering] We perform double buffering to enable
+the hosting of memory allocations out of loops (in particular loops
+that are inside parallel kernels).  For technical reasons, we
+currently do not perform double buffering in the usual way, with
+pointer swapping, but instead insert extra copies for every iteration
+of the loop.  In \cref{sec:rodinia} we shall see an example where this
+significantly impacts our performance.
+
+\item[Memory Expansion] It is not safe to naively hoist
+allocations out of parallel kernels.  When hoisting such allocations,
+we first have to perform \textit{expansion}, such that one per-thread
+private allocation of $b$ bytes becomes one shared allocation of
+$n\times{}b$ bytes, where $n$ is the number of threads.  This requires
+all allocations to be at the top level of kernels, and for their size
+to be expressible in terms of (or at least bounded by) variables whose
+value is known before the kernel.
+
+\item[Imperative IR Code Generation] The flat-parallel Futhark
+program with explicit allocations is transformed into a low-level
+imperative intermediate representation (IR).  This IR is similar to C,
+but significantly simpler, and much more explicit.  No optimisations
+are performed on this representation.  The IR has special constructs
+for representing GPU kernels, whose bodies are also expressed with the
+imperative IR.  This pass fails if any allocations remain inside
+parallel kernels.
+
+\item[Final Code Generation] The imperative IR is transformed
+into host-level (CPU) code and actual OpenCL kernels.  The host-level
+code is either C or Python, with calls to the OpenCL library, while
+OpenCL kernels are in OpenCL C (a restricted dialect of C).  We write
+the result to one or more files, and, depending on the compilation
+options, may invoke a C compiler to generate an executable.
+\end{description}
+
+\subsection{Simplification Passes}
+
+The preceding list of passes is incomplete.  Between almost every
+pass, we perform a range of simplifications and conventional
+optimisations.  There are too many in number, and too individually
+uninteresting, to be discussed in detail, but a few deserve mention:
+
+\begin{description}
+\item[Copy propagation, constant folding, and CSE] The usual bevy of
+  of scalar optimisations is performed, with range analysis and
+  propagation performed to support the elimination of (some) bounds-
+  and size checks.
+\item[Aggressive hoisting] The Futhark compiler aggressively hoists
+  expressions out of loops and branches, where possible and safe.
+  Care is taken to avoid hoisting potentially expensive constructs out
+  of branches.
+\item[Dead code removal] We remove not merely expressions whose
+  results are never used, but also rewrite expressions where only part
+  of the result is used.  Consider for example an \kw{if} that returns
+  a pair, where only one component of the pair is subsequently used.
+\item[Removal of single-iteration loops and SOACs] Any loop with a
+  single iteration, or a SOAC whose input array has a constant size of
+  $1$, can be trivially substituted with its body.  This is used to
+  enable efficient sequentialisation (see \cref{sec:streamseq-fusion}
+  for an example).
+\end{description}
+
+Most of the simplifications are performed by a general simplification
+engine, which traverses the program and applies a collection of
+rewrite rules to every expression.  The process is repeated until a
+fixed point is reached.  This approach is fairly similar to the one
+used by the Glasgow Haskell Compiler (GHC)~\cite{jones2001playing}.
+The main difference is that in GHC the rules are expressed as
+user-provided equalities, but the simplification rules in Futhark are
+hardwired into the compiler in the form of monadic Haskell functions.
+This allows the Futhark rewrite rules to be significantly more
+powerful, as they can inspect the surrounding environment, but they
+are not user-extensible.  As an example, \cref{fig:removeDeadMapping}
+defines a rule that removes redundant \kw{reshape} operations.  This
+is the sole exception to our general policy of not showing compiler
+implementation code in this thesis.
+
+\begin{figure}
+\begin{lstlisting}[basicstyle=\small\ttfamily,language=Haskell]
+removeDeadMapping :: (MonadBinder m,
+                      Op (Lore m) ~ SOAC (Lore m))
+                     => BottomUpRule m
+removeDeadMapping (_, used)
+                  (Let pat _ (Op (Map cs width fun arrs))) =
+  let ses = bodyResult $ lambdaBody fun
+      isUsed (bindee, _, _) =
+        (`UT.used` used) $ patElemName bindee
+      (pat',ses', ts') =
+        unzip3 $ filter isUsed $
+        zip3 (patternElements pat) ses $ lambdaReturnType fun
+      fun' = fun { lambdaBody =
+                     (lambdaBody fun) { bodyResult = ses' }
+                 , lambdaReturnType = ts'
+                 }
+  in if pat /= Pattern [] pat'
+     then letBind_ (Pattern [] pat') $
+            Op $ Map cs width fun' arrs
+     else cannotSimplify
+removeDeadMapping _ _ = cannotSimplify
+\end{lstlisting}
+  \caption{An example of a simplification rule from the Futhark
+    compiler (slightly reformatted for presentation purposes).  This
+    rule removes \kw{map} results that are never used.}
+  \label{fig:removeDeadMapping}
+\end{figure}
+
+\section{Abstract Syntax of the Core IR}
+\label{sec:futhark-core-ast}
 
 In this section we describe the abstract syntax of a simplified form
 of the Futhark intermediate representation (IR).  Whenever $z$ is an

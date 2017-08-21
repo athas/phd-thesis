@@ -1721,7 +1721,7 @@ let sobol_chunk [n]
 
 let sobol_stream [n] (k: i32) (dir_v: [n]i32): f32 =
   let sobol_nums = stream_map
-                     (\(xs: [chunk]i32): [chunk]f32 ->
+                     (\[chunk] (xs: [chunk]i32): [chunk]f32 ->
                         sobol_chunk dir_v xs[0] chunk)
                      [0..<k]
   in reduce (+) 0.0 sobol_nums

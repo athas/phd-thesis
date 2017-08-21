@@ -243,7 +243,8 @@ uses block decomposition, and the block size (not to be confused with
 the CUDA term ``thread block size'', which is something else) is a
 programmer-given constant.  Both the reference and Futhark
 implementation simply hard-code a constant that appears to give good
-performance in practise: $32$.
+performance in practise: $32$ for Futhark, and $16$ for the reference
+implementation.
 
 \subsection{Four Benchmarks from Parboil}
 

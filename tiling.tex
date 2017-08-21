@@ -7,14 +7,17 @@ consequence, accessing memory efficiently is of critical importance to
 obtaining high performance.  Furthermore, while CPUs have multiple
 layers of automatic caching to help mitigate the effect of the memory
 wall, GPUs typically have only a single very small level-1 cache.
-This chapter presents two novel optimisations that improves the memory
-access patterns of Futhark programs, by optimising both spatial and temporal locality of reference.
+This chapter presents how two well-known locality-of-reference
+optimisations can be applied to kernels produced by moderate
+flattening.  The optimisations improves the memory access patterns of
+Futhark programs by optimising both spatial and temporal locality of
+reference.
 
 \Cref{sec:automatic-coalescing} shows how arrays traversed in a kernel
 can have their representation in memory modified to ensure that the
 traversal is efficient.  This form of optimisation for spatial
 locality of reference, which changes not just the \textit{code}, but
-also the \textit{data}, is unusual for a compiler.
+also the \textit{data}, is not usually used by compilers.
 \Cref{sec:automatic-tiling} shows a technique for temporal locality of
 reference, via loop tiling, that uses the local memory of the GPU as a
 cache to minimise the amount of traffic to global memory.  While loop
@@ -48,13 +51,13 @@ yet again, with a few more operations.  Their types are shown on
 \item[\kw{kernel} ($\nseq{d}{n}$)
   $(\Fn{\nseq{\tau}{m}}{\nseq{v}{n}}{e})$] models a simple
   $n$-dimensional GPU kernel, loosely corresponding to a flattened
-  form of $n$ \kw{map}-nets, where nest $i$ has size $d_{i}$.
-  Semantically, the kernel function is executed for every thread, and
-  passed $n$ \textit{thread indices}, one for every dimension.  If the
-  kernel function returns $m$ values, then the \kw{kernel} construct
-  as a whole returns $m$ arrays, each of of shape
-  $[d_{1}]\cdots[d_{n}]$.  This corresponds to each thread returning a
-  single value.
+  form of $n$ \kw{map}-nets, where nest number $i$ (counted from
+  outside-in) has size $d_{i}$.  Semantically, the kernel function is
+  executed for every thread, and passed $n$ \textit{thread indices},
+  one for every dimension.  If the kernel function returns $m$ values,
+  then the \kw{kernel} construct as a whole returns $m$ arrays, each
+  of of shape $[d_{1}]\cdots[d_{n}]$.  This corresponds to each thread
+  returning a single value.
 \item[\kw{local} $c$ $x$] semantically returns a copy of $x$.
   Operationally, the intent is to copy the array $x$ to local memory
   via collective copying by those threads that differ in their thread
@@ -187,10 +190,10 @@ the default for Futhark expressions.
   at least one of the indices is variant to the thread indices.  An
   array index $y_{i}$ is variant to a thread index if there is a
   (conservatively estimated) data dependency from one of the thread
-  indices passed to the kernel function to $y_{i}$.  In such cases,
-  manifest with the permutation $(n,\ldots,m-1,0,\ldots,n-1)$,
-  corresponding to interchanging the sequentially traversed dimensions
-  outermost.
+  indices passed to the kernel function to $y_{i}$.  In such cases, we
+  use \kw{manifest} with the permutation
+  $(n,\ldots,m-1,0,\ldots,n-1)$, corresponding to interchanging the
+  sequentially traversed dimensions outermost.
 
   The (potentially wrong) assumption is that the dimensions that are
   not indexed will be traversed sequentially.  It remains future work
@@ -207,7 +210,7 @@ the default for Futhark expressions.
 Note that the transformation is on index expressions, not on arrays.
 The same array \lstinline{xss} may be indexed in different ways within
 the same kernel, and each distinct index expression may give rise to a
-unique new \kw{manifest} array.
+unique new \kw{manifest} array.\fixme{Not necessarily ideal/optimal.}
 
 \subsection{Viability of the Optimisation}
 
