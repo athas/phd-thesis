@@ -661,7 +661,7 @@ is needed to saturate the machine, but no more.
 
 \begin{figure*}
   \centering
-  
+
   \caption{The runtime of a summation implemented as either a tree reduction or a chunked tree reduction.}
   \label{fig:tree-vs-chunked}
 \end{figure*}
@@ -1758,6 +1758,401 @@ explicitly parallel and sequential code is shown in
 
 \section{Interoperability}
 \label{sec:interoperability}
+
+\section{Related Work on Automatic Parallelisation}
+
+This section discusses three simplified Fortran 77 examples from the
+DYFESM and BDNA benchmarks of the PERFECT club
+suite~\cite{Berry88theperfect}, whose automatic parallelisation
+requires complex compiler
+analysis~\cite{CosPLDI,CIVan,OanceaMon}---for example based on (i)
+inter-procedural summarization of array references, (ii) extraction of
+runtime (sufficient) conditions for safe parallelization, and (iii)
+special treatment of a class of induction variables (CIV) that cannot
+be expressed as a closed-form formula in terms of loop indices.
+%
+Such analysis are beyond the capability of the common programmers and
+commercial compilers, and it would not be necessary if application
+parallelism was expressed explicitly by means of bulk-parallel
+operators, as in a data-parallel language.
+
+The first example, presented in Section~\ref{subsec:eg1}, semantically
+corresponds to a map applied to an irregular two-dimensional array,
+but the low level implementation---which uses indirect arrays,
+unspecified preconditions, and array reshaping at call
+sites----complicates analysis.
+
+The second example, presented in Section~\ref{subsec:eg2}, shows an
+example in which the same loop may encode two semantically different
+parallel operators: a map and a generalized reduction.  Further
+difficulties refer to the compiler having to reverse engineer users
+optimizations, such as mapping two semantically different arrays to
+the same memory block.
+
+The third example, presented in Section~\ref{subsec:eg3}, shows a loop
+that semantically corresponds to the sequential composition of a
+filter and a map.  In this case the analysis has to be extended to (i)
+accommodate ``conditional-induction variables'' (CIV), and to (ii)
+reverse-engineer a composition of parallel-operators that is
+semantically equivalent with the original sequential loop.
+
+\subsection{Example 1: Difficult to Parallelise Map}
+\label{subsec:eg1}
+
+\begin{figure}[bt]
+
+\begin{lstlisting}[language=fortran]
+SUBROUTINE solvh(HE,XE,IA,IB)     SUBROUTINE geteu(XE,SYM,NP)
+ DIMENSION  HE(32, *), XE(*)       DIMENSION  XE(16,*)
+ READ(*,*) SYM, NS, NP, N
+ CCC    SOLVH_do20
+ DO i = 1, N, 1                     DO i = 1, NP, 1
+  DO k = 1, IA(i), 1                 DO j = 1, 16, 1
+   id = IB(i) + k - 1                 XE(j, i) = ...
+   CALL geteu    (XE, SYM,  NP)      ENDDO
+   CALL matmult(HE(1,id),XE,NS)     ENDDO
+   CALL solvhe   (HE(1,id), NP)
+  ENDDO                           END
+ENDDO END
+                                  SUBROUTINE solvhe(HE,NP)
+SUBROUTINE matmult(HE,XE,NS)       DIMENSION  HE(8, *)
+  DIMENSION HE(*), XE(*)
+                                   DO j = 1, 3, 1
+  DO j = 1, NS, 1                   DO i = 1, NP, 1
+    HE(j) = XE(j)                    HE(j, i)=HE(j, i)+..
+    XE(j) = ...                     ENDDO
+ENDDO END                         ENDDO END
+\end{lstlisting}
+
+\caption{Simplified Loop SOLVH\_DO20 from DYFESM.}
+\label{fig:SolvhDO20Code}
+\end{figure}
+
+\Cref{fig:SolvhDO20Code} shows the simplified version of loop
+\texttt{solvh\_do20} from DYFESM benchmark of the PERFECT club
+benchmark suite.
+%
+The aim is to prove that the (outermost) loop \texttt{solvh\_do20} is
+parallel, in the sense that no dependencies exists between loop
+iterations---in essence the loop is semantically an irregular
+\texttt{map}, each iteration of it producing non-overlapping subsets
+of the elements of the \texttt{XE} and \texttt{HE} arrays.
+
+The reasoning necessary for proving loop \texttt{solvh\_do20} parallel
+is nontrivial~\cite{CosPLDI}, and in fact impossible using purely
+static techniques.  The presence of exploitable parallelism is
+dependent on the statically unknown accesses using the indirect arrays
+\texttt{IA} and \texttt{IB}, which semantically model irregular 2D
+arrays.
+
+The reasoning can proceed by looking at \texttt{XE} and \texttt{HE} as
+unidimensional arrays, and by observing that \texttt{XE} is written in
+subroutine \texttt{geteu} on all indexes belonging to interval
+\texttt{[1,16*NP]} and is read in \texttt{matmult} on indexes in
+\texttt{[1,NS]}.
+
+Similarly, \texttt{HE} is written in \texttt{matmult} on all indexes in interval
+\texttt{[$\tau$+1,$\tau$+NS]}, and read and written in \texttt{solvhe} on a subset
+of indexes in interval \texttt{[$\tau$+1,$\tau$+8*NP-5]}, where
+$\tau$\texttt{=32*(id-1)} is the array offset of parameter \texttt{HE(1,id)}.
+
+\textit{Read-After-Write independence} of the outermost loop can be
+established by showing that the per-iteration read set of \texttt{XE}
+and \texttt{HE} are covered by their per-iteration write set. This
+corresponds to solving interval-inclusion equations
+\[
+  \texttt{[1,NS]$\subseteq$[1,16*NP]}
+\]
+and
+\[
+  \texttt{[$\tau$+1,$\tau$+8*NP-5]$\subseteq$[$\tau$+1,$\tau$+NS]},
+\]
+yielding predicate
+\[
+  \texttt{NS$\leq$16*NP $\wedge$ 8*NP$<$NS+6}
+\]
+as sufficient condition for the flow independence of arrays
+\texttt{XE} and \texttt{HE}, respectively.
+
+For \textit{Write-After-Write independence}, one can observe that the
+per-iteration write set of array \texttt{XE} is invariant to the
+outermost loop, hence \texttt{XE} can be privatised and updated at the
+very end with the values written by the last iteration (i.e.,
+static-last value).
+
+The rationale for the write-after-write independence of array
+\texttt{HE} is more complicated: The write set of an iteration
+\texttt{i} of loop \texttt{solvh\_do20},
+denoted \texttt{WF$_i$}, can be overestimated to the interval of indices:
+\[
+  \texttt{[32*(IB(i)-1),32*(IB(i)+IA(i)-2)+NS-1]}
+  \]
+  The aim is to show that
+  \[
+    \forall i \neq j, \ \mbox{\texttt{WF}}_i \ \cap
+    \mbox{\texttt{WF}}_j \ = \ \emptyset
+\]
+A sufficient condition~\cite{OanceaMon} that works in practice is
+derived by checking the monotonicity of such intervals, i.e., the
+upper bound of \texttt{WF$_i$} is less than than lower bound of
+\texttt{WF$_{i+1}$}, for all $i$.
+This results in the predicate
+\[
+  \wedge_{i=1}^{N-1}\texttt{NS$\leq$32*(IB(i+1)-IA(i)-IB(i)+1)}
+\]
+that verifies output independence under $O(\texttt{N})$ runtime
+complexity.
+
+\subsection{Example 2: Reduction or Map?}
+\label{subsec:eg2}
+
+Imperative techniques typically identify generalized-reduction
+patterns on an array (or scalar) variable \texttt{A} by checking that
+all its uses inside the target loop are of the form \texttt{A[x] =
+  A[x] $\oplus$..}, where \texttt{x} is an arbitrary expression and
+$\oplus$ is a (known) binary associative operator.
+
+The code below is an example of a generalized reduction, and can be
+parallelized by by computing the changes to \texttt{A} locally on each
+processor and by merging (adding) them in parallel at the end of the
+loop.
+
+\begin{lstlisting}[language=fortran]
+DO i = 1, N, 1
+    A(B(i)) = A(B(i)) + C(i)
+ENDDO
+\end{lstlisting}
+
+However, if \texttt{B} is an injective mapping of indices, this
+treatment is unnecessary because each iteration reads and writes
+distinct elements of \texttt{A}, and thus each processor can work
+safely directly on the shared array \texttt{A}.  In Futhark terms, in
+the latter case the loop is actually a composition of the parallel
+operators \kw{map} and \kw{scatter}.
+
+Identifying the case when a generalized reduction is a map can
+requires summarization of the iteration-wise read-write set of the
+target array \texttt{A}, denoted \texttt{RW$_i$} and checking that
+they do not overlap.  This can be stated as the following equality:
+\[
+  \cup_{i=1}^{N}(\texttt{RW}_i\cap\cup_{k=1}^{i-1}(\texttt{RW}_k))=\emptyset
+\]
+Finally, sufficient conditions for identifying the \kw{map} case can
+be extracted from this equation, for example by sorting the
+\texttt{RW$_i$} sets (as intervals), and then checking
+non-overlap. Such analysis is known as \textit{runtime reduction}
+(RRED) in the literature~\cite{CosPLDI}, but it would not be necessary
+if the map-scatter parallelism would be explicitly expressed in the
+first place.
+
+Another significant challenge to automatic parallelization are
+memory optimizations performed by the programmer. The classical
+example is privatization -- an analysis that determines whether
+it is safe that the declaration of a variable is moved from outside
+to inside the loop.   Another example is when two semantically
+different arrays are combined into the same array, as 
+illustrated in the example below. 
+
+\begin{lstlisting}[language=fortran]
+      DO i = 1, N, 1
+S1:       A(i) = C(i)*2
+S2:       A(B(i)) = A(B(i)) + C(i)
+\end{lstlisting}
+
+The statements \texttt{S1} and \texttt{S2} semantically build two different
+arrays: one which is constructed by a map operation, and another
+by a generalized-reduction operation.
+
+To disambiguate such cases, compiler analysis needs to support an
+extended reduction pattern (EXT-RRED), where the target array
+\texttt{A} is allowed to be (only) written outside reduction
+statements, as long as the write accesses do not precede on any
+control-flow-graph path any reduction statement.  Note that instances
+of EXT-RRED have non-empty per-iteration write-first (\texttt{WF$_i$})
+and read-write (\texttt{RW$_i$}) sets and empty read-only set.
+
+Enabling parallel execution in this case requires proving:
+\begin{itemize}
+\item Read-After-Write independence: \texttt{$\cup_{i=1}^N$(WF$_i$)
+    $\cap$ $\cup_{i=1}^{N}$(RW$_i$)=$\emptyset$}, and either
+\item Write-After-Write independence:
+  $\cup_{i=1}^{N}(\texttt{WF}_i \cap \cup_{k=1}^{i-1}(\texttt{WF}_k))=\emptyset$ or
+\item privatisation by static-last value:
+  $\cup_{i=1}^{N}(\texttt{WF}_i) \subseteq\texttt{WF}_{i\leftarrow N}$
+\end{itemize}
+
+Loops MXMULT\_DO10 and FORMR\_DO20 that cover almost $55\%$ of
+DYFESM's sequential runtime, exhibit both patterns discussed in this
+section.
+
+\subsection{Example 3: Conditional Induction Variables}
+\label{subsec:eg3}
+
+Another challenge for automatic parallelisation are the so called
+``conditional-induction variables'' (CIV) that represent scalars that
+do not form a uniform recurrence, e.g., their increment is not
+constant across the iteration space of the analysed loop.
+
+\begin{lstlisting}[language=fortran,mathescape=true,escapechar=|]
+    civ@1 = 0
+    DO i = 1, N, 1
+      civ@2=$\phi$(civ@1, civ@4)
+      IF C(i) .GT. 0 THEN
+        DO j = 1, C(i), 1
+          X(j+civ@2) = ...
+        ENDDO
+        civ@3 = C(i) + civ@2
+      ENDIF
+      civ@4 = $\phi$(civ@3, civ@2)
+    ENDDO
+    civ@5=$\phi$(civ@4, civ@1)
+\end{lstlisting}
+
+The code above shows a simplified version of loop
+\texttt{CORREC\_do401} from BDNA benchmark, as an example of
+non-trivial loop that uses both CIV and affine-based subscripts.
+Variable \texttt{civ} is written directly in (gated)
+single-static-assignment (SSA) notation.
+
+For example, statement \texttt{civ@2=$\phi$(civ@1,civ@4)} has the
+semantics that variable \texttt{civ@2} takes either the value of
+\texttt{civ@1} for the first iteration of the loop or the value of
+\texttt{civ@4} for all other iterations.
+
+The gist of the parallelisation technique~\cite{CIVan} is to aggregate
+symbolically the CIV references on every control-flow path of the
+analyzed loop, in terms of the CIV values at the entry and end of each
+iteration or loop.  The analysis succeeds if (i) the symbolic-summary
+results are identical on all paths and (ii) they can be aggregated
+across iterations in the interval domain.
+%
+Parallelisation requires two main steps:
+\begin{itemize}
+    \item[1] proving the absence of cross-iteration dependencies 
+        on array \texttt{X}. 
+%        do not raise any cross-iteration dependencies,
+%        by symbolically expressing read/write (index) 
+%        summaries in terms of \texttt{civ@2} and \texttt{civ@4} 
+%        and by using the monotonicity of \texttt{civ@2}
+%        values across across iterations, and
+    \item[2] computing in parallel the values of \texttt{civ}
+    at the beginning of each iteration, i.e., the values of \texttt{civ@2}. 
+\end{itemize}
+
+\paragraph{Step 1.} 
+The write accesses of the inner loop can be summarized
+by the interval
+\[
+  \texttt{WF$_{inner-loop}$=[civ@2,civ@2+C(i)-1]}.
+\]
+On the path on which condition \texttt{C(i).GT.0} holds, we have
+\[
+  \texttt{civ@4$=$civ@3$=$civ@2+C(i)}
+\]
+and the path summary is
+rewritten as
+\[
+  \texttt{W$_i^{THEN}$ = [civ@2,civ@4-1]}.
+\]
+
+The other path neither updates \texttt{X} nor increments \texttt{civ},
+hence it can use the same symbolic summary
+\[
+  \texttt{W}_i^{ELSE} = \texttt{[civ@2,civ@4-1]} = \emptyset
+  \]
+because on that path \texttt{civ@2=civ@4>civ@4-1}, and an interval
+having its lower bound greater than its upper bound is considered
+empty.
+
+It follows that the summaries of the \texttt{THEN} and \texttt{ELSE} branches
+can be unified; the iteration summary being
+\[
+  \texttt{$W_i$~=~[civ@2,civ@4-1]}.
+\]
+
+Loop independence can now be proven by verifying the set equation
+\[
+  \texttt{$\cup_{i=1}^{N}$(W$_i$ $\cap$ $\cup_{k=1}^{i-1}$(WF$_k$))=$\emptyset$},
+\]
+which holds because \texttt{$\cup_{k=1}^{i-1}$(WF$_k$)} can be symbolically
+computed to be \texttt{[1, civ@2$^i$-1]} by using:
+\begin{itemize}
+    \item the implicit invariant \texttt{civ@4$^{i-1}\=$civ@2$^{i}$},
+            i.e., the \texttt{civ} value at an iteration end is equal to 
+            the \texttt{civ} value at the entry of the next iteration, and 
+    \item the monotonicity of the \texttt{civ@2} values 
+          (because they are incremented by \texttt{C(i)} only when
+            \texttt{C(i)} is positive).
+\end{itemize}
+
+\paragraph{Step 2.} While the accesses to \texttt{X} have been
+disambiguated, \texttt{civ} still remains the source of cross
+iteration dependences.
+
+The CIV values at the beginning of each iteration can be computed in
+parallel by the following technique:
+%
+First, the slice that computes \texttt{civ} in an iteration is
+extracted and it is checked that \texttt{civ} appears only in
+reductions statement in it. Second, the \texttt{civ@2} is initialized
+(in the slice) to the neutral-element of the reduction
+operator. Third, the obtained slice is mapped across the original
+iterations space, and the result is subjected to an exclusive scan.
+
+The Futhark code below illustrates the result of this technique on our
+example\footnote{Except that \kw{scan} in Futhark is inclusive, not
+  exclusive.}:
+
+\begin{lstlisting}
+scan (+) 0 (map (\i -> if C[i] > 0 then C[i] else 0)
+                [1...N])
+\end{lstlisting}
+
+We conclude by remarking that in addition to ``heroic'' analysis 
+necessary for proving the absence of cross-iteration dependences 
+for array \texttt{X} that uses CIV-based accesses, 
+the compiler also had to re-engineer the computation of \texttt{civ} 
+values from inherently sequential to parallel. One could argue 
+that, if parallel execution is desired, the code should have been 
+written from the very beginning in terms of data-parallel operators
+rather than sequential loops.
+
+\section{Related Work on Data-Parallel Languages}
+
+Fortunately, not all work on parallelism involves Fortran 77.  There
+is a rich body of literature on embedded array languages and libraries
+targetting GPUs. Imperative solutions include
+Copperhead~\cite{Copperhead}, Accelerator~\cite{MSaccelerator}, and
+deep-learning DSLs, such as Theano~\cite{Theano} and
+Torch~\cite{Torch7}.
+
+Purely functional languages include
+Accelerate~\cite{mcdonell2013optimising},
+Obsidian~\cite{claessen2012expressive}, and
+NOVA~\cite{collins2014nova}.  These languages support neither
+arbitrary nested regular parallelism, nor explicit indexing and
+efficient sequential code inside their parallel constructs.
+
+A number of dataflow languages aim at efficient GPU compilation.
+StreamIt supports a number of static optimizations on various
+hardware, for example, GPU
+optimizations~\cite{Hormati:2011:SPS:1950365.1950409} include
+memory-layout selection (shared/global memory), resolving
+shared-memory bank conflicts, increasing the granularity of
+parallelism by vertical fusion, and untilizing unused registers by
+software prefetching and loop unrolling, while multicore
+optimizations~\cite{Gordon:2006:ECT:1168857.1168877} are aimed at
+finding the right mix of task, data and pipeline parallelism.
+
+Finally, we note that Futhark is not intended as a general-purpose
+language, but rather it is aimed at (i) expressing computational
+kernels, which can then be linked with applications written in
+mainstream languages, and, at (ii) being used as a code-generation
+target for high-level DSLs.  Such a usage was demonstrated by an
+experiment~\cite{ElsmanDybdal:Array:2014,Henriksen:2016:AGT:2975991.2975997}
+in which a subset of APL was compiled to Futhark, executed on GPU, and
+used from Python for visualization purposes.
+
 
 %%% Local Variables:
 %%% mode: latex
