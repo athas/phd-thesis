@@ -1759,6 +1759,125 @@ explicitly parallel and sequential code is shown in
 \section{Interoperability}
 \label{sec:interoperability}
 
+\begin{figure}
+\centering
+\begin{tabular}{|c|c|c|}
+  \cline{1-1}  \cline{3-3}
+    \multirow{6}{*}{Host (CPU)} &$\longrightarrow$& \multirow{6}{*}{Device (GPU)} \\
+    &Code& \\
+    &$\longrightarrow$& \\
+    &Data& \\
+    &$\longleftarrow$& \\
+    &Data& \\ \cline{1-1}  \cline{3-3}
+  \end{tabular}
+
+  \caption{The run-time structure of a program using OpenCL.  The
+    ``host'' is typically a CPU, and is entirely in control of the
+    ``device'', which might for example be a GPU, but could be
+    anything (even the same CPU as the host).}
+  \label{fig:opencl-structure}
+\end{figure}
+
+Futhark is not a general-purpose programming language.  As a purely
+functional language, interacting with the outside world is impossible.
+As an array-oriented language, complicated data structures are awkward
+or impossible.  Futhark is at its core designed on trading flexibility
+for the ability to automatically obtain good runtime performance.  As
+a result, writing full applications in Futhark is impossible.  While
+the Futhark compiler can compile a Futhark program into an executable,
+the resulting program simply executes the Futhark \texttt{main}
+function, while reading input data from standard input and writing the
+result on standard output.  This is useful for testing, but not
+particularly useful for an application programmer.
+
+Futhark is intended to be used only for the computationally intensive
+parts of a larger application, with the main part of the application
+written in a general-purpose language.  It is therefore important that
+Futhark code can be easily integrated with code written in other
+languages.  Fortunately, the design of
+OpenCL~\cite{Stone:2010:OPP:622179.1803953}, the library used by the
+Futhark compiler to communicate with GPUs or other accelerators, fits
+this use case well.
+
+The overall structure of OpenCL is shown on
+\cref{fig:opencl-structure}.  The CPU, which in OpenCL nomenclature is
+called the \textit{host}, is in control.  The host communicates with
+one or more \textit{devices}, which act as coprocessors.  The device
+can for example be a GPU, but any kind of computational resource can
+be presented to OpenCL via the device abstraction.  The host issues
+commands to the devices, which may involve uploading code (kernels) or
+data, initiating execution of uploaded code, or retrieving data stored
+on the device in response to executions.  The code uploaded to the
+device must be specified in OpenCL C, a severely restricted variant of
+the C kernel language, that lacks support for e.g. function pointers,
+recursion, or allocation.  The key property that we exploit for
+interoperability purposes is that the code running on the host is
+required only for managing the device, and thus need not be
+particularly efficient, as the vast majority of the computation takes
+place inside OpenCL kernels.  This allows us to specify the host-level
+code in ways that maximise interoperability, without worrying overmuch
+about performance losses.
+
+As a concrete example, the Futhark compiler contains a code generator
+backend where the host code is generated in the Python programming
+language, and interacts with OpenCL through the PyOpenCL
+library~\cite{kloeckner_pycuda_2012}.  The result of compiling a
+Futhark program is a Python module that defines a class, the methods
+of which correspond to Futhark functions.  These methods accept and
+return Python values (which may wrap on-GPU data), and feel to the
+programmer like calling any other Python library.  But behind the
+scenes, data and code is submitted to the GPU.  This allows us to use
+Futhark for the heavy lifting, while making use of Python's wealth of
+libraries for such things as user interaction and data format
+serialisation.  As an example, several of the benchmark programs we
+discuss in \ref{chap:empirical-validation} have been furnished with
+interactive visualisations via the Pygame library.  The Python program
+reads input events from the user, and the Futhark programs creates
+screen images (in the form of two-dimensional arrays of integers),
+which are then blitted to the screen via Pygame.  Examples of the
+resulting visualisations can be seen on \cref{fig:visualisations}
+
+While Python is a worthwhile target language due to its popularity for
+scientific computing, it is not realistic to construct code generators
+for all languages of interest.  Even a short list might include Ruby,
+R, C\#, Java, Swift, and more.  While writing a host-code backend for
+the Futhark compiler requires only a few thousand lines of Haskell
+code, we do not wish the burden of maintaining a dozen such backends.
+Rather, we should invest effort in improving the C backend, such that
+it can generate code that can be called by the foreign function
+interfaces (FFIs) of other languages.  Due to its ubiquity, most
+languages make it easy to call C code.  However, the Python backend
+still demonstrates clearly how Futhark can be useful in an application
+development context.
+
+\begin{figure}
+  \begin{subfigure}{0.24\textwidth}
+    \includegraphics[width=\textwidth]{img/mandelbrot.png}
+    \caption{Mandelbrot}
+    \label{fig:mandelbrot}
+  \end{subfigure}
+  \begin{subfigure}{0.24\textwidth}
+    \includegraphics[width=\textwidth]{img/nbody.png}
+    \caption{$N$-body}
+    \label{fig:nbody}
+  \end{subfigure}
+  \begin{subfigure}{0.24\textwidth}
+    \includegraphics[width=\textwidth]{img/fluid.png}
+    \caption{Fluid}
+    \label{fig:fluid}
+  \end{subfigure}
+  \begin{subfigure}{0.24\textwidth}
+    \includegraphics[width=\textwidth]{img/crystal.png}
+    \caption{Crystal}
+    \label{fig:crystal}
+  \end{subfigure}
+
+  \caption{Visualisations of four benchmark programs implemented in
+    Futhark, and called from Python.}
+  \label{fig:visualisations}
+\end{figure}
+
+
 \section{Related Work on Automatic Parallelisation}
 
 This section discusses three simplified Fortran 77 examples from the
@@ -2108,14 +2227,14 @@ scan (+) 0 (map (\i -> if C[i] > 0 then C[i] else 0)
                 [1...N])
 \end{lstlisting}
 
-We conclude by remarking that in addition to ``heroic'' analysis 
-necessary for proving the absence of cross-iteration dependences 
-for array \texttt{X} that uses CIV-based accesses, 
-the compiler also had to re-engineer the computation of \texttt{civ} 
-values from inherently sequential to parallel. One could argue 
-that, if parallel execution is desired, the code should have been 
-written from the very beginning in terms of data-parallel operators
-rather than sequential loops.
+We conclude by remarking that in addition to this ``heroic'' analysis,
+which is necessary for proving the absence of cross-iteration
+dependences for array \texttt{X} that uses CIV-based accesses, the
+compiler also had to re-engineer the computation of \texttt{civ}
+values from inherently sequential to parallel.  We argue that, if
+parallel execution is desired, the code should have been written from
+the very beginning in terms of data-parallel operators rather than
+sequential loops.
 
 \section{Related Work on Data-Parallel Languages}
 
