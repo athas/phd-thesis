@@ -2077,12 +2077,12 @@ Loop independence can now be proven by verifying the set equation
 which holds because \texttt{$\cup_{k=1}^{i-1}$(WF$_k$)} can be symbolically
 computed to be \texttt{[1, civ@2$^i$-1]} by using:
 \begin{itemize}
-    \item the implicit invariant \texttt{civ@4$^{i-1}\=$civ@2$^{i}$},
-            i.e., the \texttt{civ} value at an iteration end is equal to 
-            the \texttt{civ} value at the entry of the next iteration, and 
-    \item the monotonicity of the \texttt{civ@2} values 
-          (because they are incremented by \texttt{C(i)} only when
-            \texttt{C(i)} is positive).
+\item the implicit invariant
+  $\texttt{civ@4}^{i-1}=\texttt{civ@2}^{i}$, i.e., the \texttt{civ}
+  value at an iteration end is equal to the \texttt{civ} value at the
+  entry of the next iteration, and
+\item the monotonicity of the \texttt{civ@2} values (because they are
+  incremented by \texttt{C(i)} only when \texttt{C(i)} is positive).
 \end{itemize}
 
 \paragraph{Step 2.} While the accesses to \texttt{X} have been
