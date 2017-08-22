@@ -1183,10 +1183,10 @@ let bar = scale_twice.g f64.pi [1...5]
 \end{figure}
 
 The primary motivation behind Futhark was to create a language whose
-efficient implementation was not hindered by complicated features.
-And for the most part, Futhark resembles a least-common-denominator
-functional language.  However, we have taken the opportunity to add
-various language features specialised for the task of high-performance
+efficient implementation is not hindered by complicated features.  For
+the most part, Futhark resembles a least-common-denominator functional
+language.  However, we have taken the opportunity to add various
+language features specialised for the task of high-performance
 parallel array programming.  In particular, the fact that Futhark is
 not intended for constructing advanced user-defined data types, but
 instead expects programmers to express their program in terms of
@@ -1194,10 +1194,10 @@ arrays, allows us to add specialised constructs and notation to aid in
 array programming.  We have already seen an example in the form of
 size parameters, which allows the programmer to express size
 constraints on functions parameters.  For example, the dot product
-function on \Cref{fig:futhark-dotprod} requires that the two
-input arrays have the same length, while the matrix multiplication on
-\Cref{fig:futhark-matmult} specifies the usual size constraints
-on matrix multiplication.
+function on \Cref{fig:futhark-dotprod} requires that the two input
+arrays have the same length, while the matrix multiplication on
+\Cref{fig:futhark-matmult} specifies the usual size constraints on
+matrix multiplication.
 
 \begin{figure}
   \centering
@@ -1224,8 +1224,16 @@ let matmul [n][m][p]
   \label{fig:futhark-size-parameters}
 \end{figure}
 
-Futhark also supports two somewhat more exotic features, both of which
-are introduced for performance reasons.  These are discussed below.
+This section is not intended as a full guide to Futhark programming.
+The Futhark reference
+manual\footnote{\url{https://futhark.readthedocs.io}} serves that
+purpose.  Therefore, we explain the syntax and semantics of Futhark on
+a case-by-case basis by example.  We shall, however, be more precise
+when we describe the core language used by the compiler.
+
+Apart from the usual parallel combinators, Futhark also supports two
+somewhat more exotic features, both of which are introduced for
+performance reasons.  These are discussed below.
 
 \subsection{In-Place Updates}
 \label{sec:uniqueness-types}
