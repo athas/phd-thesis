@@ -156,7 +156,7 @@ GPU model:
   used by a thread is a function solely of its code, and cannot depend
   on kernel-launch parameters.
 
-\item[Shared memory,] which is fast but size-constrained on-chip
+\item[Local memory,] which is fast but size-constrained on-chip
   memory, which is shared by all threads in a group.  When a kernel is
   launched, some quantity of local memory can be requested per group
   (same amount for each).  The contents of a local memory buffer
@@ -280,6 +280,167 @@ GPUs have little cache in the way we know from CPUs.  While we can use
 local and private memory as a manually managed cache, most of our
 memory performance will come from rapidly reading and writing from
 global memory via coalesced memory operations.
+
+\subsubsection{A coalescing example: transposition}
+\label{sec:gpu-transposition}
+
+As an example of how coalescing can be resolved in a nontrivial case,
+this section will present how two-dimensional matrix transposition can
+be implemented in the GPU model.  The basic idea is to launch a kernel
+that contains one thread for every element in the input matrix.  For
+simplicity, we assume that the total number of input elements is
+divisible by our desired workgroup size.
+
+\begin{figure}
+
+\begin{lstlisting}[language={}]
+thread(in, out, n, m):
+  gtid <- get_global_id()
+  i <- gtid / n
+  j <- gtid % m
+
+  index_in <- i * n + j
+  index_out <- j * m + i
+
+  out[index_out] <- in[index_in]
+\end{lstlisting}
+
+  \caption{Naive GPU implementation of matrix transposition.}
+  \label{fig:naive-gpu-transposition}
+\end{figure}
+
+A naive attempt can be seen on \cref{fig:naive-gpu-transposition}.
+Because the GPU model does not have a notion of multi-dimensional
+arrays, we assume the nominally $n\times{}m$ matrix is represented as
+a flat array in row-major representation.
+
+The write to the \texttt{out} array is fine, as it is coalesced
+between neighbouring threads.  However, the read from \texttt{in} is
+problematic.  Suppose $n=m=100$.  If we perform the index arithmetic
+by hand, we obtain the threads and indexes shown on
+\cref{tab:naive-gpu-indices}.
+
+\begin{table}
+
+  \begin{subtable}{\textwidth}
+  \centering
+\begin{tabular}{r|rr|rr}
+  \texttt{gtid} & \texttt{i} & \texttt{j} & \texttt{index\_in} & \texttt{index\_out} \\\hline
+  0 & 0 & 0 & 0 & 0 \\
+  1 & 0 & 1 & 1 & 100 \\
+  2 & 0 & 2 & 2 & 200 \\
+  3 & 0 & 3 & 3 & 300 \\
+  \multicolumn{5}{c}{$\vdots$} \\
+  100 & 1 & 0 & 100 & 1 \\
+  101 & 1 & 1 & 101 & 101 \\
+  102 & 1 & 2 & 102 & 201 \\
+\end{tabular}
+
+  \caption{Tabulation of computed indexes for the transposition kernel on \cref{fig:naive-gpu-transposition}.  We assume $n=m=100$.}
+  \label{tab:naive-gpu-indices}
+  \end{subtable}
+
+  \begin{subtable}{\textwidth}
+  \centering
+\begin{tabular}{r|rr|rr|rr}
+  \texttt{gtid} & \texttt{g\_i} & \texttt{g\_j} & \texttt{l\_i} & \texttt{l\_j} & \texttt{index\_in} & \texttt{index\_out} \\\hline
+  0 & 0 & 0 & 0 & 0 &  0 & 0 \\
+  1 & 0 & 1 & 0 & 1 &  1 & 1 \\
+  2 & 0 & 2 & 1 & 0 &  2 & 2 \\
+  3 & 0 & 3 & 1 & 1 &  3 & 3 \\
+  \multicolumn{7}{c}{$\vdots$} \\
+  100 & 1 & 0 & 0 & 0 & 100 & 100 \\
+  101 & 1 & 1 & 0 & 1 & 101 & 101 \\
+  102 & 1 & 2 & 1 & 0 & 102 & 102 \\
+\end{tabular}
+
+  \caption{Tabulation of computed indexes for the transposition kernel on \cref{fig:coalesced-gpu-transposition}.  We assume $n=m=100$, and $\texttt{TILE\_SIZE}=2$ (this is an implausibly small number, $16$ is more realistic).}
+  \label{tab:coalesced-gpu-indices}
+\end{subtable}
+
+  \caption{Tables of indices computed for the two transposition kernels.}
+  \label{tab:transpose-gpu-indices}
+\end{table}
+
+The solution is to perform a \textit{tiled transposition}.  Every
+workgroup will read a chunk of the input array into a local memory
+array, and then write back that chunk in transposed form.  The trick
+is that the element that a given thread reads is not the same as the
+element that it writes.  We could say that we perform the
+transposition in local memory, rather than global memory.  The
+approach is shown on \cref{fig:coalesced-gpu-transposition}.  We
+assume some constant \texttt{TILE\_SIZE}, and that the workgroup size
+is exactly $\texttt{TILE\_SIZE}\cdot\texttt{TILE\_SIZE}$.  We further
+assume the presence of a local memory array \texttt{block} with room
+for one element for every thread in the workgroup.  Recall that local
+memory arrays are local to the workgroup, and visible by all threads
+in the workgroup.
+
+\begin{figure}
+
+\begin{lstlisting}[language={}]
+local block[TILE_SIZE*TILE_SIZE]
+
+thread(in, out, n, m):
+  gtid <- get_global_id()
+  g_i <- gtid / n
+  g_j <- gtid % m
+
+  ltid <- get_local_id()
+  l_i <- ltid / TILE_SIZE
+  l_j <- ltid % TILE_SIZE
+
+  index_in <- g_i * m + g_j
+  index_out <- g_i * n + g_j
+
+  block[l_j*TILE_SIZE + l_i] <- in[index_in]
+
+  barrier()
+
+  out[index_out] <- block[l_i*TILE_SIZE + l_j]
+\end{lstlisting}
+
+  \caption{A GPU implementation of matrix transposition that ensures
+    coalesced access to memory.  We assume that the workgroup size is
+    $\texttt{TILE\_SIZE}\cdot\texttt{TILE\_SIZE}$.}
+  \label{fig:coalesced-gpu-transposition}
+\end{figure}
+
+\begin{table}
+  \centering
+\end{table}
+
+We use a memory barrier between reading the input and writing the
+output.  This is necessary to ensure that the element we read from
+\texttt{block} has been written by the responsible thread, as GPUs do
+not guarentee execution order outside of warps.
+
+The coalesced kernel is very efficient on current GPU hardware, and is
+in fact not much slower than an ordinary memory copy.  Thus we can
+treat transposition as a fast primitive.  It is also not hard to
+extend the transposition kernel such that it transposes not just a
+single two-dimensional array, but rather transposes the inner two
+dimensions of a three-dimensional array.  This is useful for
+implementing Futhark's \kw{rearrange} construct.  We have two final
+remarks on transposition:
+
+\begin{enumerate}
+\item For this kernel, we assume that $n$ and $m$ are divisible by
+  \texttt{TILE\_SIZE} in both dimensions.  This assumption can be
+  lifted by the liberal application of bounds checks before accessing
+  global memory.  However, such checks may make the kernel inefficient
+  for pathological cases where $n$ or $m$ is very small (corresponding
+  to very ``fat'' or ``skinny'' matrices), as many threads per
+  workgroup will be idle.  Specialised kernels should be used for
+  these cases.
+\item The way the kernel on \cref{fig:coalesced-gpu-transposition}
+  accesses local memory is susceptible to \textit{bank conflicts},
+  where several threads in the same memory clock cycle attempt to
+  access different addresses within the same memory bank.  We do not
+  address bank conflicts further here, except to note that they are
+  solvable by padding the \texttt{local} array such that it has size
+  \texttt{TILE\_SIZE*(TILE\_SIZE+1)}.
+\end{enumerate}
 
 \section{The Model in the Real World}
 \label{sec:gpu-model-real-world}
@@ -494,6 +655,14 @@ our compilation strategy.
 
 \section{GPU Implementation of Array Calculus}
 \label{sec:calculus-implementation}
+
+The combinators presented in \cref{chap:calculus} permit an efficient
+mapping to GPUs.  Indeed, we shall see that ``kernel extraction'', the
+process of generating flat parallel GPU kernels from a nested parallel
+Futhark program, is primarily a process of rewriting the program into
+a composition of recognisable primitives.  This section shows how a
+subset of these are handled with respect to the GPU model introduced
+above.
 
 %%% Local Variables:
 %%% mode: latex

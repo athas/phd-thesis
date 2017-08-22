@@ -340,18 +340,35 @@ details include:
 Expressions ($e$) in the intermediate language are in A-normal
 form~\cite{Sabry:1992:RPC:141478.141563}.  That is, all subexpressions
 are variable names (except for the special cases \kw{loop}, \kw{if},
-and \kw{let}).  Tuple-typed variables do not exist in the IR, except
-as a syntactical construct for some operators.  A let-bound pattern
-($p$) consists of one or more variables and associated types that bind
-the result of an expression ($e$); intuitively equivalent to a tuple
-pattern in the source language.  Types are syntactically
-differentiated into two sorts: $\tau$, without uniqueness attributes,
-and $\utau$, which permit an optional uniqueness attribute (an
-asterisk).  Uniqueness attributes are only used when specifying the
-parameter and return types of top-level functions and
-\lstinline{for}-loops---patterns in \lstinline{let} bindings and
-anonymous functions possess no uniqueness attributes.
+and \kw{let}).  However, for readability, we shall often stray from
+strict A-normal form when showing examples.  Tuple-typed variables do
+not exist in the IR, except as a syntactical construct for some
+operators.  A let-bound pattern ($p$) consists of one or more
+variables and associated types that bind the result of an expression
+($e$); intuitively equivalent to a tuple pattern in the source
+language.  Types are syntactically differentiated into two sorts:
+$\tau$, without uniqueness attributes, and $\utau$, which permit an
+optional uniqueness attribute (an asterisk).  Uniqueness attributes
+are only used when specifying the parameter and return types of
+top-level functions and \lstinline{for}-loops---patterns in
+\lstinline{let} bindings and anonymous functions possess no uniqueness
+attributes.
 
+As a syntactic convenience, we also permit the omission of of \kw{in}
+immediately preceding \kw{let}.  This allows us to write
+\begin{lstlisting}
+let x = 2
+let y = 3
+in x + y
+\end{lstlisting}
+  instead of
+\begin{lstlisting}
+let x = 2 in
+let y = 3 in
+x + y
+\end{lstlisting}
+  which quickly adds up for larger expressions.  This convenience is
+  also present in the Futhark source language.
 
 \begin{figure}
 \begin{tabular}{lp{58mm}}

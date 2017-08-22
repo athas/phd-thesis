@@ -35,7 +35,7 @@ of fusion is to eliminate the overhead of storing intermediate results
 in memory.
 
 Most fusion algorithms in the literature are unable to handle fusion
-across \lstinline{zip}/\lstinline{unzip}, and more generally the case
+across \kw{zip}/\kw{unzip}, and more generally the case
 where the output of a producer is used by several consumers.  The
 algorithm presented in this chapter is capable of fusing such cases
 if this is possible without duplicating computation, as demonstrated on
@@ -72,7 +72,8 @@ This chapter covers two main themes: \Cref{sec:fusion-algorithm}
 describes our aggressive fusion algorithm, in particular when a
 producer result may be used by multiple consumers, without duplicating
 computation.  \Cref{sec:fusionalgebra} describes the rewrite rules
-used to fuse two SOACs.
+used to fuse two SOACs.  However, first we define an extended set of
+SOACs with improved fusion properties.
 
 \section{New SOACs}
 \label{sec:fusion-in-futhark}
@@ -95,9 +96,9 @@ those in the source languages, have two important qualities:
   issue is examined in more depth in \cref{chap:kernel-extraction}.
 \end{enumerate}
 
-The new SOACs are shown on \Cref{fig:newSoacType}.  An individual
-description now follows, which also shows how instances of the
-previous SOACs are mapped to the new ones.
+The types of the new SOACs are shown on \Cref{fig:newSoacType}.  An
+individual description now follows, which also shows how instances of
+the previous SOACs are mapped to the new ones.
 
 \begin{description}
 \item[{\kw{map}}] is unchanged from before.
@@ -187,6 +188,113 @@ compiler implements \kw{filter} by a decomposition into \kw{scan} and
 \section{The Overall Fusion Algorithm}
 \label{sec:fusion-algorithm}
 
+While the foundations of the fusion algorithm were developed prior to
+this thesis~\cite{henriksen2013t2}, we will summarise the basic
+technique.  The following is adapted from the author's master's
+thesis~\cite{henriksen2014exploiting}.
+
+The entire algorithm consists of two distinct stages:
+
+\begin{enumerate}
+\item Traverse the program, collecting SOAC-expressions and fusing
+  producers into consumers where possible.  The end result is a
+  mapping from SOACs in the original program, to replacement SOAC
+  expressions (the result of fusion operations).  This is called the
+  \textit{gathering} phase.
+
+\item Traverse the program again, using the result of the gathering
+  phase to replace SOAC expressions with their fully fused forms.
+  This may lead to dead code, as the output variables of producers
+  that have been fused into their consumers are no longer used.  These
+  can be removed using standard dead code removal.
+\end{enumerate}
+
+Futhark, as a block-structured language, is suited to region-based
+analysis, and the fusion algorithm is indeed designed as a reduction
+of a dataflow graph.
+
+\begin{figure}
+\begin{center}
+\includegraphics[width=5cm]{img/t1t2-1.pdf}
+\end{center}
+\caption{T$_{1}$-T$_{2}$-reduction}
+\label{fig:t1t2-1}
+\end{figure}
+
+Our structural analysis is inspired by the
+T$_{1}$-T$_{2}$-reduction~\cite{red_dragon}.  We say that a flow graph
+is reducible if it can be reduced to a single node by the following
+two transformations:
+
+\begin{description}
+  \item[T$_{1}$:] Remove an edge from a node to itself.
+
+  \item[T$_{2}$:] Combine two nodes $m$ and $n$, where $m$ is the
+    single predecessor of $n$, and $n$ is not the entry of the flow
+    graph.
+\end{description}
+
+On \cref{fig:t1t2-1} is shown a small flow graph and highlights
+instances where the two reductions could apply.  The overall idea is
+to construct a flow graph of the Futhark program, reduce it to a
+single point, and at each reduction step combine the information
+stored at the nodes being combined.
+
+By construction, Futhark always produces a reducible graph.  Each node
+corresponds to an expression, with the successors of the node being
+its subexpressions.  This means that we can implement the reduction
+simply as a bottom-up traversal of the Futhark syntax tree.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=35ex,valign=t]{img/fusion-1.pdf}\hspace{2ex}
+\includegraphics[width=35ex,valign=t]{img/fusion-2.pdf}
+
+\hfill\vspace{2ex}\\
+
+\includegraphics[width=35ex,valign=t]{img/fusion-3.pdf}\hspace{2ex}
+\includegraphics[width=35ex,valign=t]{img/fusion-4.pdf}
+\caption{Fusion by T$_{2}$-transformation on the dependency graph}
+\label{fig:fusion-on-graph}
+\end{figure}
+
+\Cref{fig:fusion-on-graph} depicts the intuitive idea on which our
+fusion transformation is based.  The top-left figure shows the
+dependency graph of a simple program, where an arrow points from the
+consumer to the producer.
+
+The main point is that all SOACs that appear inside the dashed circle
+can be fused without duplicating any computation, even if several of
+the to-be-fused arrays are used in different SOACs.  For example,
+\texttt{y1} is used to compute both \texttt{(z1,z2)} and
+\texttt{(q1,q)}\footnote{Note also that not all input arrays of a SOAC
+  need be produced by the same SOAC.}.  This is accomplished by means
+of $T_2$ reduction on the dependency graph: The rightmost child, i.e.,
+\lstinline{map g ...}, of the root SOAC (\lstinline{map f1 ...})  has
+only one incoming edge, hence it can be fused.  This is achieved by:
+\begin{enumerate}
+\item Replacing in the root SOAC the child's output with the child's
+  input arrays
+\item Inserting a call to the child's function in the root's function,
+  which computes the per-element output of the child,
+\item Removing duplicate input arrays of the resulting SOAC.
+\end{enumerate}
+The above is the procedure for fusing two \kw{map} SOACs.
+\Cref{sec:fusionalgebra} contains the rules used for other cases.
+
+The top-right part of \cref{fig:fusion-on-graph} shows the
+(simplified) result of the first fusion, where the copy statements
+have been eliminated by copy propagation.  In the new graph, the
+leftmost child of the root, i.e., the one computing \texttt{(z1,z2)},
+has only one incoming edge and can be fused.  The resulting graph,
+shown in the bottom-left figure can be fused again resulting in the
+bottom-right graph of \cref{fig:fusion-on-graph}.  At this point no
+further $T_2$ reduction is possible, because the SOAC computing
+\texttt{x1} has two incoming edges.  This example demonstrates a key
+benefit of removing \kw{zip}/\kw{unzip} and using our tupleless SOACs
+representation: There are no intermediate nodes in the data-dependency
+graph between fusable producer and consumer.
+
 \subsection{Invalid fusion}
 \label{sec:invalidfusion}
 
@@ -194,7 +302,7 @@ We must be careful not to violate the uniqueness rules when performing
 fusion.  For example, consider the following program.
 
 \begin{lstlisting}
-let b = map f a)
+let b = map f a
 let c = a with [i] <- x
 in map g b
 \end{lstlisting}
@@ -204,7 +312,7 @@ modification, we could fuse to the following program.
 
 \begin{lstlisting}[mathescape]
 let c = a with [i] <- x
-in map (g \(\circ\) f) a
+in map (g $\circ$ f) a
 \end{lstlisting}
 
 However, this results in a violation of Uniqueness Rule 1, and the
@@ -222,7 +330,7 @@ when the consumer is within the lexical scope of the producer anyway.
 Even when fusion is possible, it may not be beneficial, and may be
 harmful to overall performance in the following cases.
 
-\begin{description}[style=nextline]
+\begin{description}
 \item[Computation may be duplicated.]
 
 In the program
@@ -246,23 +354,33 @@ solve.  Accessing global memory can be more than a hundred times
 slower than accessing local (register) memory, hence duplicating
 computation may in some cases be preferable.
 
-\item[Can reduce memory locality.]
+The fusion algorithm used by the Futhark compiler is careful never to
+duplicate computation.  However, some simpification rules may perform
+duplicate small amounts of scalar computation.
 
+\item[Can reduce memory locality.]
   Consider a simple case of fusing
-  \texttt{(map~$f$)~$\circ$~(map~$g$)}.  When $g$ is executed for an
-  element of the input array, neighboring elements will be put into
-  the cache, making them faster to access.  This exhibits good data
-  locality.  In contrast, the composed function $f~\circ~g$ will
-  perform more work after accessing a given input element, increasing
-  the risk that the input array may be evicted from the cache before
-  the next element is to be used.  On GPUs, there is the added risk of
-  the kernel function exercising additional register pressure, which
-  may reduce hardware occupancy (thus reducing latency hiding) by
-  having fewer computational cores active.  In this case, it may be
-  better to execute each of the two \texttt{map}s as separate kernels.
+  \[
+    \map~f~\circ \map~g
+  \]
+  When $g$ is executed for an element of the input array, neighboring
+  elements may be put into the cache, making them faster to access.
+  This exhibits good data locality.  In contrast, the composed
+  function $f~\circ~g$ will perform more work after accessing a given
+  input element, increasing the risk that the input array may be
+  evicted from the cache before the next element is to be used.  On
+  GPUs, there is the added risk of the kernel function exercising
+  additional register pressure, which may reduce hardware occupancy
+  (thus reducing latency hiding) by having fewer computational cores
+  active.  In this case, it may be better to execute each of the two
+  \texttt{map}s as separate kernels.
+
+  The fusion algorithm used by the Futhark compiler is not concerned
+  with these issues.  The risk of cache eviction is not very relevant
+  on GPUs, and determining the proper size of GPU kernels is a job
+  better left for kernel extraction \cref{chap:kernel-extraction}.
 \end{description}
 
-\newpage
 \section{Fusion Rules}
 \label{sec:fusionalgebra}
 
@@ -278,12 +396,12 @@ but they will be removed by subsequent simplification, not by the
 fusion algorithm itself.
 
 For simplicity, we will assume that the inputs to $B$ have been
-arranged such that those arrays as are produced by $A$ come first.  We
-commit some abuse of notation when describing the composition of the
-lambda functions, as we permit ourselves to invoke lambda operands as
-if they were functions.  This is not strictly permitted by the grammar
-we use for the core language, but it avoids a significant amount of
-tedious bookkeeping in the rules.
+arranged such that those arrays that are produced by $A$ come first.
+We commit some abuse of notation when describing the composition of
+the lambda functions, as we permit ourselves to invoke lambda operands
+as if they were functions.  This is not strictly permitted by the
+grammar we use for the core language, but it avoids a significant
+amount of tedious bookkeeping in the rules.
 
 We do not describe explicitly rules for all compositions of SOACs,
 even those that are in principle fusible.  Since any \kw{map} can be
