@@ -628,17 +628,19 @@ that appear interesting.  Very irregular algorithms, such as graph
 processing, may also be convenient to implement in this fashion.
 
 Unfortunately, dynamic parallelism often suffers from performance
-problems in practice\fixme{cite for this}, and fruitful applications
-are not as prevalent as might have been expected.  Efficient usage of
-dynamic parallelism centers around collecting the desired new kernel
-launches and merging them together into one launch.  From a functional
-programming point of view, it seems a better strategy to implement
-irregular problems via flattening (either manual or automatic), rather
-than using dynamic parallelism.  For these reasons, dynamic
-parallelism is not part of our GPU model, and is not employed by the
-Futhrak compiler.\footnote{Another, more pragmatic, reason is that
-  dynamic parallelism is not supported by the OpenCL implementation
-  provided by NVIDIA.}
+problems in
+practice~\cite{dimarco2013performance,wang2014characterization}, and
+fruitful applications are not as prevalent as might have been
+expected.  Efficient usage of dynamic parallelism centers around
+collecting the desired new kernel launches and merging them together
+into as few launches as possible, to amortise the overhead.  From a
+functional programming point of view, it seems a better strategy to
+implement irregular problems via flattening (either manual or
+automatic), rather than using dynamic parallelism.  For these reasons,
+dynamic parallelism is not part of our GPU model, and is not employed
+by the Futhark compiler.\footnote{Another, more pragmatic, reason is
+  that dynamic parallelism is not supported by the OpenCL
+  implementation provided by NVIDIA.}
 
 \subsubsection{Intra-Group Communication}
 

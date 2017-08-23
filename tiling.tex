@@ -238,6 +238,8 @@ slowdown.  In the future, we intend to investigate how to
 the array is originally created, and store it in the desired
 representation in the first place.
 
+\subsection{Example: Brownian Bridge}
+
 \section{Automatic Loop Tiling}
 \label{sec:automatic-tiling}
 
@@ -249,11 +251,11 @@ it is traversed.  The result is that the number of accesses to global
 memory are reduced.
 
 The algorithm is driven by recognizing arrays that are used as input
-to \lstinline{stream_seq} constructs \textit{and} are invariant to at
-least one of the kernel dimensions.  The tiling algorithm proceeds by
-traversing the body of a \kw{kernel} and looking for an appropriate
-\StreamSeq{} instance, which is then transformed using either
-\textit{one-dimensional} or \textit{two-dimensional} tiling, as
+to \lstinline{stream_seq} constructs \textit{and} are invariant to one
+or two of the kernel's innermost dimensions.  The tiling algorithm
+proceeds by traversing the body of a \kw{kernel} and looking for an
+appropriate \StreamSeq{} instance, which is then transformed using
+either \textit{one-dimensional} or \textit{two-dimensional} tiling, as
 detailed below.  In both cases, the \StreamSeq{} is transformed into
 two nested \StreamSeq{}s, with the outer one iterating across chunks,
 and the inner iterating across a single chunk.  We tile at most one
@@ -273,7 +275,9 @@ arrays have sizes that are not divisible with the optimal tile size.
 \label{sec:one-dimensional-tiling}
 
 One-dimensional tiling is performed when the input arrays of a
-\StreamSeq{} are invariant to the same dimension.
+\StreamSeq{} are invariant to the same dimension.\fixme{show or remark
+  on the streamSeq rewrite rule that allows one to re-write a
+  streamSeq construct into a nest of two streamSeq constructs.}
 
 For example, the kernel
 \begin{lstlisting}[xleftmargin=0.5cm]
@@ -281,7 +285,7 @@ kernel (n) (\i -> stream_seq (f i) (ne) ps)
 \end{lstlisting}
 
 \noindent exhibits such an optimization opportunity for the streamed
-array \lstinline{ps}, as it is invariant the first (and only)
+array \lstinline{ps}, as it is invariant to the first (and only)
 dimension, and is transformed into:
 
 \begin{lstlisting}[xleftmargin=0.5cm]
@@ -335,8 +339,8 @@ in kernel (n,l) (\i j ->
 \end{minipage}
 \vspace{1em}
 
-The chunk function \lstinline{f} is computes the dot product of its
-two input arrays and adds it to the accumulator.  Prior to kernel
+The chunk function \lstinline{f} computes the dot product of its two
+input arrays and adds it to the accumulator.  Prior to kernel
 extraction, the \StreamSeq{} was in the form of a \kw{redomap}.  The
 arrays \lstinline{xs} and \lstinline{ys} are both invariant to at
 least one dimension of the kernel, so they can be tiled as follows:
@@ -365,7 +369,7 @@ in kernel (n,l) (\i j ->
 Operationally, the \lstinline{local 2} (or \lstinline{local 1})
 expression creates a two-dimensional array in local memory, which is
 then immediately indexed with the local thread ID along dimension $1$
-(or $2$), resulting in a one-dimensional array.
+(or $2$), resulting in a one-dimensional array.\fixme{very unclear; expand.  Maybe make this explicit.}
 
 \subsection{A Complicated Instance of Tiling}
 \label{sec:lavamd-tiling}
@@ -425,11 +429,20 @@ is the ability to compute which kernel dimensions \lstinline{j'} is
 invariant to, which is reasonably simple in a pure language such as
 Futhark.
 
+\fixme{fix here}you should say safety requires that the block size for
+dimension "i"
+is precisely? (or a multiple of) "q"
+Also note, that while this tiling works with many 2-dim block sizes
+(for dimensions i and j), it is best to keep the block size on the variant
+dimension j equal to 1, so as to maximize the ratio of local-to-global
+memory accesses for array xs.
+Am I correct in saying that?
+
 \section{Related Work}
 
-The thrust of this chapter is not to argue that Futhark's scheme for
-tiling and achieving coalesced memory accesses are superior to other
-techniques.  Rather, have merely shown that the moderate flattening
+The intent of this chapter is not to argue that Futhark's scheme for
+tiling and achieving coalesced memory accesses is superior to other
+techniques.  Rather, we have merely shown that the moderate flattening
 algorithm does not actively \textit{prevent} us from performing such
 optimisations, as is the case for full flattening.
 

@@ -75,17 +75,27 @@ CPUs, but this is not a direction we shall investigate in this thesis.
 The initial passes of the sequential and parallel pipelines are
 identical, but they differ after a certain point.  In this section,
 and the thesis as a whole, we will focus on the parallel compilation
-pipeline, as it is by far the more complicated of the two.
+pipeline, as it is by far the more complicated of the two.  The
+intermediate representation used by Futhark is typed, and to ensure
+robustness, full type-checking (including verifying safety of in-place
+updates) is performed between all compiler passes.  The type checking
+rules become more lenient as the representation is gradually lowered,
+and the later stages perform only cursory checking.  This
+type-checking carries a significant compilation overhead
+(approximately $20\%$), so we expect to disable it for production
+releases of the compiler.
 
 The pipeline proceeds with the following passes in order as follows:
 
 \begin{description}
-\item[Internalisation and Desugaring] The source Futhark
-language is translated into the core language
-(\cref{sec:futhark-core-ast}).  In particular, all tuples are
-flattened, and arrays of tuples are transformed into tuples of arrays,
-as shown on \ref{fig:calc-tuple-transform}.  This is also the pass
-where where size inference is performed (\cref{chap:size-analysis}).
+\item[Internalisation and Desugaring] The source Futhark language is
+  translated into the core language (\cref{sec:futhark-core-ast}).  In
+  particular, modules and polymorphic functions are removed through
+  specialisation (outside the scope of the thesis), all tuples are
+  flattened, and arrays of tuples are transformed into tuples of
+  arrays, as shown on \ref{fig:calc-tuple-transform}.  This is also
+  the pass where where size inference is performed
+  (\cref{chap:size-analysis}).
 
 \item[Inlining and Dead Function Removal] All functions are
 inlined.  As the Futhark language presently does not support recursive
@@ -173,23 +183,27 @@ optimisations.  There are too many in number, and too individually
 uninteresting, to be discussed in detail, but a few deserve mention:
 
 \begin{description}
-\item[Copy propagation, constant folding, and CSE] The usual bevy of
+\item[Copy propagation, constant folding, and CSE:] The usual bevy of
   of scalar optimisations is performed, with range analysis and
   propagation performed to support the elimination of (some) bounds-
   and size checks.
-\item[Aggressive hoisting] The Futhark compiler aggressively hoists
+\item[Aggressive hoisting:] The Futhark compiler aggressively hoists
   expressions out of loops and branches, where possible and safe.
   Care is taken to avoid hoisting potentially expensive constructs out
   of branches.
-\item[Dead code removal] We remove not merely expressions whose
+\item[Dead code removal:] We remove not merely expressions whose
   results are never used, but also rewrite expressions where only part
   of the result is used.  Consider for example an \kw{if} that returns
   a pair, where only one component of the pair is subsequently used.
-\item[Removal of single-iteration loops and SOACs] Any loop with a
+\item[Removal of single-iteration loops and SOACs:] Any loop with a
   single iteration, or a SOAC whose input array has a constant size of
   $1$, can be trivially substituted with its body.  This is used to
   enable efficient sequentialisation (see \cref{sec:streamseq-fusion}
   for an example).
+\item[Un-existentialisation:] As we shall see in
+  \cref{chap:size-analysis}, Futhark uses an existential type system
+  with size-dependent types.  Simplification rules are used for making
+  existential sizes concrete where possible.
 \end{description}
 
 Most of the simplifications are performed by a general simplification
@@ -203,9 +217,11 @@ hardwired into the compiler in the form of monadic Haskell functions.
 This allows the Futhark rewrite rules to be significantly more
 powerful, as they can inspect the surrounding environment, but they
 are not user-extensible.  As an example, \cref{fig:removeDeadMapping}
-defines a rule that removes redundant \kw{reshape} operations.  This
-is the sole exception to our general policy of not showing compiler
-implementation code in this thesis.
+defines a rule that removes results of a \kw{map} that are not used
+subsequently.  This rule depends on information about what happens
+\textit{after} the expression, and is thus applied during a bottom-up
+traversal.  This is the sole exception to our general policy of not
+showing compiler implementation code in this thesis.
 
 \begin{figure}
 \begin{lstlisting}[basicstyle=\small\ttfamily,language=Haskell]
@@ -239,12 +255,14 @@ removeDeadMapping _ _ = cannotSimplify
 \section{Abstract Syntax of the Core IR}
 \label{sec:futhark-core-ast}
 
-In this section we describe the abstract syntax of a simplified form
-of the Futhark intermediate representation (IR).  Whenever $z$ is an
-object of some kind, we write $\bar{z}$ to range over sequences of
-objects of this kind. When we want to be explicit about the size of a
-sequence $\bar{z} = z_0,\cdots,z_{(n-1)}$, we often write it on the
-form $\nseq{z}{n}$ and we write $z,\bar{z}$ to denote the sequence
+This section describes the abstract syntax of a simplified form of the
+Futhark intermediate representation (IR).
+
+\paragraph{Notation for sequences.} Whenever $z$ is an object of some
+kind, we write $\bar{z}$ to range over sequences of objects of this
+kind. When we want to be explicit about the size of a sequence
+$\bar{z} = z_0,\cdots,z_{(n-1)}$, we often write it on the form
+$\nseq{z}{n}$ and we write $z,\bar{z}$ to denote the sequence
 $z,z_0,\cdots,z_{(n-1)}$.  Depending on context, the elements of the
 sequence or may not have separators, or be merely juxtaposed.  For
 example, we may use the same notation to shorten a function
@@ -262,8 +280,8 @@ or a function type
 \]
 It is always clear from the context which separator (if any) is
 intended.  On occasion we use more complicated sequences, where not
-all terms under the bar variant.  In this case, the variant term is
-subscripted with $i$.  For example,
+all terms under the bar are variant.  In this case, the variant term
+is subscripted with $i$.  For example,
 \[
   (\nseq{[d]v_{i}}{n}) = ([d]v_{1}, \ldots, [d] v_{n})
 \]
@@ -296,10 +314,10 @@ $$
       & | & \mbox{\lstinline[mathescape]!let\ $p$ =\ $e$ in\ $b$!} & \mbox{(Let binding)}\\
       & | & k & \mbox{(Constant)} \\
       & | & x & \mbox{(Variable)} \\
-      & | & x \odot{} x & \mbox{(Scalar binary operator)}\\
+      & | & e \odot{} e & \mbox{(Scalar binary operator)}\\
       & | & \mbox{\lstinline[mathescape]!if\ $x$ then\ $e$ else\ $e$!} & \mbox{(Branch)} \\
       & | & \mbox{\texttt{$x$[$x_{1},\ldots,x_{n}$]}} & \mbox{(Array indexing)}\\
-      & | & \mbox{\lstinline[mathescape]!$x$ with [$x_{1},\ldots,x_{n}$] <-\ $x$!} &\mbox{(In-place update)}\\
+      & | & \mbox{\lstinline[mathescape]!$x$ with [$e_{1},\ldots,e_{n}$] <-\ $e$!} &\mbox{(In-place update)}\\
       & | & \mbox{\lstinline[mathescape]!loop ($\hat{p}$)=($x_{1},\ldots,x_{n}$)!}  &  \mbox{(Loop)} \\
       &   & \mbox{\lstinline[mathescape]!\ for\ $x$ <\ $x$ do\ $e$!}\\
       & | & f~x_{1}~\ldots~x_{n} & \mbox{(Function call)}\\
@@ -320,10 +338,10 @@ $$
   \label{fig:futhark-ir}
 \end{figure*}
 
-\Cref{fig:futhark-ir} shows the (simplified) IR of Futhark,
-which will be used for all compiler-chapters of this thesis.  The
-syntax is intentionally similar to the source language.  Notable
-details include:
+\paragraph{AST definition.} \Cref{fig:futhark-ir} shows the
+(simplified) core IR of Futhark, which will be used for all compiler
+chapters of this thesis.  The syntax is intentionally similar to the
+source language.  Notable details include:
 \begin{itemize}
 \item Variable names are ranged over by $d$, $x$, $y$, and $z$, and we use
   $f$ to range over function names.
@@ -337,7 +355,8 @@ details include:
   \lstinline{filter}, and so on. Moreover, named functions may only be
   defined at top-level.  Recursion is not permitted.
 \end{itemize}
-Expressions ($e$) in the intermediate language are in A-normal
+When discussing properties of the language, we will often assume that
+expressions ($e$) in the intermediate language are in A-normal
 form~\cite{Sabry:1992:RPC:141478.141563}.  That is, all subexpressions
 are variable names (except for the special cases \kw{loop}, \kw{if},
 and \kw{let}).  However, for readability, we shall often stray from
@@ -384,7 +403,9 @@ x + y
                                                                                                Perform a reduction of arrays $x_{1}, \ldots, x_{n}$ via the $2n$-ary function $\lambda$, producing $n$ values.  The values $y_{1}, \ldots, y_{n}$ constitute a neutral argument for $\lambda$.
   \\
   \lstinline[mathescape]!scan $\lambda$ ($y_{1}, \ldots, y_{n}$) $x_{1}$ $\ldots$ $x_{n}$! &
-                                                                                             Perform an inclusive prefix scan of arrays $x_{1}, \ldots, x_{n}$ via the $2n$-ary function $\lambda$, producing $n$ values.  The values $y_{1}, \ldots, y_{n}$ constitute a neutral argument for $\lambda$.
+                                                                                             Perform an inclusive prefix scan of arrays $x_{1}, \ldots, x_{n}$ via the $2n$-ary function $\lambda$, producing $n$ values.  The values $y_{1}, \ldots, y_{n}$ constitute a neutral argument for $\lambda$. \\
+  \lstinline[mathescape]!filter $\lambda$ $x_{1}$ $\ldots$ $x_{n}$! &
+ Produce $n$ arrays, containing only those elements with index $j$ for which $\lambda~\nseq{x_{i}[j]}{n}$ is true.
 \end{tabular}
 \caption{Description of SOAC operators.}
 \label{fig:soacDesc}
@@ -452,16 +473,16 @@ $\opty = \forall \vec{\alpha}.\etau$, written $\opty \geq \etau'$,
 if there exists a substitution $S$ such that $S(\etau) = \etau'$.
 
 Type schemes for operators, including a representative subset of the
-SOAC operators, are given in \Cref{fig:soacType}, and an
-informal description of them is given in \Cref{fig:soacDesc}.
-The SOACs of the intermediate language (e.g., \lstinline{map}) are the
-tuple-of-array version of the user language SOACs. The SOACs of the
-intermediate language receive an arbitrary number of array arguments
-and produce a tuple of arrays. The semantics of a SOAC operator can be
-intuitively understood as a composition between \lstinline{unzip}, the
-user-language SOAC (e.g., \lstinline{map}), and \lstinline{zip}, where the
-unnamed function is suitably modified to work with the flat sequence
-of array arguments.
+SOAC operators, are given in \Cref{fig:soacType}, and an informal
+description of them is given in \Cref{fig:soacDesc}.  The SOACs of the
+intermediate language (e.g., \lstinline{map}) are a tuple-of-array
+versions of the user language SOACs. The SOACs of the intermediate
+language receive an arbitrary number of array arguments and produce a
+tuple of arrays as their result.  The semantics of a SOAC operator can
+be intuitively understood as a composition between \lstinline{unzip},
+the user-language SOAC (e.g., \lstinline{map}), and \lstinline{zip},
+where the unnamed function is suitably modified to work with the flat
+sequence of array arguments.
 
 In the type rules, we permit the implicit transformation of uniqueness
 types and patterns $\utau/\utty/\hat{p}$ to their corresponding
@@ -556,7 +577,23 @@ $\Gamma$, the program $P$ has tuple type $\rho$.''
 \section{Checking Uniqueness Types}
 \label{sec:uniqueness-formalism}
 
+An in-place update \lstinline{a with [i] <- v} is safe if and only if:
+
+\begin{enumerate}
+\item The array \texttt{a} (including aliases) does not occur on any
+  execution path following the in-place update.
+\item \texttt{v} does not alias \texttt{a}.
+\end{enumerate}
+
+To check for safety statically, we require two things: aliasing
+information for all variables in the program
+(\cref{sec:alias-analysis}), and a way to check for how and when
+variables are used (\cref{sec:update-checking}).  In the formalisation
+that follows, alias analysis is separate from safety checking.  In an
+implementation, the two can be done in a single pass.
+
 \subsection{Alias Analysis}
+\label{sec:alias-analysis}
 
 \newcommand{\expAliases}[3]{#1 \vdash #2 \Rightarrow #3}
 \newcommand{\aliases}[1]{\textrm{aliases}(#1)}
@@ -566,12 +603,12 @@ We perform alias analysis on a program that we assume to be otherwise
 type-correct.  Our presentation uses an inference rule-based approach
 %similar to the one usually used for type systems.
 in which the central judgment takes the form %as follows:
-$\expAliases{\Sigma}{e}{\langle \sigma_{1}, \ldots, \sigma_{n} \rangle}$, which
-asserts that, within the context $\Sigma$, the
+$\expAliases{\Sigma}{e}{\langle \sigma_{1}, \ldots, \sigma_{n}
+  \rangle}$, which asserts that, within the context $\Sigma$, the
 expression $e$ produces $n$ values, where value number $i$ has the
 \textit{alias set} $\sigma_{i}$.  An alias set is a subset of the
 variable names in scope, and indicates which variables an array value
-(or variable) may share elements with.
+(or variable) may be aliased with.
 %(Alias sets for non-array variables are meaningless in this context).
 The context $\Sigma$ maps variables in scope
 to their aliasing sets.
@@ -602,7 +639,7 @@ to their aliasing sets.
 \begin{equation*}
 \inference{
 }{
-  \expAliases{\Sigma}{c}{\langle \emptyset \rangle}
+  \expAliases{\Sigma}{k}{\langle \emptyset \rangle}
 }
 \tagsc{Alias-Const}
 \end{equation*}
@@ -618,7 +655,7 @@ to their aliasing sets.
 \begin{equation*}
 \inference{
 }{
-  \expAliases{\Sigma}{x \oplus y}{\langle \emptyset \rangle}
+  \expAliases{\Sigma}{x \odot y}{\langle \emptyset \rangle}
 }
 \tagsc{Alias-ScalarBinOp}
 \end{equation*}
@@ -657,8 +694,8 @@ to their aliasing sets.
 \inference{
 }{
 \expAliases{\Sigma}{
-  \text{\lstinline[mathescape]!$x_{a}$ with [$\nseq{x}{n}$] <-\ $x_{x}$!}
-}{\langle \Sigma(x_{a}) \rangle}
+  \text{\lstinline[mathescape]!$x_{a}$ with [$\nseq{e}{n}$] <-\ $e_{x}$!}
+}{\langle \Set{x_{a}} \cup \Sigma(x_{a}) \rangle}
 }
 \tagsc{Alias-Update}
 \end{equation*}
@@ -720,6 +757,13 @@ to their aliasing sets.
 \begin{equation*}
 \inference{
 }{
+  \expAliases{\Sigma}{\kw{size}~c~x}{\langle \emptyset \rangle}
+}\tagsc{Alias-Size}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+}{
   \expAliases{\Sigma}{\text{\lstinline[mathescape]!iota\ $x$!}}{\langle \emptyset \rangle}
 }\tagsc{Alias-Iota}
 \end{equation*}
@@ -759,6 +803,15 @@ to their aliasing sets.
 \begin{equation*}
 \inference{
 }{
+  \expAliases{\Sigma}{\kw{scatter}~x~y~z}
+  {\langle \Set{x} \cup \Sigma(x) \rangle}
+}
+\tagsc{Alias-Scatter}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+}{
   \expAliases{\Sigma}{\text{\lstinline[mathescape]!reduce\ $a$\ ($\nseq{x}{n}$)\ $\nseq{x}{n}$!}}
   {\langle \nseq{\emptyset}{n} \rangle}
 }
@@ -787,22 +840,19 @@ to their aliasing sets.
 \label{fig:aliasing-rules-2}
 \end{figure}
 
-\fixme{not space reasons}
 The aliasing rules are listed in Figures~\ref{fig:aliasing-rules-1}
-and \ref{fig:aliasing-rules-2}, although for space reasons, some are
-left out.  The \textsc{Alias-Var}-rule defines the aliases of a
-variable expression to be the alias set of the variable joined by the
-name of the variable itself - this is because $v \notin \Sigma(v)$, as
-can be seen by \textsc{Alias-LetPat}.  Alias sets for values produced
-by SOACs such as \lstinline{map} are empty.  We can imagine the arrays
-produced as \textit{fresh}, although the compiler is of course free to
-reuse existing memory if it can do so safely.  The
+and \ref{fig:aliasing-rules-2}.  The \textsc{Alias-Var}-rule defines
+the aliases of a variable expression to be the alias set of the
+variable joined by the name of the variable itself - this is because
+$v \notin \Sigma(v)$, as can be seen by \textsc{Alias-LetPat}.  Alias
+sets for values produced by SOACs such as \kw{map} are empty.  We can
+imagine the arrays produced as \textit{fresh}, although the compiler
+is of course free to reuse memory if it can do so safely.  The
 \textsc{Alias-IndexArray} rule tells us that a scalar read from an
 array does not alias its origin array, but \textsc{Alias-SliceArray}
-dictates that an array slice does, which fits the implementation
-intuition.
-% about how such operations might be implemented.
-
+dictates that an array slice does.  This fits the our intuition of how
+an implementation might implement these cases - scalars are read into
+registers, where array slicing is just offsetting a pointer.
 
 The most interesting aliasing rules are the ones for function calls
 (\textsc{Alias-Apply-Nonunique} and \textsc{Alias-Apply-Unique}).
@@ -813,80 +863,72 @@ is unique the alias set is empty, otherwise the result conservatively
 aliases all non-unique parameters.
 
 \subsection{In-Place Update Checking}
+\label{sec:update-checking}
 
 \newcommand{\inPlaceSafe}[3]{#1\ \rhd \langle #2, #3 \rangle}
 \newcommand{\consumedOK}[3]{#1 \vdash #2 \triangle #3}
 
 In our implementation, alias computation and in-place update checking
 is performed at the same time, but is split here for expository
-purposes.  Let $\aliases{v}$ the alias set of the variable $v$.  We
-denote by $\mathcal{O}$ the set of the variables \textit{observed}
-(used) in expression $e$, and by $\mathcal{C}$ the set of variables
-\textit{consumed} through function calls and in-place updates.
-Together, the pair $\langle\mathcal{C},\mathcal{O}\rangle$ is called
-an \textit{occurrence trace}.
+purposes.  In the following, let $\aliases{v}$ be the alias set of the
+variable $v$, which we assume has been computed as in the previous
+section.  We denote by $\mathcal{O}$ the set of the variables
+\textit{observed} (used) in some expression $e$, and by $\mathcal{C}$
+the set of variables \textit{consumed} through function calls and
+in-place updates.  Together, the pair
+$\langle\mathcal{C},\mathcal{O}\rangle$ is called an
+\textit{occurrence trace}.
 
 \Cref{fig:uniqueness-rules} defines a \textit{sequencing} judgment
-between two occurrence traces, which takes the form $\seqOccurences
+between two occurrence traces, which takes the form
+\[
+  \seqOccurences
   {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
   {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
-  {\langle\mathcal{C}_{3},\mathcal{O}_{3}\rangle}$
-%We also define a judgment for \textit{sequencing} two occurrence
-%traces on figure \ref{fig:aliasing-rules}.  The sequencing judgment
-%\begin{equation*}\boxed{
-%  \seqOccurences
-%  {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
-%  {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
-%  {\langle\mathcal{C}_{3},\mathcal{O}_{3}\rangle}
-%}\end{equation*}
+  {\langle\mathcal{C}_{3},\mathcal{O}_{3}\rangle}
+\]
 and which can be derived if and only if it is acceptable for
 $\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle$ to happen first, then
 $\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle$, giving the combined
-occurrence trace $\langle\mathcal{C}_{3},\mathcal{O}_3\rangle$.  The
-formulation as a judgment is because sequencing is sometimes not
-derivable---for example in the case where an array is used after  %this situation corresponds to
-it has been consumed.  The judgment is defined by a single inference
+occurrence trace $\langle\mathcal{C}_{3},\mathcal{O}_3\rangle$.  We
+formulate this as a judgment because sequencing is sometimes not
+derivable---for example in the case where an array is used after it
+has been consumed.  The judgment is defined by a single inference
 rule, which states that two occurrence traces can be sequentialized if
 and only if no array consumed in the left-hand trace is used in the
 right-hand trace.
 
-Some of the inference rules for checking if an expression $e$ is
-functionally safe with respect to in-place updates are shown in
-\Cref{fig:uniqueness-rules}, where the central judgment is
-$\inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}$.
-%\begin{equation*}
-%\boxed{
-%\inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}
-%}
-%\end{equation*}
+Some of the most important inference rules for checking if an
+expression $e$ is functionally safe with respect to in-place updates
+are shown in \Cref{fig:uniqueness-rules}, where the central judgment
+is $\inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}$.  We assume that the
+program is in strict A-normal form.
+
+The rule for in-place update %
+\lstinline[mathescape]{$v_{a}$ with [$\nseq{v}{n}$] <- $v_{v}$}
 %
+gives rise to an occurrence trace indicating that we have
+\textit{observed} $v_{v}$ and \textit{consumed} $v_{a}$.  Indices
+$\nseq{v}{n}$ are ignored as they are necessarily scalar variables,
+which cannot be consumed.
 
-The rule for in-place update
-\lstinline[mathescape]{$v_{a}$ with [$\nseq{v}{n}$] <- $v_{v}$} gives rise to an
-occurrence trace indicating that we have \textit{observed} $v_{v}$ and
-\textit{consumed} $v_{a}$.  Indices $\nseq{v}{n}$ are ignored as
-they are necessarily scalar variables and cannot be consumed.
-
-Another case is checking the safety of a \lstinline{map} expression.
-We do not wish to permit the function of a \lstinline{map} to consume
-any array bound outside of it, as that would imply the array is
-consumed once for every iteration of the \lstinline{map}.  However,
-the function may consume its parameters, which should be seen as the
-\lstinline{map} expression as a whole consuming the corresponding
+Another interesting rule concerns checking the safety of \kw{map}
+expressions.  We do not wish to permit the function of a \kw{map} to
+consume any array bound outside of it, as that would imply the array
+may be consumed by more than one iteration of the \kw{map}.  However,
+the function may consume its \textit{parameters}, which should be seen
+as the \kw{map} expression as a whole consuming the corresponding
 input array.  This restriction also preserves the parallel semantics
 of \lstinline{map}, because different rows of a matrix can be safely
 updated in parallel.  An example can be seen on
-\Cref{fig:map-in-place-update}, which shows an in-place update
-nested inside an array.  To express this restriction, we define an
-auxiliary judgment
-$\consumedOK {\mathcal{P}}
+\Cref{fig:map-in-place-update}, which shows an in-place update nested
+inside an array.  To express this restriction, we define an auxiliary
+judgment:
+\[
+\consumedOK {\mathcal{P}}
 {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
-{\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}$.
-%
-%:\begin{equation*} \boxed{ \consumedOK {\mathcal{P}}
-%  {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
-%  {\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle} }
-%\end{equation*}
+{\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}
+\]
 Here, $\mathcal{P}$ is a mapping from parameter names to alias sets.
 Any variable $v$ in $\mathcal{O}_{1}$ that has a mapping in
 $\mathcal{P}$ is replaced with $\mathcal{P}[v]$ to produce
@@ -901,12 +943,14 @@ not have such a mapping, the judgment is not derivable.
 %a parameter.
 %
 The precise inference rules are shown on
-\Cref{fig:parameter-consumption}.
+\cref{fig:parameter-consumption}.
 %
 Do-loops and function declarations can be checked for safety in a
 similar way.  A function is safe with respect to in-place updates if
 its body consumes only those of the function's parameters that are
-unique.
+unique (rule \textsc{Safe-Fun} on \cref{fig:parameter-consumption}).
+For a function call, care is taken to ensure that the argument passed
+for a consumed parameter does not alias any other argument.
 
 \begin{figure}
 \sempart{Validity of sequencing}{\seqOccurences{\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}{\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}{\langle\mathcal{C}_{3},\mathcal{O}_{3}\rangle}}
@@ -922,7 +966,7 @@ unique.
 }\tagsc{Occurence-Seq}
 \end{equation*}
 
-\sempart{Uniqueness Safety Rules}{\inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}}
+\sempart{Uniqueness safety for expressions}{\inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}}
 
 \begin{equation*}
 \inference{
@@ -1007,11 +1051,62 @@ unique.
 \tagsc{Safe-Map}
 \end{equation*}
 
+\begin{equation*}
+  \inference{
+    \textrm{lookup}_{\textrm{fun}}(f) = \utau_{1}\rightarrow\cdots\rightarrow\utau_{n}\rightarrow\utau_{r}
+    \\
+    \forall i.(\utau_{i}=\texttt{*}\tau) \Rightarrow (\forall j.j = i \vee v \notin \aliases{v_{j}})
+    \\
+    \mathcal{C'} = \Set{\aliases{v_{i}}~|~v_{i}\in\nseq{v}{n}, x_{i} = v \wedge \tau_{i} = \texttt{*}\tau}
+    \\
+    \mathcal{O'} = \Set{\aliases{v_{i}}~|~v_{i}\in\nseq{v}{n}} - \mathcal{C'}
+  }{
+    \inPlaceSafe{\textsf{$f$ $x_{1}$ \ldots{} $x_{n}$}}
+    {\mathcal{C}'}{\mathcal{O}'}
+  }\tagsc{Safe-Fun}
+\end{equation*}
+
+\begin{equation*}
+\inference{
+  \inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}
+  \\
+  \forall v\in\mathcal{C}.\exists i.x_{i} = v \wedge.\utau_{i} = \texttt{*}\tau
+  \\
+  \forall i.(\utau_{i}=\texttt{*}\tau) \Rightarrow (\forall j.j = i \vee v \notin \aliases{v_{j}})
+  \\
+  \mathcal{C'} = \Set{\aliases{v_{i}}~|~v_{i}\in\nseq{v}{n}, x_{i} = v \wedge \tau_{i} = \texttt{*}\tau}
+  \\
+  \mathcal{O'} = \Set{\aliases{v_{i}}~|~v_{i}\in\nseq{v}{n}} - \mathcal{C'}
+}{
+  \inPlaceSafe{
+    \text{\lstinline[mathescape]!loop ($\nseq{x_{i}: \utau_{i}}{n}$) =\ $\nseq{v}{n}$ for\ $z_{1}$ <\ $z_{2}$ do\ $e$!}}
+  {\mathcal{C}'}{\mathcal{O}'}
+}
+\tagsc{Safe-Loop}
+\end{equation*}
+
   \caption{Checking safety of consumption.}
   \label{fig:uniqueness-rules}
 \end{figure}
 
 \begin{figure}
+\sempart{Uniqueness safety for function definitions}{\triangledown fun}
+
+\begin{equation*}
+  \inference{
+    \inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}
+    \\
+    \forall v\in\mathcal{C}.\exists i.x_{i} = v \wedge \tau_{i} = \texttt{*}\tau
+  }{
+    \triangledown\Fun{$f$}{$\nseq{x_{i}: \hat{\tau}_{i}}{n}$}{$\utty_2$}{$e$}
+  } \tagsc{Safe-Fun}
+\end{equation*}
+
+  \sempart{Validity of parameter consumption}{
+\consumedOK {\mathcal{P}}
+{\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
+{\langle\mathcal{C}_{2},\mathcal{O}_{2}\rangle}}
+
 \begin{equation*}
 \boxed{
   \consumedOK
@@ -1062,10 +1157,10 @@ v \in \mathcal{P} \qquad \mathcal{P} \vdash \langle \mathcal{C}, \mathcal{O} \ra
 \begin{figure}
 \begin{lstlisting}
   -- This one is OK and considered to consume 'as'.
-  let bs = map (\(a) -> !a with [0] <- 2!) as
+  let bs = map (\a -> a with [0] <- 2) as
   let d  = iota m
   -- This one is NOT safe, since d is not a formal parameter.
-  let cs = map (\(i) -> @d with [i] <- 2@) (iota n)
+  let cs = map (\i -> d with [i] <- 2) (iota n)
 \end{lstlisting}
   \caption{Examples of \lstinline{map}s with in-place updates.}
   \label{fig:map-in-place-update}

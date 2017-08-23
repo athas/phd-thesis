@@ -463,17 +463,17 @@ Figure~\ref{fig:bfs-fun-pad} shows a simple, albeit work-inefficient,
 translation to Futhark of the discussed imperative code, which uses
 padding to satisfy array regularity. First, the indices of the active
 nodes (i.e., the ones on the current breadth level) are identified by
-the \lstinline{filter} operation on line \ref{line:futfilter}. Second,
-the maximal number of edges of these nodes, denoted by
-\lstinline{e_max}, is computed via a \lstinline{map-reduce}
-composition on lines \ref{line:emaxstart}--\ref{line:emaxend}.  Third,
-the \lstinline{map} nest computes two two-dimensional arrays of
-innermost size equal to \lstinline{e_max}, in which the first one
-corresponds to the indices of the unvisited neighbours, and the second
-one to their breadth level (\lstinline{costs}).  The indices that are
-outside the edge degree of a node are marked with out-of-bounds
-indices (\lstinline{-1}), and similarly for the nodes that were
-already visited.
+the \lstinline{filter} operation on line \ref{line:futfilter}.  This
+contributes significantly to final performance.  Second, the maximal
+number of edges of these nodes, denoted by \lstinline{e_max}, is
+computed via a \lstinline{map-reduce} composition on lines
+\ref{line:emaxstart}--\ref{line:emaxend}.  Third, the \lstinline{map}
+nest computes two two-dimensional arrays of innermost size equal to
+\lstinline{e_max}, in which the first one corresponds to the indices
+of the unvisited neighbours, and the second one to their breadth level
+(\lstinline{costs}).  The indices that are outside the edge degree of
+a node are marked with out-of-bounds indices (\lstinline{-1}), and
+similarly for the nodes that were already visited.
 %
 Fourth, the index-value arrays are flattened (at lines
 \ref{line:futflatstart}-\ref{line:futflatend}) and the
@@ -488,8 +488,11 @@ datasets in which the graph is large enough to fully utilise the
 hardware, while Futhark exploits both levels of parallelism and wins
 on smaller graphs with large edge degree.  Interestingly, this is not
 simply a question of how much to parallelise, but a fundamental
-algorithmic design decision.  It is unlikely that a compiler-based
-solution exists to this problem.
+algorithmic design decision.  The unsolved challenge is a
+representation and technique that can fuse the Futhark code in
+\cref{fig:bfs-fun-pad} into something resulting the one-level-parallel
+C code in \cref{fig:bfs-imperative}, and furthermore generate both
+versions of the code.
 
 \begin{figure}[ht]
 \begin{lstlisting}[language=C,numbers=left,escapechar=|]

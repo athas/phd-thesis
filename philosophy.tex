@@ -338,9 +338,13 @@ shall restrict ourselves to the simple monomorphic subset.  Futhark is
 not a general-purpose programming language. Instead, Futhark is
 intended for relatively small and simple high-performance programs,
 which can form the computational core of a larger program written in a
-conventional language.  The restrictions imposed by the need for
-inter-operability with mainstream productivity languages are
-elaborated in \cref{sec:interoperability}.
+conventional language.  This perspective is elaborated in
+\cref{sec:interoperability}.  This thesis is not intended as a full
+guide to Futhark programming; the Futhark reference
+manual\footnote{\url{https://futhark.readthedocs.io}} serves that
+purpose well enough.  Therefore, we explain the syntax and semantics
+of Futhark on a case-by-case basis by example.  We shall, however, be
+more precise when we describe the core language used by the compiler.
 
 A reasonable high-level programming model for parallel computers is
 one based on \textit{bulk operations}, where we program in terms of
@@ -1223,13 +1227,6 @@ let matmul [n][m][p]
   \caption{Two examples of using size parameters to encode size constraints on Futhark functions.  Presently the constraints are checked at run-time, not compile-time, and thus serve more as documentation than a safety mechanism.}
   \label{fig:futhark-size-parameters}
 \end{figure}
-
-This section is not intended as a full guide to Futhark programming.
-The Futhark reference
-manual\footnote{\url{https://futhark.readthedocs.io}} serves that
-purpose.  Therefore, we explain the syntax and semantics of Futhark on
-a case-by-case basis by example.  We shall, however, be more precise
-when we describe the core language used by the compiler.
 
 Apart from the usual parallel combinators, Futhark also supports two
 somewhat more exotic features, both of which are introduced for
