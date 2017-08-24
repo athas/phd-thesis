@@ -1,6 +1,6 @@
 \chapter{Background and Philosophy}
 \label{chap:philosophy}
-
+\fixme{Add roadmap}
 In physics, the speed of light, denoted $c$, is the ultimate speed
 limit of the universe.  Likewise in programming, ``as fast as C'' is
 often used as an indication that some programming language is as fast
@@ -1882,8 +1882,17 @@ development context.
   \label{fig:visualisations}
 \end{figure}
 
+An entirely different approach is to use Futhark as a \textit{target
+  language} for a compiler.  In fact, this was the original purpose
+for Futhark, but it has receded into the background as the Futhark
+source language grew more pleasant to use.  We have, however,
+cursorily investigated this approach by using Futhark as the target
+language for an APL
+compiler~\cite{Henriksen:2016:AGT:2975991.2975997}, where the
+generated code performed comparably with hand-written Futhark.
 
 \section{Related Work on Automatic Parallelisation}
+\label{sec:related-automatic-par}
 
 This section discusses three simplified Fortran 77 examples from the
 DYFESM and BDNA benchmarks of the PERFECT club

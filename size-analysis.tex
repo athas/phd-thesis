@@ -195,13 +195,13 @@ substitution is also applied to the result type.
   \fracc{
     \Gamma \vd e_1 : \exists\nseq{d}{l}.\rho
     \\
-    p = (\nseq{z}{l},\nseq{y}{m}) \sp \vdp p : \rho
+    p = (\nseq{d^p}{l},\nseq{y}{m})
     \\
-    \exists S_r.(\textrm{$S_{r}$ is bijection from $\nseq{z}{l}$ to $\nseq{d}{l}$}) \wedge S_r(\rho) = (\nseq{\texttt{i32}}{l}, \nseq{\tau'}{m})
+    \exists S_r.(\textrm{$S_{r}$ is bijection from $\nseq{d^{p}}{l}$ to $\nseq{d}{l}$}) \wedge S_r(\rho) = (\nseq{\texttt{i32}}{l}, \nseq{\tau'}{m})
     \\
-    \Gamma,p \vd e_2 : \exists{x}{k}.\rho'
+    \Gamma,p \vd e_2 : \exists\nseq{d^r}{k}.\rho'
   }{
-    \Let{(\nseq{x_i: \tau_i}{n})}{e_1}{e_2} : \textrm{ext}(\nseq{x}{n}, \exists{x}{k}.\rho')
+    \Let{p}{e_1}{e_2} : \textrm{ext}(\nseq{x}{n}, \exists\nseq{d^r}{k}.\rho')
   }
 
 \fracc{
