@@ -197,11 +197,11 @@ substitution is also applied to the result type.
     \\
     p = (\nseq{d^p}{l},\nseq{y}{m})
     \\
-    \exists S_r.(\textrm{$S_{r}$ is bijection from $\nseq{d^{p}}{l}$ to $\nseq{d}{l}$}) \wedge S_r(\rho) = (\nseq{\texttt{i32}}{l}, \nseq{\tau'}{m})
+    \textrm{$S_{r}$ is bijection from $\nseq{d^{p}}{l}$ to $\nseq{d}{l}$} \quad S_r(\rho) = (\nseq{\texttt{i32}}{l}, \nseq{\tau'}{m})
     \\
     \Gamma,p \vd e_2 : \exists\nseq{d^r}{k}.\rho'
   }{
-    \Let{p}{e_1}{e_2} : \textrm{ext}(\nseq{x}{n}, \exists\nseq{d^r}{k}.\rho')
+    \Gamma \vd \Let{p}{e_1}{e_2} : \textrm{ext}(\nseq{x}{n}, \exists\nseq{d^r}{k}.\rho')
   }
 
 \fracc{
@@ -222,9 +222,9 @@ substitution is also applied to the result type.
   \Gamma(s) = \texttt{bool} \\
   \Gamma \vd e_1 : \exists \seq{x}.\rho_1 \sp \Gamma \vd e_2 : \exists \seq{y}.\rho_2
   \\
-  (\exists\seq{z}.\rho') = \textrm{Unification of $\seq{x}.\rho_1$ and $\seq{y}.\rho_2$}
+  (\exists\seq{z}.\rho') = \textrm{Unification of $\exists\seq{x}.\rho_1$ and $\exists\seq{y}.\rho_2$}
 }{
-  \Gamma \vd \Let{p}{\If{s}{e_1}{e_2}}{e_3} : \exists\seq{z}.\rho'
+  \Gamma \vd \If{s}{e_1}{e_2} : \exists\seq{z}.\rho'
 }
 
   \caption{Size-aware typing rules for interesting expressions.}
@@ -511,10 +511,12 @@ is easier to implement, and performed equally well.
 \begin{figure}
 
 \begin{lstlisting}
-let concat_shape (n: i32) (m: i32) (xs: [n]f64) (ys: [m]f64): i32 =
+let concat_shape (n: i32) (m: i32)
+                 (xs: [n]f64) (ys: [m]f64): i32 =
   n+m
 
-let concat_value (n: i32) (m: i32) (c: i32) (xs: [n]f64) (ys: [m]f64): [c]f64 =
+let concat_value (n: i32) (m: i32) (c: i32)
+                 (xs: [n]f64) (ys: [m]f64): [c]f64 =
   let (is: [c]i32) = iota c
   let (zs: [c]f64) =
     map (\i -> if i < n then xs[i] else ys[i+n]) is
