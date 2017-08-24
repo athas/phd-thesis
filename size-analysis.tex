@@ -2,21 +2,22 @@
 \label{chap:size-analysis}
 
 A great many optimisations and safety checks in Futhark depend on how
-the shape of two arrays relate to each other, and at which point the
-shape of an array can be known.  Especially the latter is important
-for the moderate flattening transformation
-(\cref{chap:kernel-extraction}) that constitutes one of the main
-contributions of the thesis.  Nested parallelism supports the
-construction of arrays whose \textit{value} is dependent on some outer
-parallel construct.  However, for \textit{regular} nested parallelism,
-the shapes of those arrays can be computed invariant to all parallel
-loops.  It is crucial for efficient execution that we can hoist the
-computation of such sizes out of parallel loops.  This requires us to
-reify the notion of an array shape, and the computation of that shape,
-in the IR.  In the Futhark compiler, we treat size computations like
-any other expression, which allows us to use our general compiler
-optimisation repertoire to optimise and simplify the computation of
-sizes.
+the shape of two arrays relate to each other, or at which point the
+shape of an array can be known (especially if that point is much
+earlier than the point at which the \textit{values} of the array can
+be known).  Especially the latter is important for the moderate
+flattening transformation (\cref{chap:kernel-extraction}) that
+constitutes one of the main contributions of the thesis.  Nested
+parallelism supports the construction of arrays whose values are
+dependent on some outer parallel construct.  However, for
+\textit{regular} nested parallelism, the shapes of those arrays can be
+computed invariant to all parallel loops.  It is crucial for efficient
+execution that we can hoist the computation of such sizes out of
+parallel loops.  This requires us to reify the notion of an array
+shape, and the computation of that shape, in the IR.  In the Futhark
+compiler, we treat size computations like any other expression, which
+allows us to use our general compiler optimisation repertoire to
+optimise and simplify the computation of sizes.
 
 The main contribution of this chapter is an IR design that maintains
 the invariant that for \textit{any} array-typed variable in scope,
@@ -26,7 +27,7 @@ cannot be computed in advance (consider a \kw{filter} or a function
 call), we use a lightweight mechanism based on \textit{existential
   types}.  This chapter also discusses how we move from the unsized IR
 to the sized IR (analogous to ``typed'' versus ``untyped''), and how
-many size calculations can subsequently be optimised away.  An
+most size calculations can subsequently be optimised away.  An
 important technique is \textit{function slicing}, which we use to
 derive functions that precompute the size of values returned by a
 function.
@@ -55,21 +56,22 @@ invariants are only ``assumed'', that is, they have not been verified
 \item \lstinline{reduce} and \lstinline{scan} receive arguments of
   identical outermost size, and \lstinline{scan} results have
   outermost size equal to that of the input.  The semantics for
-  \lstinline{reduce} and \lstinline{scan} assumes that the
-  (corresponding two) arguments and result of the binary associative
-  operator have identical shapes.
+  \lstinline{reduce} and \lstinline{scan} assumes that the two
+  arguments and result of the binary associative operator have
+  identical shapes.
 \end{itemize}
 
 \begin{figure}
 \begin{tabular}{lrlr}
   $\tau$ & $::=$ & \mbox{\texttt{t} ~ $|$ ~ \texttt{[$d$]$\tau$}} & \mbox{(Scalar/array type)} \\
-  $\ft$ & $::=$ & $(x_{1}: \tau_1) \rightarrow \cdots \rightarrow (x_{n}: \tau_{n}) \rightarrow \exists \bar{d_2}.\tty$ & (Sizes of results $\in \bar{d_2}$)\\
-  $\etau$ & $::=$ & $\alpha~|~(x_{1}: \tau_{1}, \ldots, x_{n}: \tau_{n})~|~(x: \etau) \rightarrow \etau$ \\
-  $\opty$ & $::=$ & $\forall\bar{\alpha}.\etau$ \\
-  fun & ::= & \mbox{\Fun{$f$}{$\hat{p}$}{$\overline{d}.\utau$}{$e$}} ~~& ~~\mbox{(Named function)} \\
+  $\ft$ & $::=$ & $(x_{1}: \tau_1) \rightarrow \cdots \rightarrow (x_{n}: \tau_{n}) \rightarrow \exists \bar{d}.\tty$ & (Sizes of results $\in \bar{d}$)\\
+  $\etau$ & $::=$ & $\alpha~|~(x_{1}: \tau_{1}, \ldots, x_{n}: \tau_{n})~|~(x: \etau) \rightarrow \exists \bar{d}.\etau$ & ~~\mbox{(Sizes of results $\in \bar{d}$)} \\
+  $\opty$ & $::=$ & $\forall\bar{\alpha}.\ft$ \\
+  fun & ::= & \mbox{\Fun{$f$}{$\hat{p}$}{$\overline{d}.\utau$}{$e$}} ~~& ~~\mbox{(Sizes of results $\in \bar{d}$)} \\
 \end{tabular}
 \caption{Types with embedded size information and named parameters.
-  The remaining syntax definitions remain unchanged.}
+  The remaining syntax definitions remain unchanged, except that they
+  refer to the new definitions above.}
 \label{fig:sizeTypes}
 \end{figure}
 
@@ -79,29 +81,26 @@ invariants are only ``assumed'', that is, they have not been verified
   {\lstinline!iota!} & : & $(d: \texttt{i32}) \rightarrow [d]\texttt{i32}$ \\
   {\lstinline!replicate!} & : & $\forall\alpha.(d: \texttt{i32}) \rightarrow \alpha \rightarrow [d]\alpha$ \\
   \lstinline[mathescape]!reshape! & : & $\forall\nseq{d}{m}\alpha.(x_{1}: \texttt{i32}, \ldots, x_{n}: \texttt{i32})$ \\
-  & & ~~~~~~~~~~~~ $\rightarrow[d_{1}]\cdots[d_{m}]\alpha\rightarrow[x_{1}]\cdots[x_{n}]\alpha$ \\
-  \lstinline[mathescape]!rearrange ($c_{1}, \ldots, c_{n}$)! & : & $\forall\nseq{d}{n}\alpha.[d_{1}]\cdots[d_{n}]\alpha\rightarrow[d_{p(1)}]\cdots[d_{p(n)}]\alpha$ \\
+            & & ~~~~~~~~~~~~ $\rightarrow[d_{1}]\cdots[d_{m}]\alpha\rightarrow[x_{1}]\cdots[x_{n}]\alpha$ \\
+  \lstinline[mathescape]!rearrange ($\nseq{c}{n}$)! & : & $\forall\nseq{d}{n}\alpha.[d_{1}]\cdots[d_{n}]\alpha\rightarrow[d_{p(1)}]\cdots[d_{p(n)}]\alpha$ \\
             & & ~~ \text{where $p(i)$ is the result of applying the}\\
             & & ~~ \text{permutation induced by $c_{1}, \ldots, c_{n}$}. \\
-  {\lstinline!map!} & : & $\forall d\ \bar{\alpha}^{(n)}\bar{\beta}^{(m)}.(\nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(m)}))$\\
-            & & ~~~~~~~~~~~~~~~~~~~~ $\rightarrow \nseq{[s]\alpha_i}{n}$\\
-            & & ~~~~~~~~~~~~~~~~~~~~ $\rightarrow (\nseq{[s]\beta_i}{m})$\\
+  {\lstinline!map!} & : & $\forall d\ \bar{\alpha}^{(n)}\bar{\beta}^{(m)}.$\\
+            & & $~(\nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(m)})) \rightarrow \nseq{[s]\alpha_i}{n} \rightarrow (\nseq{[s]\beta_i}{m})$\\
   {\lstinline!scatter!} & : & $\forall d \nseq{x}{m} \nseq{\alpha}{n}.$\\
-          & & ~~~~~~~~~~~~~~ $(\nseq{[x_{i}]\alpha_{i}}{n})$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[d]\texttt{i32}}{n})$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[d]\alpha_i}{n})$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[x_{i}]\beta_i}{m})$\\
-  {\lstinline!reduce!} & : & $\forall \ d \ \bar{\alpha}^{(n)}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(n)}))$ \\
-          & & ~~~~~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{n})$\\
-          & & ~~~~~~~~~~~~~~ $\rightarrow \nseq{[d]\alpha_i}{n}$\\
-          & & ~~~~~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{n})$ \\
-  {\lstinline!scan!} & : & $\forall \ d \ \bar{\alpha}^{(n)}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow \rightarrow (\bar{\beta}^{(n)}))$ \\
-          & & ~~~~~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{n})$\\
-          & & ~~~~~~~~~~~~~~ $\rightarrow \nseq{[d]\alpha_i}{n}$\\
-          & & ~~~~~~~~~~~~~~ $\rightarrow (\nseq{[d]\alpha_i}{n})$ \\
-{\lstinline!filter!} & : & $\forall \ d_1 \ \bar{\alpha}^{(n)}.(\nseq{\alpha}{n} \rightarrow \texttt{bool})$ \\
-          & & ~~~~~~~~~~~~~~ $\rightarrow \nseq{[d_{1}]\alpha_i}{n}$ \\
-          & & ~~~~~~~~~~~~~~ $\rightarrow \exists d_{2}.(\nseq{[d_{2}]\alpha_i}{n})$ \\
+            & & $~(\nseq{[x_{i}]\alpha_{i}}{n}) \rightarrow (\nseq{[d]\texttt{i32}}{n}) \rightarrow (\nseq{[d]\alpha_i}{n}) \rightarrow (\nseq{[x_{i}]\beta_i}{m})$\\
+  {\lstinline!reduce!} & : & $\forall d \ \bar{\alpha}^{(n)}.$\\
+  & & $~(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(n)})) \rightarrow (\nseq{\alpha}{n}) \rightarrow \nseq{[d]\alpha_i}{n} \rightarrow (\nseq{\alpha}{n})$ \\
+  {\lstinline!scan!} & : & $\forall d \ \bar{\alpha}^{(n)}.$\\
+  & & $(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(n)})) \rightarrow (\nseq{\alpha}{n}) \rightarrow \nseq{[d]\alpha_i}{n} \rightarrow (\nseq{[d]\alpha_i}{n})$ \\
+  {\lstinline!filter!} & : & $\forall d_1 \ \bar{\alpha}^{(n)}.$\\
+  & & $~(\nseq{\alpha}{n} \rightarrow \texttt{bool}) \rightarrow \nseq{[d_{1}]\alpha_i}{n} \rightarrow \exists d_{2}.(\nseq{[d_{2}]\alpha_i}{n})$ \\
+  \kw{stream\_map} & : & $\forall d~\nseq{\alpha}{n}~\nseq{\beta}{m}.$\\
+  & & $~((x: \texttt{i32})\rightarrow\nseq{[x]\alpha_{i}}{n} \rightarrow (\nseq{[x]\beta_{i}}{m})) \rightarrow \nseq{[d]\alpha_i}{n} \rightarrow (\nseq{[d]\beta}{m})$ \\
+  \kw{stream\_red} & : & $\forall d~\nseq{\alpha}{n}\nseq{\beta}{m}.(\nseq{\beta}{m} \rightarrow \nseq{\beta}{m} \rightarrow (\nseq{\beta}{m})) $ \\
+  & & $~~~\rightarrow ((x: \texttt{i32})\rightarrow\nseq{[x]\alpha_{i}}{n} \rightarrow (\nseq{\beta_{i}}{m}))$ \\
+  & & $~~~\rightarrow \nseq{[d]\alpha_i}{n} \rightarrow (\nseq{\beta}{m})$ \\
+
 \end{tabular}
 \caption{Dependent-size types for various SOACs.}
 \label{fig:soacSizeType}
@@ -132,15 +131,115 @@ it is expected that the functional argument declares the result type
 able to ``pre-allocate'' space for the result.  However, the return
 size cannot in general be known in advance without evaluating the
 function.
-% 
-The following demonstrates, by example, the code transformation that
-(i) makes explicit in the code the shape-dependent types and verifies
-the assumed invariants and (ii) optimizes away in many cases the
-existential types.
 
-\section{Size Analysis by Example}
+\subsection{New Type Rules}
+
+The addition of size-dependent types requires an extension of the
+typing rules.  The main problem is the handling of an existential
+context in the return type of an expression.  We extent the type
+judgment for expressions such that it now returns an a type with an
+existentially quantified part (which may be empty).  The most
+interesting rules are shown on \cref{fig:sizeTypeRules} and discussed
+below.
+
+The rule for \kw{let}-bindings is interesting in that it may
+``increase'' the existensiality of a type.  As an example, consider an
+expression \lstinline{replicate x v}.  Supposing $\texttt{v}: \tau$,
+this expression has type $[x]\tau$ %
+while \mbox{\lstinline{let x = y in replicate x v}} has type
+$\exists d.[d]\tau$.  The specific names used in the existential
+quantification do not matter.
+
+It is also in the rule for \kw{let}-bindings that we bind the
+existential sizes to concrete variables.  For example, if the return
+type of the function contains $l$ existential sizes, then we require
+that the pattern begins with $l$ names of type \texttt{i32}.
+Operationally, these will be bound to the actual sizes of the value
+returned by the function.  For the type rule, there must be some
+substitution $S_{r}$ such that, when $S_{r}$ is applied to the return
+type of the function, the resulting type matches the types bound by
+the non-existential part of the pattern.  For example, given a
+function
+\[
+  \texttt{f}: (\texttt{x}: \texttt{i32}) \rightarrow (\texttt{y}: \tau) \rightarrow \exists \texttt{n}.[\texttt{x}][\texttt{n}]\tau
+\]
+we can conclude that the \kw{let}-binding
+\[
+\Let{(\texttt{m}: \texttt{i32}, \texttt{v}: [\texttt{a}][\texttt{m}]\tau)}{\texttt{f}~\texttt{a}~\texttt{b}}{e}
+\]
+is well-typed (assuming $\texttt{a}: \texttt{i32}$ and $e$ is
+well-typed), but
+\[
+\Let{(\texttt{m}: \texttt{i32}, \texttt{v}: [\texttt{m}][\texttt{a}]\tau)}{\texttt{f}~\texttt{a}~\texttt{b}}{e}
+\]
+is not (note the swapped dimensions in the type of \texttt{v}).
+
+Another interesting case is for functions and operators, because of
+the named parameters.  We assume that all arguments to the function
+are variable names.  Intuitively, we then construct a substitution
+$S_{p}$ from the parameter names in the type of the function to the
+concrete names of the arguments, and apply this substitution before
+checking whether the argument types match the parameter types.  The
+substitution is also applied to the result type.
+
+\begin{figure}[bt]
+  \textrm{\textit{Further existentialising an existential type}}
+  \begin{align*}
+    \textrm{ext}(\nseq{x}{n},\exists\nseq{d}{m}.\rho) = %
+    \exists \seq{y}~\nseq{d}{m}.\rho \\
+    \textrm{where}~\seq{y} = \textrm{those of $\nseq{x}{n}$ free in $\rho$}
+  \end{align*}
+
+  \sempart{Expressions}{\Gamma \vd e : \exists\seq{d}.\rho}
+
+  \fracc{
+    \Gamma \vd e_1 : \exists\nseq{d}{l}.\rho
+    \\
+    p = (\nseq{z}{l},\nseq{y}{m}) \sp \vdp p : \rho
+    \\
+    \exists S_r.(\textrm{$S_{r}$ is bijection from $\nseq{z}{l}$ to $\nseq{d}{l}$}) \wedge S_r(\rho) = (\nseq{\texttt{i32}}{l}, \nseq{\tau'}{m})
+    \\
+    \Gamma,p \vd e_2 : \exists{x}{k}.\rho'
+  }{
+    \Let{(\nseq{x_i: \tau_i}{n})}{e_1}{e_2} : \textrm{ext}(\nseq{x}{n}, \exists{x}{k}.\rho')
+  }
+
+\fracc{
+  \textrm{lookup}_{\textrm{fun}}(f) = \nseq{(p_i: \tau_i)}{n} \rightarrow \exists\nseq{d}{l}\nseq{\tau'}{m}
+    \\
+    S = \langle \nseq{p_i \mapsto x_i}{n} \rangle \quad \forall i \in \Set{1,\ldots,n}.\Gamma(x_i) = S(\tau_i)
+}
+{\Gamma \vd f~x_{1}~\ldots~x_n : \exists\nseq{d}{l}.S(\nseq{\tau'}{m})}
+
+\fracc{
+  \Gamma \vda a_i : \etau^p_i \sp i \in \Set{1, \ldots, n}\\
+  \textrm{TySch}(\emph{op}) = \nseq{(p_i: \etau_i)}{n} \rightarrow \exists\nseq{d}{l}.\nseq{\tau'}{m} \\
+  S = \langle \nseq{p_i \mapsto x_i}{n}~\textrm{where $x_{i}=a_{i}$} \rangle \quad \forall i \in \Set{1,\ldots,n}.\etau^p_i = S(\etau_i)}{
+  \Gamma \vd \emph{op}~\nseq{a}{n} : \exists\nseq{d}{l}.S(\nseq{\tau'}{m})
+}
+
+\fracc{
+  \Gamma(s) = \texttt{bool} \\
+  \Gamma \vd e_1 : \exists \seq{x}.\rho_1 \sp \Gamma \vd e_2 : \exists \seq{y}.\rho_2
+  \\
+  (\exists\seq{z}.\rho') = \textrm{Unification of $\seq{x}.\rho_1$ and $\seq{y}.\rho_2$}
+}{
+  \Gamma \vd \Let{p}{\If{s}{e_1}{e_2}}{e_3} : \exists\seq{z}.\rho'
+}
+
+  \caption{Size-aware typing rules for interesting expressions.}
+  \label{fig:sizeTypeRules}
+\end{figure}
+
+\section{Size Inference by Example}
 \label{subsec:size-analysis-intuition}
 
+Thi section demonstrates, by example, the code transformation that (i)
+makes explicit in the code the shape-dependent types and verifies the
+assumed invariants and (ii) optimizes away in many cases the
+existential types.  Our philosophy is to initially use existential
+types liberally, with the expectation that inlining and simplification
+will eventually remove almost all of them.
 
 \begin{figure}
 \begin{lstlisting}
@@ -176,22 +275,9 @@ let main (vsss: [][][]f64): [][]f64 =
 \end{figure}
 
 The program in \Cref{fig:RunEgSrc} receives as input a
-three-dimensional array \texttt{A}, and produces a two-dimensional
-array \texttt{B}, by mapping the elements of the outermost dimension
-of \texttt{A} by function \texttt{f}, such that each of the rows of
-\texttt{B} is the catenation of the arrays produced by reducing the
-innermost dimension of \texttt{A} by addition and multiplication,
-respectively. The Futhark source language is very close to the
-un-sized IR in \Cref{fig:RunEgSrc}, except that types are
-required only in function declarations, and expressions need not be in
-A-normal form.
-
-The parameters/result of \texttt{main} are treated in adhoc fashion
-(read/written from/to a file).
-Note that the source IR is size-agnostic (typed): 
-for example, \texttt{B} has been inferred to be a two-dimensional array of 
-reals \texttt{--} as a result of a \texttt{map} with a function of signature
-\texttt{[[real]] $\rightarrow$ [real]} \texttt{--} but its shape is not known yet. 
+three-dimensional array \texttt{vsss}, and produces a two-dimensional
+array, by mapping the elements of the outermost dimension of
+\texttt{vsss} by function \texttt{f}.
 
 \begin{figure}
 \begin{lstlisting}

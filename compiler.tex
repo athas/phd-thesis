@@ -1,4 +1,4 @@
-\renewcommand{\sp}{~~~~~}
+\renewcommand{\sp}{\quad}
 \newcommand{\ft}{\phi}
 \newcommand{\fts}{\varphi}
 \newcommand{\tty}{\rho}
@@ -11,9 +11,9 @@
 \newcommand{\vdhp}{\vd_{\hat{\textrm{p}}}}
 \newcommand{\vdP}{\vd_\textrm{P}}
 \newcommand{\vda}{\vd_\textrm{a}}
-\newcommand{\fracc}[2]{\begin{eqnarray} \frac{\begin{array}{c} #1
-    \end{array}}{\begin{array}{c} #2 \end{array}} \end{eqnarray}}
-\newcommand{\fraccn}[2]{\refstepcounter{equation}\mbox{$\frac{\begin{array}{c} #1 \end{array}}{\begin{array}{c} #2 \end{array}}$}~(\arabic{equation})}
+\newcommand{\fracc}[2]{\begin{eqnarray} \inference{#1
+    }{#2}\end{eqnarray}}
+\newcommand{\fraccn}[2]{\refstepcounter{equation}\mbox{$\inference{#1}{#2}$}~(\arabic{equation})}
 \newcommand{\fraccc}[2]{\mbox{$\frac{\begin{array}{c} #1 \end{array}}{\begin{array}{c} #2 \end{array}}$}}
 \newcommand{\fn}{\ensuremath{\lambda}}
 \newcommand{\Fn}[3]{\fn#2:~#1~\rightarrow #3}
@@ -258,15 +258,16 @@ removeDeadMapping _ _ = cannotSimplify
 This section describes the abstract syntax of a simplified form of the
 Futhark intermediate representation (IR).
 
-\paragraph{Notation for sequences.} Whenever $z$ is an object of some
-kind, we write $\bar{z}$ to range over sequences of objects of this
-kind. When we want to be explicit about the size of a sequence
-$\bar{z} = z_0,\cdots,z_{(n-1)}$, we often write it on the form
-$\nseq{z}{n}$ and we write $z,\bar{z}$ to denote the sequence
-$z,z_0,\cdots,z_{(n-1)}$.  Depending on context, the elements of the
-sequence or may not have separators, or be merely juxtaposed.  For
-example, we may use the same notation to shorten a function
-application
+\subsection{Notation for sequences}
+
+Whenever $z$ is an object of some kind, we write $\seq{z}$ to range
+over sequences of objects of this kind. When we want to be explicit
+about the size of a sequence $\seq{z} = z_0,\cdots,z_{(n-1)}$, we
+often write it on the form $\nseq{z}{n}$ and we write $z,\seq{z}$ to
+denote the sequence $z,z_0,\cdots,z_{(n-1)}$.  Depending on context,
+the elements of the sequence or may not have separators, or be merely
+juxtaposed.  For example, we may use the same notation to shorten a
+function application
 \[
   f~\nseq{v}{n} \equiv f~v_{1}~\cdots~v_{n}
 \]
@@ -302,7 +303,7 @@ $$
     \utau & ::= & \mbox{$\tau$ ~ $|$ ~ \texttt{*}$\tau$} & \mbox{(Nonunique/Unique type)} \\
     \tty  & ::=   & (\tau_1, \ldots, \tau_n) & \mbox{(Tuple types)}\\
     \utty  & ::=   & (\utau_1, \ldots, \utau_n) & \mbox{(Nonunique/Unique tuple types)}\\
-    \ft & ::= & \tty_1 \rightarrow \tty_2 & \mbox{(Function type)}\\
+    \ft & ::= & \tty_1 \rightarrow \cdots \rightarrow \tty_n & \mbox{(Function type)}\\
     \\
     p & ::= & (x_{1} : \tau_{1})~\ldots~(x_{n} : \tau_{n})  & \mbox{(\lstinline{let} or $\lambda$ pattern)} \\
     \hat{p} & ::= & (x_{1} : \utau_{1})~\ldots~(x_{n} : \utau_{n})  & \mbox{(Function pattern)} \\
@@ -338,10 +339,12 @@ $$
   \label{fig:futhark-ir}
 \end{figure*}
 
-\paragraph{AST definition.} \Cref{fig:futhark-ir} shows the
-(simplified) core IR of Futhark, which will be used for all compiler
-chapters of this thesis.  The syntax is intentionally similar to the
-source language.  Notable details include:
+\subsection{AST definition}
+
+\Cref{fig:futhark-ir} shows the (simplified) core IR of Futhark, which
+will be used for all compiler chapters of this thesis.  The syntax is
+intentionally similar to the source language.  Notable details
+include:
 \begin{itemize}
 \item Variable names are ranged over by $d$, $x$, $y$, and $z$, and we use
   $f$ to range over function names.
@@ -373,8 +376,10 @@ top-level functions and \lstinline{for}-loops---patterns in
 \lstinline{let} bindings and anonymous functions possess no uniqueness
 attributes.
 
-As a syntactic convenience, we also permit the omission of of \kw{in}
-immediately preceding \kw{let}.  This allows us to write
+\subsubsection{Syntactic Conveniences}
+
+We permit the omission of of \kw{in} immediately preceding \kw{let}.
+This allows us to write
 \begin{lstlisting}
 let x = 2
 let y = 3
@@ -387,7 +392,21 @@ let y = 3 in
 x + y
 \end{lstlisting}
   which quickly adds up for larger expressions.  This convenience is
-  also present in the Futhark source language.
+  also present in the Futhark source language.  For patterns in
+  \kw{let}-bindings, we will also write
+\[
+  (x_{1}: \tau_{1}, \ldots, x_{n}: \tau_{n})
+\]
+instead of
+\[
+  (x_{1}: \tau_{1}) \ldots (x_{n}: \tau_{n})
+\]
+as strictly required by the syntax, in order to match the source
+language.  For brevity, we will also sometimes elide some type
+annotations.  In such cases we may also elide the parentheses when
+only a single name is bound by the pattern.  We will often stray from
+the strict lambda syntax, and write for example \lstinline{(+2)}
+instead of \lstinline{(\x.x+2)}.
 
 \begin{figure}
 \begin{tabular}{lp{58mm}}
@@ -397,15 +416,26 @@ x + y
   \lstinline[mathescape]!replicate $y$ $x$! & Returns an array of rank one higher than $x$'s rank, containing an $y$-times replication of $x$.\\
   \lstinline[mathescape]!reshape ($y_{1},\ldots,y_{n}$) $x$! & Return an array of shape $y_{1}\times\ldots\times y_{n}$ containing the row-major elements of $x$.  It is a dynamic error if $x$ does not contain exactly $y_{1}\times\ldots\times y_{n}$ elements. \\
   \lstinline[mathescape]!rearrange ($c_{1}, \ldots, c_{n}$) $x$! & Rearrange the order of dimensions of the $n$-dimensional array $x$.  The reordering $c_{1}, \ldots, c_{n}$ must be a permutation of $1...n$. \\
-  \lstinline[mathescape]!map $\lambda$ $x_{1}$ $\ldots$ $x_{n}$! & Apply the $n$-ary function $\lambda$ simultaneously to consecutive elements of $x_{1}\ldots{}x_{n}$, producing an array of the results.  If $\lambda$ returns $k$ values, $k$ arrays are returned. \\
+\end{tabular}
+\caption{Description of array operators.  SOACs are described on \cref{fig:soacDesc}}
+\label{fig:arrayDesc}
+\end{figure}
+
+\begin{figure}
+  \centering
+\begin{tabular}{lp{80mm}}
+  $\emph{op}~\nseq{a}{l}$ & Description \\ \hline
+  \lstinline[mathescape]!map $\lambda$ $\nseq{x}{n}$! & Apply the $n$-ary function $\lambda$ simultaneously to consecutive elements of $x_{1}\ldots{}x_{n}$, producing an array of the results.  If $\lambda$ returns $k$ values, $k$ arrays are returned. \\
   \lstinline[mathescape]!scatter $x$ $y$ $z$! & For all $i$, write $z[i]$ to position $y[j]$ in $x$.  Consumes $x$ and semantically returns a new array.  The result is unspecified if different values are written to the same position.  Out-of-bound writes have no effect. \\
-  \lstinline[mathescape]!reduce $\lambda$ ($y_{1}, \ldots, y_{n}$) $x_{1}$ $\ldots$ $x_{n}$! &
+  \lstinline[mathescape]!reduce $\lambda$ ($\nseq{y}{n}$) $\nseq{x}{n}$! &
                                                                                                Perform a reduction of arrays $x_{1}, \ldots, x_{n}$ via the $2n$-ary function $\lambda$, producing $n$ values.  The values $y_{1}, \ldots, y_{n}$ constitute a neutral argument for $\lambda$.
   \\
-  \lstinline[mathescape]!scan $\lambda$ ($y_{1}, \ldots, y_{n}$) $x_{1}$ $\ldots$ $x_{n}$! &
+  \lstinline[mathescape]!scan $\lambda$ ($\nseq{y}{n}$) $\nseq{x}{n}$! &
                                                                                              Perform an inclusive prefix scan of arrays $x_{1}, \ldots, x_{n}$ via the $2n$-ary function $\lambda$, producing $n$ values.  The values $y_{1}, \ldots, y_{n}$ constitute a neutral argument for $\lambda$. \\
-  \lstinline[mathescape]!filter $\lambda$ $x_{1}$ $\ldots$ $x_{n}$! &
- Produce $n$ arrays, containing only those elements with index $j$ for which $\lambda~\nseq{x_{i}[j]}{n}$ is true.
+  \lstinline[mathescape]!filter $\lambda$ $\nseq{x}{n}$! &
+                                                                      Produce $n$ arrays, containing only those elements with index $j$ for which $\lambda~\nseq{x_{i}[j]}{n}$ is true. \\
+  $\kw{stream\_map}~\lambda~\nseq{x}{n}$ & See \cref{sec:streaming-soacs}. \\
+  $\kw{stream\_red}~\lambda_{c}~\lambda_{f}~\nseq{x}{n}$ & See \cref{sec:streaming-soacs}. \\
 \end{tabular}
 \caption{Description of SOAC operators.}
 \label{fig:soacDesc}
@@ -419,29 +449,21 @@ x + y
   {\lstinline!iota!} & : & $\texttt{i32} \rightarrow []\texttt{i32}$ \\
   {\lstinline!replicate!} & : & $\forall\alpha.\texttt{i32} \rightarrow \alpha \rightarrow []\alpha$ \\
   \lstinline[mathescape]!reshape! & : & $\forall\alpha.(\texttt{i32}_{1}, \ldots, \texttt{i32}_{n})\rightarrow[]_{1}\cdots[]_{m}\alpha\rightarrow[]_{1}\cdots[]_{n}\alpha$ \\
-  \lstinline[mathescape]!rearrange ($c_{1}, \ldots, c_{n}$)! & : & $\forall\alpha.[]_{1}\cdots[]_{n}\alpha\rightarrow[]_{1}\cdots[]_{n}\alpha$ \\
-  {\lstinline!map!} & : & $\forall\bar{\alpha}^{(n)}\bar{\beta}^{(m)}. (\nseq{\alpha}{n} \rightarrow (\bar{\beta}^{(m)}))$ \\
-          & & ~~~~~~~~~~~~~~~~~ $\rightarrow \nseq{[]\alpha_i}{n}$ \\
-          & & ~~~~~~~~~~~~~~~~~ $\rightarrow ([]\beta_1,\ldots,[]\beta_m)$ \\
-  {\lstinline!scatter!} & : & $\forall \nseq{\alpha}{n}.(\nseq{[]\alpha_{i}}{n})$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[]\texttt{i32}}{n})$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[]\alpha_i}{n})$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[]\beta_i}{n})$\\
-  {\lstinline!reduce!} & : & $\forall\bar{\alpha}^{(n)}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\bar{\alpha}^{(n)}))$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{n})$\\
-          & & ~~~~~~~~~~ $\rightarrow \nseq{[]\alpha_i}{n}$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$ \\
-  {\lstinline!scan!} & : & $\forall\bar{\alpha}^{(n)}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\bar{\alpha}^{(n)}))$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{n})$\\
-          & & ~~~~~~~~~~ $\rightarrow \nseq{[]\alpha_i}{n}$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[]\alpha_i}{m})$ \\
-  {\lstinline!filter!} & : & $\forall\bar{\alpha}^{(n)}.(\alpha_1 \rightarrow \ldots \rightarrow \alpha_n \rightarrow \texttt{bool})$ \\
-          & & ~~~~~~~~~~ $\rightarrow \nseq{[]\alpha_i}{n}$ \\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[]\alpha_i}{n})$ \\
+  \lstinline[mathescape]!rearrange ($\nseq{c}{n}$)! & : & $\forall\alpha.[]_{1}\cdots[]_{n}\alpha\rightarrow[]_{1}\cdots[]_{n}\alpha$ \\
+  {\lstinline!map!} & : & $\forall\nseq{\alpha}{n}\nseq{\beta}{m}.(\nseq{\alpha}{n} \rightarrow (\nseq{\beta}{m})) \rightarrow \nseq{[]\alpha_i}{n} \rightarrow (\nseq{\beta}{m})$ \\
+  {\lstinline!scatter!} & : & $\forall \nseq{\alpha}{n}.(\nseq{[]\alpha_{i}}{n}) \rightarrow (\nseq{[]\texttt{i32}}{n}) \rightarrow (\nseq{[]\alpha_i}{n}) \rightarrow (\nseq{[]\beta_i}{n})$\\
+  {\lstinline!reduce!} & : & $\forall\nseq{\alpha}{n}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\nseq{\alpha}{n})) \rightarrow (\nseq{\alpha}{n}) \rightarrow \nseq{[]\alpha_i}{n} \rightarrow (\nseq{\alpha}{n})$ \\
+  {\lstinline!scan!} & : & $\forall\nseq{\alpha}{n}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\nseq{\alpha}{n})) \rightarrow (\nseq{\alpha}{n}) \rightarrow \nseq{[]\alpha_i}{n} \rightarrow (\nseq{[]\alpha_i}{n})$ \\
+  {\lstinline!filter!} & : & $\forall\nseq{\alpha}{n}.(\nseq{\alpha}{n} \rightarrow \texttt{bool}) \rightarrow \nseq{[]\alpha_i}{n} \rightarrow (\nseq{[]\alpha_i}{n})$ \\
+  \kw{stream\_map} & : & $\forall\nseq{\alpha}{n}~\nseq{\beta}{m}.(\nseq{[]\alpha_{i}}{n} \rightarrow (\nseq{[]\beta_{i}}{m})) \rightarrow \nseq{[]\alpha_i}{n} \rightarrow (\nseq{[]\beta}{m})$ \\
+  \kw{stream\_red} & : & $\forall\nseq{\alpha}{n}~\nseq{\beta}{m}.(\nseq{\beta}{m} \rightarrow \nseq{\beta}{m} \rightarrow (\nseq{\beta}{m})) \rightarrow (\nseq{[]\alpha_{i}}{n} \rightarrow (\nseq{\beta_{i}}{m}))$ \\
+  & & $~~~\rightarrow \nseq{[]\alpha_i}{n} \rightarrow (\nseq{\beta}{m})$ \\
 \end{tabular}
 \caption{Size-agnostic type schemes for operators, including various SOACs.}
 \label{fig:soacType}
 \end{figure}
+
+\subsection{Array Operators}
 
 An \textit{array operator} ($op$) is one of several constructs that
 operate on arrays.  These include SOACs, but also such operations as
@@ -456,7 +478,7 @@ functions may themselves be functions:
 
 \begin{tabular}{lrl}
 $\etau$ & $::=$ & $\alpha~|~(\tau_{1}, \ldots, \tau_{n})~|~\etau_1 \rightarrow \etau_2~|~\etau \rightarrow \etau$ \\
-$\opty$ & $::=$ & $\forall\bar{\alpha}.\etau$
+$\opty$ & $::=$ & $\forall\seq{\alpha}.\etau$
 \end{tabular}
 
 \noindent Extended types ($\ubar{\tau}$) and extended type schemes
@@ -464,25 +486,28 @@ $\opty$ & $::=$ & $\forall\bar{\alpha}.\etau$
 shall be implicit about converting types and type schemes to and from
 their extended counter parts.  We treat the single-element tuple
 $(\tau)$ as equivalent to $\tau$.  A \emph{substitution} ($S$) is a
-mapping from type variables to extended types. Applying a substitution
-$S$ to some object $B$, written $S(B)$, has the effect of
-simultaneously applying $S$ to type variables in $B$ (being the
-identity outside its domain). An extended type $\etau'$ is \emph{an
-  instance of} an extended type scheme
-$\opty = \forall \vec{\alpha}.\etau$, written $\opty \geq \etau'$,
-if there exists a substitution $S$ such that $S(\etau) = \etau'$.
+mapping from type variables (and, later, term variables) to extended
+types.  We write substitutions $\langle x\mapsto y\rangle$.  Applying
+a substitution $S$ to some object $B$, written $S(B)$, has the effect
+of simultaneously applying $S$ to variables in $B$ (being the identity
+outside its domain).  An extended type $\etau'$ is \emph{an instance
+  of} an extended type scheme $\opty = \forall \vec{\alpha}.\etau$,
+written $\opty \geq \etau'$, if there exists a substitution $S$ such
+that $S(\etau) = \etau'$.
 
 Type schemes for operators, including a representative subset of the
-SOAC operators, are given in \Cref{fig:soacType}, and an informal
-description of them is given in \Cref{fig:soacDesc}.  The SOACs of the
-intermediate language (e.g., \lstinline{map}) are a tuple-of-array
-versions of the user language SOACs. The SOACs of the intermediate
-language receive an arbitrary number of array arguments and produce a
-tuple of arrays as their result.  The semantics of a SOAC operator can
-be intuitively understood as a composition between \lstinline{unzip},
-the user-language SOAC (e.g., \lstinline{map}), and \lstinline{zip},
-where the unnamed function is suitably modified to work with the flat
-sequence of array arguments.
+SOAC operators, are given in \cref{fig:soacType}, and an informal
+description is given in \cref{fig:arrayDesc,fig:soacDesc}.  The SOACs
+of the intermediate language (e.g., \lstinline{map}) are a
+tuple-of-array versions of the user language SOACs. The SOACs of the
+intermediate language receive an arbitrary number of array arguments
+and produce a tuple of arrays as their result.  The semantics of a
+SOAC operator can be intuitively understood as a composition between
+\lstinline{unzip}, the user-language SOAC (e.g., \lstinline{map}), and
+\lstinline{zip}, where the unnamed function is suitably modified to
+work with the flat sequence of array arguments.
+
+\subsection{Typing Rules}
 
 In the type rules, we permit the implicit transformation of uniqueness
 types and patterns $\utau/\utty/\hat{p}$ to their corresponding
@@ -539,7 +564,7 @@ $\Gamma$, the program $P$ has tuple type $\rho$.''
 
 \fracc{}{\Gamma \vdP \epsilon}
 
-\caption{Typing rules for Futhark's core IR, excluding expressions.}
+\caption{Typing rules for Futhark's core IR, excluding expressions, which are shown on \cref{fig:srcTypeRulesExps}}
 \label{fig:srcTypeRules}
 \end{figure}
 
@@ -553,8 +578,8 @@ $\Gamma$, the program $P$ has tuple type $\rho$.''
 \fracc{\textrm{ConstType}(\emph{ct}) = \tau \sp \Gamma, x:\tau \vd e : \rho}{\Gamma \vd \Let{x:\tau}{\emph{c}}{e} : \rho}
 
 \fracc{\Gamma \vda a_i : \etau_i \sp i \in \Set{1, \ldots, n}\\
-\textrm{TySch}(\emph{op}) \geq (\bar{\etau}^{(n)}) \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vd e : \rho'}
-{\Gamma \vd \Let{p}{\emph{op}~\bar{a}^{(n)}}{e} : \rho'}
+\textrm{TySch}(\emph{op}) \geq (\nseq{\etau}{n}) \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vd e : \rho'}
+{\Gamma \vd \Let{p}{\emph{op}~\nseq{a}{n}}{e} : \rho'}
 
 \fracc{\Gamma(x_i) = \tau_i \sp i \in \Set{1, \ldots, n} \\
 \textrm{lookup}_{\textrm{fun}}(f) = \tau_1 \rightarrow \cdots \rightarrow \tau_n \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vd e : \rho'}
@@ -570,10 +595,12 @@ $\Gamma$, the program $P$ has tuple type $\rho$.''
   tuple, meaning that all other expressions are always bound to a
   pattern.}
 \label{fig:srcTypeRulesExps}
+
 \end{figure}
 
 \fixme{Some rules are missing.}
 
+\FloatBarrier
 \section{Checking Uniqueness Types}
 \label{sec:uniqueness-formalism}
 
