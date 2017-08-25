@@ -29,7 +29,7 @@ code''.\footnote{I will using C as the main point of reference in the
 In contrast, languages whose abstract model is more different from
 physical machines, so-called ``high-level languages'', cannot be as
 easily mapped to real machines.  Compilers must invest considerable
-effort in mapping e.g. the call-by-need lambda calculus of Haskell to
+effort in mapping for example the call-by-need lambda calculus of Haskell to
 the sequential register machine~\cite{jones1992implementing}.  Even
 after decades of work, high-level languages struggle to catch up to
 the performance of C on the sequential random-accesss register
@@ -750,9 +750,9 @@ such as copy propagation, constant folding, and dead code removal
 remain useful in a data-parallel such as Futhark, other, more
 sophisticated, transformations are also important.  One such
 transformation is \textit{loop fusion}, which removes intermediate
-results by combining several loops into one.  The mechanisms behind
-fusion the Futhark compiler are discussed in detail in
-Chapter~\ref{chap:fusion}. The remainder of this section discusses the
+results by combining several loops into one.  \Cref{chap:fusion}
+discusses in more detail the technique by which fusion is implemented
+in the Futhark compiler. The remainder of this section discusses the
 intuition and motivation behind loop fusion, as well as showing how
 fusion is significantly easier in the functional setting than for
 imperative languages.
@@ -1559,7 +1559,7 @@ let cluster_sums_par [k] [n] [d]
   let increments: [n][k][d]i32 = |\label{line:cluster_sums_par_map_begin}|
         map (\(p, c) ->
           let a = replicate k (replicate d 0.0)
-          in a with [c] < map (/f32 counts[c]) p)
+          in a with [c] <- map (/f32 counts[c]) p)
              points |\label{line:cluster_sums_par_map_end}|
   let increments': [k][d][n]i32 =
     rearrange (1,2,0) increments |\label{line:cluster_sums_par_sum_begin}|
@@ -1597,7 +1597,7 @@ programmer specify this \textit{chunk function} directly.
 
 As shown in \cref{fig:stream-means}, \StreamRed{} is given the
 associative reduction operator (lines
-\ref{cluster_sums_stream_op_begin}--\ref{cluster_sums_stream_op_begin}),
+\ref{cluster_sums_stream_op_begin}--\ref{cluster_sums_stream_op_end}),
 together with the \textit{chunk function} (line
 \ref{cluster_sums_stream_chunk}).  Because we wish to process two
 arrays---both \texttt{points} and \texttt{membership}---we use
@@ -1647,7 +1647,7 @@ reduction function will be fully parallelised as a segmented
 reduction, and the body of the chunk function will be sequentialised.
 
 The performance of the \StreamRed{} version compared to explicitly
-parallel and equential code is shown in \cref{tab:streaming-perf}.  We
+parallel and sequential code is shown in \cref{tab:streaming-perf}.  We
 see that the fully parallel version running on a GPU is in fact slower
 than the sequential version, because it does significantly more work.
 The \StreamRed{} version performs well both when compiled to parallel
@@ -1657,14 +1657,14 @@ code, and when compiled to sequential code.
   \centering
   \begin{tabular}{llrr}
     \textbf{Program} & \textbf{Version}  & \textbf{Runtime} & \textbf{Speedup} \\
-\multirow{4}{*}{Cluster means} & Chunked (parallel) & 17.6ms & \multirow{2}{*}{$\times7.6$} \\
+\multirow{4}{*}{Cluster means} & Chunked (parallel) & 17.6ms & \multirow{2}{*}{$\times7.60$} \\
 & Fully parallel & 134.1ms & \\\cline{2-4}
 & Chunked (sequential) & 98.3ms & \multirow{2}{*}{$\times0.92$} \\
 & Fully sequential & 90.7ms & \\\hline
 
 \multirow{4}{*}{Sobol numbers} & Chunked (parallel) & 3.9ms & \multirow{2}{*}{$\times11.13$} \\
 & Fully parallel & 43.4ms & \\\cline{2-4}
-& Chunked (sequential) & 129.7ms & \multirow{2}{*}{$\times1.0$} \\
+& Chunked (sequential) & 129.7ms & \multirow{2}{*}{$\times1.00$} \\
 & Fully sequential & 129.1ms & \\
   \end{tabular}
   \caption{Speedup of chunking SOACs versus fully sequential and
@@ -1720,12 +1720,12 @@ Monte-Carlo algorithms.  While the summation is contrived, the need to
 efficiently generate Sobol sequences comes from the OptionPricing
 benchmark presented in \cref{sec:finpar}.  Sobol numbers can be
 computed by a \kw{map}-parallel formula, or by a cheaper (recurrence)
-one, but which requires \kw{scan}~\cite{FinPar:TACO}.  This property
-can be expressed elegantly with \StreamMap{}, whose function accepts
-an input chunk, and must produce an output chunk of the same size.
-Chunks are processed in parallel.  For this program, the chunk
-function applies the \kw{map}-parallel formula once, then applies the
-\kw{scan} formula.
+one, but which requires \kw{scan}~\cite{FinPar:TACO,LexiFiPricing}.
+This property can be expressed elegantly with \StreamMap{}, whose
+function accepts an input chunk, and must produce an output chunk of
+the same size.  Chunks are processed in parallel.  For this program,
+the chunk function applies the \kw{map}-parallel formula once, then
+applies the \kw{scan} formula.
 
 \begin{figure}
 \begin{lstlisting}[numbers=left]
@@ -1783,7 +1783,13 @@ Note that the two formulae are algorithmically very different.  There
 is little chance that a compiler can efficiently derive one from the
 other.  The performance of the StreamMap{} version compared to
 explicitly parallel and sequential code is shown in
-\cref{tab:streaming-perf}.
+\cref{tab:streaming-perf}.  The significant speedup of the chunked
+over the fully parallel implementation is due to the inner parallelism
+being efficiently sequentialised through the ``\StreamSeq{} fusion''
+technique discussed in \cref{sec:streamseq-fusion}.  This changes the
+per-chunk memory footprint from $O(\textrm{chunksize})$ to $O(1)$;
+effectively transforming the problem from memory-bound to
+compute-bound.
 
 \section{Interoperability}
 \label{sec:interoperability}
