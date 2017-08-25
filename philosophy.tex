@@ -1,6 +1,6 @@
 \chapter{Background and Philosophy}
 \label{chap:philosophy}
-\fixme{Add roadmap}
+
 In physics, the speed of light, denoted $c$, is the ultimate speed
 limit of the universe.  Likewise in programming, ``as fast as C'' is
 often used as an indication that some programming language is as fast
@@ -45,26 +45,26 @@ significance) of C-like languages, manufacturers have attempted to
 prolong the illusion of the sequential random-access machine for as long as
 possible.
 
-Unfortunately, while C may be exceeded (as I hope to show in this
-thesis), $c$ is a harder nut to crack.  The machine on which I am
-typing contains a CPU with a clock frequency of $2.3GHz$,
-corresponding to a clock cycle taking $0.43ns$.  Given that $c$ is
-approximately $3\cdot10^{8}m/s$, light moves approximately $13cm$ in
-the the time the CPU takes to perform a clock cycle, thus physically
-limiting the distance a single piece of information can travel in a
-single cycle.
+Unfortunately, while C may be exceeded (as we hope to show in this
+thesis), $c$ is a tougher nut to crack.  The machine on which this
+paragraph is being typed contains a CPU with a clock frequency of
+$2.3GHz$, corresponding to a clock cycle taking $0.43ns$.  Given that
+$c$ is approximately $3\cdot10^{8}m/s$, light moves approximately
+$13cm$ in the the time the CPU takes to perform a clock cycle, thus
+physically limiting the distance a single piece of information can
+travel in a single cycle.
 
-Another physical limitation is power dissipation: roughly, the power
-usage of the transistors in a processor is roughly proportional to the
-square of its clock frequency\fixme{cite}.  This prevents an increase in clock
-frequency unless we can compensate with an increase in the efficiency
-of the transistors.  For a sequential machine that executes
-instructions in exactly the order they are given, the only way to
-speed up execution of a program is to increase the rate at which
-instructions are executed.  If we can double the rate at which
-instructions are processed, we in effect halve the time it takes to
-execute some program (assuming no memory bottlenecks, which I will
-discuss later).
+Another, even greater, physical limitation is power dissipation:
+roughly, the power usage of the transistors in a processor is roughly
+proportional to the square of its clock frequency\fixme{cite}.  This
+prevents an increase in clock frequency unless we can compensate with
+an increase in the efficiency of the transistors.  For a sequential
+machine that executes instructions in exactly the order they are
+given, the only way to speed up execution of a program is to increase
+the rate at which instructions are executed.  If we can double the
+rate at which instructions are processed, we in effect halve the time
+it takes to execute some program (assuming no memory bottlenecks,
+which we will discuss later).
 
 In the popular vernacular, \textit{Moore's Law} is typically rendered
 as ``computers double in speed every two years''.  But actually, the
@@ -160,7 +160,30 @@ mismatch becomes acute when we move away from the comparatively benign
 world of multicore CPUs and into the realm of massively parallel
 processors.
 
+In this chapter we shall discuss the problems caused by the impedance
+mismatch, and what a better programming model may look like.  We begin
+in \cref{sec:massively-parallel-machines} by giving an overview of
+massively parallel machines, in particular the now-ubiquitous GPUs.
+\Cref{sec:a-parallel-programming-language} presents data-parallel
+functional programming, a programming model suited for massively
+parallel machines, through \textit{Futhark}, the programming language
+that has been developed as part of this thesis.  In
+\cref{sec:fusion-for-modular-programming,sec:nested-parallelism} we
+argue for the importance of fusion and nested parallelism for modular
+parallel programming.  In \cref{sec:new-language} we defend the
+decision to introduce yet another programming language, rather than
+re-use an existing one, by arguing that certain features of existing
+functional languages hinder efficient parallel execution.
+\Cref{sec:interoperability} shows how Futhark, a restricted
+data-parallel language, can be used in practise, by demonstrating
+interoperability with mainstream and not-so-mainstream technologies.
+Finally, \cref{sec:related-automatic-par} shows in practise the
+difficulties involved in parallelising legacy sequential code, and
+\cref{sec:related-data-par} discusses other approaches to
+data-parallel functional programming.
+
 \section{Massively Parallel Machines}
+\label{sec:massively-parallel-machines}
 
 To a large extent, mainstream CPUs favour programming convenience,
 familiarity, and backwards compatibility over raw performance.  We
@@ -310,6 +333,7 @@ domain of experts, and off-limits to most programmers, except through
 the use of restricted libraries offering pre-defined primitives.
 
 \section{A Parallel Programming Language}
+\label{sec:a-parallel-programming-language}
 
 We need a better programming model; one that does not have as
 fundamental a mismatch between its execution model and parallel
@@ -701,6 +725,7 @@ limited parallelism is much easier, than the the efforts parallelising
 compilers go to when converting sequential code to parallel code.
 
 \section{Fusion for Modular Programming}
+\label{sec:fusion-for-modular-programming}
 
 One of the most important goals for most programming languages is to
 support modular and abstract programming.  A modular program is
@@ -2251,6 +2276,7 @@ the very beginning in terms of data-parallel operators rather than
 sequential loops.
 
 \section{Related Work on Data-Parallel Languages}
+\label{sec:related-data-par}
 
 Fortunately, not all work on parallelism involves Fortran 77.  There
 is a rich body of literature on embedded array languages and libraries
@@ -2276,16 +2302,6 @@ parallelism by vertical fusion, and untilizing unused registers by
 software prefetching and loop unrolling, while multicore
 optimizations~\cite{Gordon:2006:ECT:1168857.1168877} are aimed at
 finding the right mix of task, data and pipeline parallelism.
-
-Finally, we note that Futhark is not intended as a general-purpose
-language, but rather it is aimed at (i) expressing computational
-kernels, which can then be linked with applications written in
-mainstream languages, and, at (ii) being used as a code-generation
-target for high-level DSLs.  Such a usage was demonstrated by an
-experiment~\cite{ElsmanDybdal:Array:2014,Henriksen:2016:AGT:2975991.2975997}
-in which a subset of APL was compiled to Futhark, executed on GPU, and
-used from Python for visualization purposes.
-
 
 %%% Local Variables:
 %%% mode: latex

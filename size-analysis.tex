@@ -32,7 +32,18 @@ important technique is \textit{function slicing}, which we use to
 derive functions that precompute the size of values returned by a
 function.
 
+\Cref{sec:sized-ir} introduces the syntax of the IR, which is a slight
+extension of the one presented in the previous chapter.  In
+\cref{sec:size-analysis-intuition} we give an intuition for how size
+inference functions, via an example of how a program progresses from
+having no inferred sizes, to being highly existential, to finally
+having most sizes resolved statically.  \Cref{sec:size-type-rules}
+presents a subset of the type rules for the sized IR, and
+\cref{sec:size-inference} shows some of the transformations used to
+add size information to an unsized program.
+
 \section{A Sized IR}
+\label{sec:sized-ir}
 
 One important observation of the IR presented in the previous chapter
 is that some operator-semantics invariants, related to the array
@@ -132,111 +143,22 @@ able to ``pre-allocate'' space for the result.  However, the return
 size cannot in general be known in advance without evaluating the
 function.
 
-\subsection{New Type Rules}
-
-The addition of size-dependent types requires an extension of the
-typing rules.  The main problem is the handling of an existential
-context in the return type of an expression.  We extent the type
-judgment for expressions such that it now returns an a type with an
-existentially quantified part (which may be empty).  The most
-interesting rules are shown on \cref{fig:sizeTypeRules} and discussed
-below.
-
-The rule for \kw{let}-bindings is interesting in that it may
-``increase'' the existensiality of a type.  As an example, consider an
-expression \lstinline{replicate x v}.  Supposing $\texttt{v}: \tau$,
-this expression has type $[x]\tau$ %
-while \mbox{\lstinline{let x = y in replicate x v}} has type
-$\exists d.[d]\tau$.  The specific names used in the existential
-quantification do not matter.
-
-It is also in the rule for \kw{let}-bindings that we bind the
-existential sizes to concrete variables.  For example, if the return
-type of the function contains $l$ existential sizes, then we require
-that the pattern begins with $l$ names of type \texttt{i32}.
-Operationally, these will be bound to the actual sizes of the value
-returned by the function.  For the type rule, there must be some
-substitution $S_{r}$ such that, when $S_{r}$ is applied to the return
-type of the function, the resulting type matches the types bound by
-the non-existential part of the pattern.  For example, given a
-function
-\[
-  \texttt{f}: (\texttt{x}: \texttt{i32}) \rightarrow (\texttt{y}: \tau) \rightarrow \exists \texttt{n}.[\texttt{x}][\texttt{n}]\tau
-\]
-we can conclude that the \kw{let}-binding
-\[
-\Let{(\texttt{m}: \texttt{i32}, \texttt{v}: [\texttt{a}][\texttt{m}]\tau)}{\texttt{f}~\texttt{a}~\texttt{b}}{e}
-\]
-is well-typed (assuming $\texttt{a}: \texttt{i32}$ and $e$ is
-well-typed), but
-\[
-\Let{(\texttt{m}: \texttt{i32}, \texttt{v}: [\texttt{m}][\texttt{a}]\tau)}{\texttt{f}~\texttt{a}~\texttt{b}}{e}
-\]
-is not (note the swapped dimensions in the type of \texttt{v}).
-
-Another interesting case is for functions and operators, because of
-the named parameters.  We assume that all arguments to the function
-are variable names.  Intuitively, we then construct a substitution
-$S_{p}$ from the parameter names in the type of the function to the
-concrete names of the arguments, and apply this substitution before
-checking whether the argument types match the parameter types.  The
-substitution is also applied to the result type.
-
-\begin{figure}[bt]
-  \textrm{\textit{Further existentialising an existential type}}
-  \begin{align*}
-    \textrm{ext}(\nseq{x}{n},\exists\nseq{d}{m}.\rho) = %
-    \exists \seq{y}~\nseq{d}{m}.\rho \\
-    \textrm{where}~\seq{y} = \textrm{those of $\nseq{x}{n}$ free in $\rho$}
-  \end{align*}
-
-  \sempart{Expressions}{\Gamma \vd e : \exists\seq{d}.\rho}
-
-  \fracc{
-    \Gamma \vd e_1 : \exists\nseq{d}{l}.\rho
-    \\
-    p = (\nseq{d^p}{l},\nseq{y}{m})
-    \\
-    \textrm{$S_{r}$ is bijection from $\nseq{d^{p}}{l}$ to $\nseq{d}{l}$} \quad S_r(\rho) = (\nseq{\texttt{i32}}{l}, \nseq{\tau'}{m})
-    \\
-    \Gamma,p \vd e_2 : \exists\nseq{d^r}{k}.\rho'
-  }{
-    \Gamma \vd \Let{p}{e_1}{e_2} : \textrm{ext}(\nseq{x}{n}, \exists\nseq{d^r}{k}.\rho')
-  }
-
-\fracc{
-  \textrm{lookup}_{\textrm{fun}}(f) = \nseq{(p_i: \tau_i)}{n} \rightarrow \exists\nseq{d}{l}\nseq{\tau'}{m}
-    \\
-    S = \langle \nseq{p_i \mapsto x_i}{n} \rangle \quad \forall i \in \Set{1,\ldots,n}.\Gamma(x_i) = S(\tau_i)
-}
-{\Gamma \vd f~x_{1}~\ldots~x_n : \exists\nseq{d}{l}.S(\nseq{\tau'}{m})}
-
-\fracc{
-  \Gamma \vda a_i : \etau^p_i \sp i \in \Set{1, \ldots, n}\\
-  \textrm{TySch}(\emph{op}) = \nseq{(p_i: \etau_i)}{n} \rightarrow \exists\nseq{d}{l}.\nseq{\tau'}{m} \\
-  S = \langle \nseq{p_i \mapsto x_i}{n}~\textrm{where $x_{i}=a_{i}$} \rangle \quad \forall i \in \Set{1,\ldots,n}.\etau^p_i = S(\etau_i)}{
-  \Gamma \vd \emph{op}~\nseq{a}{n} : \exists\nseq{d}{l}.S(\nseq{\tau'}{m})
-}
-
-\fracc{
-  \Gamma(s) = \texttt{bool} \\
-  \Gamma \vd e_1 : \exists \seq{x}.\rho_1 \sp \Gamma \vd e_2 : \exists \seq{y}.\rho_2
-  \\
-  (\exists\seq{z}.\rho') = \textrm{Unification of $\exists\seq{x}.\rho_1$ and $\exists\seq{y}.\rho_2$}
-}{
-  \Gamma \vd \If{s}{e_1}{e_2} : \exists\seq{z}.\rho'
-}
-
-  \caption{Size-aware typing rules for interesting expressions.}
-  \label{fig:sizeTypeRules}
-\end{figure}
+The main difference between the size-dependent typing of the core
+language, and the size annotations of the source language, is that the
+latter are optional and checked dynamically, while the former are
+mandatory and enforced statically.  As shown on
+\cref{fig:soacSizeType}, the \kw{reshape} construct functions as an
+``escape hatch'', by which we can arbitrarily transform the shape of
+an array.  An implicit run-time check enforces that the original shape
+and the desired shape has the same total number of elements.  This is
+used to handle cases that would otherwise not be well-typed.
 
 \section{Size Inference by Example}
-\label{subsec:size-analysis-intuition}
+\label{sec:size-analysis-intuition}
 
-Thi section demonstrates, by example, the code transformation that (i)
-makes explicit in the code the shape-dependent types and verifies the
-assumed invariants and (ii) optimizes away in many cases the
+This section demonstrates, by example, the code transformation that
+(i) makes explicit in the code the shape-dependent types and verifies
+the assumed invariants and (ii) optimizes away in many cases the
 existential types.  Our philosophy is to initially use existential
 types liberally, with the expectation that inlining and simplification
 will eventually remove almost all of them.
@@ -281,7 +203,8 @@ array, by mapping the elements of the outermost dimension of
 
 \begin{figure}
 \begin{lstlisting}
-let concat @(n: i32) (m: i32)@ (xs: [@n@]f64) (ys: [@m@]f64): @d.@[@d@]f64 =
+let concat @(n: i32) (m: i32)@ (xs: [@n@]f64) (ys: [@m@]f64)
+           : @d.@[@d@]f64 =
   let a = @n@
   let b = @m@
   let c = a+b
@@ -537,6 +460,151 @@ let f (m: i32) (k: i32) (vss: [m][k]f64): d.[d]f64 =
   \caption{An example of applying the slicing approach to \lstinline{concat}.}
   \label{fig:FShapeSlice}
 \end{figure}
+
+\section{New Type Rules}
+\label{sec:size-type-rules}
+
+The addition of size-dependent types requires an extension of the
+typing rules.  The main problem is the handling of an existential
+context in the return type of an expression.  We extent the type
+judgment for expressions such that it now returns an a type with an
+existentially quantified part (which may be empty).  The most
+interesting rules are shown on \cref{fig:sizeTypeRules} and discussed
+below.
+
+The rule for \kw{let}-bindings is interesting in that it may
+``increase'' the existensiality of a type.  As an example, consider an
+expression \lstinline{replicate x v}.  Supposing $\texttt{v}: \tau$,
+this expression has type $[x]\tau$ %
+while \mbox{\lstinline{let x = y in replicate x v}} has type
+$\exists d.[d]\tau$.  The specific names used in the existential
+quantification do not matter.
+
+It is also in the rule for \kw{let}-bindings that we bind the
+existential sizes to concrete variables.  For example, if the return
+type of the function contains $l$ existential sizes, then we require
+that the pattern begins with $l$ names of type \texttt{i32}.
+Operationally, these will be bound to the actual sizes of the value
+returned by the function.  For the type rule, there must be some
+substitution $S_{r}$ such that, when $S_{r}$ is applied to the type of
+the bound value, the resulting type matches the types bound by the
+non-existential part of the pattern.  For example, given a function
+\[
+  \texttt{f}: (\texttt{x}: \texttt{i32}) \rightarrow (\texttt{y}: \tau) \rightarrow \exists \texttt{n}.[\texttt{x}][\texttt{n}]\tau
+\]
+we can conclude that the \kw{let}-binding
+\[
+\Let{(\texttt{m}: \texttt{i32}, \texttt{v}: [\texttt{a}][\texttt{m}]\tau)}{\texttt{f}~\texttt{a}~\texttt{b}}{e}
+\]
+is well-typed (assuming $\texttt{a}: \texttt{i32}$ and $e$ is
+well-typed), but
+\[
+\Let{(\texttt{m}: \texttt{i32}, \texttt{v}: [\texttt{m}][\texttt{a}]\tau)}{\texttt{f}~\texttt{a}~\texttt{b}}{e}
+\]
+is not (note the swapped dimensions in the type of \texttt{v}).
+
+A pattern can contain existential parts that are not existential in
+the type.  This is useful for supporting gradual simplification of
+existential sizes, without having the intermediate steps be ill-typed
+For example, consider this expression:
+
+\[
+\Let{\mbox{\lstinline{(d: i32) (a: [d]i32)}}}{\mbox{\lstinline{(let y = x in replicate y 0)}}}{e}
+\]
+
+Since the size \texttt{y} is bound inside of the outer
+\kw{let}-binding, we have no choice but to leave the size \texttt{d}
+existential.  If the compiler then performs copy-propagation, we
+obtain the following expression:
+
+\[
+\Let{\mbox{\lstinline{(d: i32) (a: [d]i32)}}}{\mbox{\lstinline{replicate x 0}}}{e}
+\]
+
+The type of \lstinline{replicate x 0} is \lstinline{[x]i32}, but since
+copy-propagation is not concerned with modifying patterns in
+\kw{let}-patterns, we still existentially quantify the size of the
+result.  A subsequent simplification can then be applied to remove
+unnecessary existential parts of patterns, by noting that \texttt{d}
+will always be \texttt{x}, yielding:
+
+\[
+\Let{\mbox{\lstinline{(a: [x]i32)}}}{\mbox{\lstinline{replicate x 0}}}{e}
+\]
+
+From a compiler engineering point of view, it would be awkward if
+copy-propagation (or other optimisations) were also responsible for
+fixing any changes to existential sizes that were caused by their
+simplifications.  It is cleaner to separate this into multiple
+separate transformations, but this requires that the intermediate
+forms are well-typed.  This fits well with the general philosophy in
+the Futhark compiler of gradual refinement, as was also shown in the
+previous section.  However, making a type \textit{more} existential
+would still require us to fix up the relevant patterns.
+
+Another interesting case is for functions and operators, because of
+the named parameters.  We assume that all arguments to the function
+are variable names.  Intuitively, we then construct a substitution
+$S_{p}$ from the parameter names in the type of the function to the
+concrete names of the arguments, and apply this substitution before
+checking whether the argument types match the parameter types.  The
+substitution is also applied to the result type.
+
+\begin{figure}[bt]
+  \textrm{\textit{Further existentialising an existential type}}
+  \begin{align*}
+    \textrm{ext}(\nseq{x}{n},\exists\nseq{d}{m}.\rho) = %
+    \exists \seq{y}~\nseq{d}{m}.\rho \\
+    \textrm{where}~\seq{y} = \textrm{those of $\nseq{x}{n}$ free in $\rho$}
+  \end{align*}
+
+  \sempart{Expressions}{\Gamma \vd e : \exists\seq{d}.\rho}
+
+  \fracc{
+    \Gamma \vd e_1 : \exists\nseq{d}{k}.\rho
+    \\
+    p = (\nseq{d^p}{l},\nseq{y}{m})
+    \\
+    \textrm{$S_{r}$ is surjective substitution from $\nseq{d^{p}}{l}$ to $\nseq{d}{k}$} \quad S_r(\rho) = (\nseq{\texttt{i32}}{l}, \nseq{\tau'}{m})
+    \\
+    \Gamma,p \vd e_2 : \exists\nseq{d^r}{k}.\rho'
+  }{
+    \Gamma \vd \Let{p}{e_1}{e_2} : \textrm{ext}(\nseq{x}{n}, \exists\nseq{d^r}{k}.\rho')
+  }
+
+\fracc{
+  \textrm{lookup}_{\textrm{fun}}(f) = \nseq{(p_i: \tau_i)}{n} \rightarrow \exists\nseq{d}{l}\nseq{\tau'}{m}
+    \\
+    S = \langle \nseq{p_i \mapsto x_i}{n} \rangle \quad \forall i \in \Set{1,\ldots,n}.\Gamma(x_i) = S(\tau_i)
+}
+{\Gamma \vd f~x_{1}~\ldots~x_n : \exists\nseq{d}{l}.S(\nseq{\tau'}{m})}
+
+\fracc{
+  \Gamma \vda a_i : \etau^p_i \sp i \in \Set{1, \ldots, n}\\
+  \textrm{TySch}(\emph{op}) = \nseq{(p_i: \etau_i)}{n} \rightarrow \exists\nseq{d}{l}.\nseq{\tau'}{m} \\
+  S = \langle \nseq{p_i \mapsto x_i}{n}~\textrm{where $x_{i}=a_{i}$} \rangle \quad \forall i \in \Set{1,\ldots,n}.\etau^p_i = S(\etau_i)}{
+  \Gamma \vd \emph{op}~\nseq{a}{n} : \exists\nseq{d}{l}.S(\nseq{\tau'}{m})
+}
+
+\fracc{
+  \Gamma(s) = \texttt{bool} \\
+  \Gamma \vd e_1 : \exists \seq{x}.\rho_1 \sp \Gamma \vd e_2 : \exists \seq{y}.\rho_2
+  \\
+  (\exists\seq{z}.\rho') = \textrm{Unification of $\exists\seq{x}.\rho_1$ and $\exists\seq{y}.\rho_2$}
+}{
+  \Gamma \vd \If{s}{e_1}{e_2} : \exists\seq{z}.\rho'
+}
+
+  \caption{Size-aware typing rules for interesting expressions.}
+  \label{fig:sizeTypeRules}
+\end{figure}
+
+\section{Size Inference}
+\label{sec:size-inference}
+
+This section presents a set of syntax-directed rules for transforming
+an un-annotated Futhark program into an \textit{annotated} Futhark
+program, where all types have size information.
 
 \section{Related Work}
 
