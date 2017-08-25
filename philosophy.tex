@@ -460,7 +460,8 @@ In functional languages, we usually prefer to include just a few
 powerful foundational constructs, on which the rest of the language
 can be built.  In principle, \lstinline{map} can be used to express
 (almost) all other data-parallel constructs.  For example, we can
-write a summation as follows:
+write a summation as follows, where we assume for simplicity that the
+size of the input array is a power of two:
 
 \begin{lstlisting}
 let sum (xs: []i32): i32 =
@@ -484,25 +485,23 @@ iteration of the loop body.  The array slicing syntax
 and up to (but exclusive) \lstinline{2*n}.
 
 The summation proceeds by repeatedly cutting the array in twain,
-adding each half to the other until only a single element is left.
-For simplicity, we assume that the size of the input array
-\lstinline{xs} is a power of two.  We can characterise the performance
-of \lstinline{sum} with with a work/depth parallel cost
-model~\cite{Blelloch:1995:PSF:224164.224210}.  If we suppose that
-\lstinline{map} runs in work $O(n)$ and depth $O(1)$, the function
-\lstinline{sum} runs in work $O(n)$ and depth $O(\log n)$.  This is
-asymptotically optimal for physically reasonable machine models.
-However, if executed straightforwardly on a GPU, this function will be
-far from reaching peak potential performance.  One reason is that it
-is very expensive to create the intermediate \lstinline{ys} arrays,
-compared to the time taken to add the numbers.  While a ``sufficiently
-smart'' compiler may be able to rewrite the program to avoid some of
-this overhead (and perhaps even take advantage of hardware-specific
-features for performing summations), this is contrary to the
-philosophy behind Futhark.  Although we do not mind aggressive
-optimisation, the transformations we perform should arise naturally
-out of the constructs used by the programmer, and not depend on subtle
-and fragile analyses.
+adding each half to the other until only a single element is left.  We
+can characterise the performance of \lstinline{sum} with with a
+work/depth parallel cost model~\cite{Blelloch:1995:PSF:224164.224210}.
+If we suppose that \lstinline{map} runs in work $O(n)$ and depth
+$O(1)$, the function \lstinline{sum} runs in work $O(n)$ and depth
+$O(\log n)$.  This is asymptotically optimal for physically reasonable
+machine models.  However, if executed straightforwardly on a GPU, this
+function will be far from reaching peak potential performance.  One
+reason is that it is very expensive to create the intermediate
+\lstinline{ys} arrays, compared to the time taken to add the numbers.
+While a ``sufficiently smart'' compiler may be able to rewrite the
+program to avoid some of this overhead (and perhaps even take
+advantage of hardware-specific features for performing summations),
+this is contrary to the philosophy behind Futhark.  Although we do not
+mind aggressive optimisation, the transformations we perform should
+arise naturally out of the constructs used by the programmer, and not
+depend on subtle and fragile analyses.
 
 As a consequence, we provide several parallel constructs in Futhark
 that, while expressible in an asymptotically optimal form using

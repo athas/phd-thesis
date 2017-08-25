@@ -1,4 +1,4 @@
-\chapter{Size Analysis}
+\chapter{Size Inference}
 \label{chap:size-analysis}
 
 A great many optimisations and safety checks in Futhark depend on how
@@ -78,7 +78,7 @@ invariants are only ``assumed'', that is, they have not been verified
   $\ft$ & $::=$ & $(x_{1}: \tau_1) \rightarrow \cdots \rightarrow (x_{n}: \tau_{n}) \rightarrow \exists \bar{d}.\tty$ & (Sizes of results $\in \bar{d}$)\\
   $\etau$ & $::=$ & $\alpha~|~(x_{1}: \tau_{1}, \ldots, x_{n}: \tau_{n})~|~(x: \etau) \rightarrow \exists \bar{d}.\etau$ & ~~\mbox{(Sizes of results $\in \bar{d}$)} \\
   $\opty$ & $::=$ & $\forall\bar{\alpha}.\ft$ \\
-  fun & ::= & \mbox{\Fun{$f$}{$\hat{p}$}{$\overline{d}.\utau$}{$e$}} ~~& ~~\mbox{(Sizes of results $\in \bar{d}$)} \\
+  fun & ::= & \mbox{\Fun{$f$}{$\hat{p}$}{$\seq{d}.\utau$}{$e$}} ~~& ~~\mbox{(Sizes of results $\in \bar{d}$)} \\
 \end{tabular}
 \caption{Types with embedded size information and named parameters.
   The remaining syntax definitions remain unchanged, except that they
@@ -319,7 +319,8 @@ let main (n: i32) (m: i32) (k: i32)
                 vss
           let (is: [c]i32) = iota c
           let (zs: [c]f64) =
-            map (\i -> if i < n then xs[i] else ys[i+a]) is
+            map (\i -> if i < n then xs[i] else ys[i+a])
+                is
           let rs = reshape l zs
           in rs)
         vsss
@@ -425,11 +426,18 @@ the result.  An example is shown on \Cref{fig:FShapeSlice},
 which contains a portion of the running example.  The
 \lstinline{concat} function has been split into
 \lstinline{concat_shape} and \lstinline{concat_value}. The call to
-\lstinline{concat} has been likewise split.  The Futhark compiler
-currently does not use this approach.  Partly because of the risk for
-asymptotic slowdown in the presence of recursion (which was supported
-at the time), and partly because merely inlining plus simplification
-is easier to implement, and performed equally well.
+\lstinline{concat} has been likewise split.
+
+In practise, sophisticated dead code removal may be necessary to
+obtain efficient shape functions --- for example, we will need to
+remove shape-invariant loops --- and thus our approach generally
+requires the compiler to possess an effective simplification engine.
+
+The Futhark compiler currently does not use this approach of splitting
+functions.  Partly because of the risk for asymptotic slowdown in the
+presence of recursion (which was supported at the time), and partly
+because merely inlining plus simplification is easier to implement,
+and performed equally well for our purposes.
 
 \begin{figure}
 
@@ -532,6 +540,11 @@ will always be \texttt{x}, yielding:
 \Let{\mbox{\lstinline{(a: [x]i32)}}}{\mbox{\lstinline{replicate x 0}}}{e}
 \]
 
+The vast majority of the existential-related simplification we perform
+is of the trivial nature above, where gradual rewrites eventually
+bring the program to a form where the existential sizes can be
+statically resolved.
+
 From a compiler engineering point of view, it would be awkward if
 copy-propagation (or other optimisations) were also responsible for
 fixing any changes to existential sizes that were caused by their
@@ -539,8 +552,10 @@ simplifications.  It is cleaner to separate this into multiple
 separate transformations, but this requires that the intermediate
 forms are well-typed.  This fits well with the general philosophy in
 the Futhark compiler of gradual refinement, as was also shown in the
-previous section.  However, making a type \textit{more} existential
-would still require us to fix up the relevant patterns.
+previous section.  This leniency will also help us when first
+inserting the existential information, as shown in the next section.
+However, making a type \textit{more} existential would still require
+us to fix up the relevant patterns.
 
 Another interesting case is for functions and operators, because of
 the named parameters.  We assume that all arguments to the function
@@ -602,9 +617,262 @@ substitution is also applied to the result type.
 \section{Size Inference}
 \label{sec:size-inference}
 
+\newcommand{\transformBnd}[1]{\mathcal{A}_{#1}^{\text{exp}}}
+\newcommand{\transformFun}{\mathcal{A}^{\text{fun}}}
+\newcommand{\transformLam}[1]{\mathcal{A}_{#1}^{\text{lam}}}
+\newcommand{\head}{\textrm{head}}
+\newcommand{\tail}{\textrm{tail}}
+\newcommand{\drop}{\textrm{drop}}
+\newcommand{\cons}[2]{#1 :: #2}
+
 This section presents a set of syntax-directed rules for transforming
 an un-annotated Futhark program into an \textit{annotated} Futhark
-program, where all types have size information.
+program, where all types have size information.  Concretely, we are
+performing a syntax-directed translation that carries out the
+following tasks:
+
+\begin{enumerate}
+\item Add existential contexts to function return types to match the
+  number of (distinct) array dimensions.
+\item Add extra parameters to all functions corresponding to the
+  number of (distinct) array dimensions in their parameters.
+\item Add existential contexts to all \kw{let}-patterns corresponding
+  to the existential type of the bound expression.
+\item Insert \kw{reshape} expressions where necessary (e.g. for inputs
+  to \kw{map}) to ensure that size-related restrictions are
+  maintained.
+\item Amend any type $[]\tau$ such that it has form $[d]\tau$, where
+  $d$ is some variable in scope.  After the preceding steps have been
+  accomplished, this can be done by looking at the context in which
+  the type occurs and following the type rules.
+\end{enumerate}
+
+We will ignore the distinction between unique and non-unique types, as
+these have no influence on size inference.  We write $\text{d}(\tau)$
+to indicate the \emph{rank} (number of dimensions) of a type $\tau$.
+We may also write $\text{d}(v)$, where $v$ is not itself a type, but
+something which {\em has} a type, such as a variable.
+
+\subsection{Fundamental Transformation}
+\label{sec:FundamentalTransformation}
+
+\newcommand{\ext}{\textrm{ext}}
+\newcommand{\shape}{\textrm{shape}}
+\newcommand{\val}{\textrm{value}}
+\newcommand{\checking}{\textrm{checking}}
+
+For each function $f$ in the original program, we generate the
+\textit{existential function} $f_{\ext}$, that returns the values
+returned by $f$, with all shapes in the return type being
+existentially quantified.
+
+Specifically, if the return type of a function \(f\) is
+$\nseq{\tau}{n}$, then the return type of \(f_{\ext}\) is
+\(\exists\nseq{d^{1}_{i}}{\text{d}(\tau_{1})}\cdots\nseq{d^{n}_{i}}{\text{d}(\tau_{n})}.(\tau_{1}',
+\ldots, \tau_{n}')\), where $\text{d}(\tau)$ is the rank of $\tau$,
+and \(\tau_{j}'\) is \(\tau_{j}\) shape-annotated with
+\(\nseq{d^{i}_{i}}{\text{d}(\tau_{j})}\).
+%
+For example, if \(f\) returns type \([][]\texttt{i32}\), \(f_{\ext}\)
+will return type \(\exists d_{1}~d_{2}[d_{1}][d_{2}]\texttt{i32}\).
+Thus, after transformation, the shape of the return of a function will
+be existentially quantified.
+
+Furthermore, the parameters of \(f\) are likewise annotated.  An
+explicit \texttt{i32} parameter is added for every dimension of an
+array parameter, with the array parameter itself annotated to refer to
+the corresponding \texttt{i32} parameter.  For example, if \(f\) takes
+a single parameter \([][]\texttt{i32} p\), then \(f_{\ext}\) will take
+three parameters \(\texttt{i32}~n\), \(\texttt{i32}~m\), and
+\([m][n]\texttt{i32}\)
+
+In this chapter we assume for simplicity that the original program
+contains no pre-existing size information, as by the un-sized IR
+presented in the previous chapter.  This is not congruent with the
+actual Futhark source language, where user-provided shape invariants
+may be present.  In the implementation, these are handled by imposing
+constraints on the dimensions we generate.  For example, if the source
+program contains information relating certain dimensions of the
+function return type to specific function parameters, we do not
+generate existential dimensions, but instead refer directly to the
+function parameters.  Likewise, if the source program specifies that
+certain dimensions are identical to each other, we simply generate a
+single size parameter and use that for all the dimensions in question.
+
+\begin{figure}[bt]
+
+\begin{align*}
+  \mathcal{T}(\texttt{[]}_{1}\cdots\texttt{[]}_n\texttt{t},\nseq{s}{n}) = \texttt{[$s_{1}$]$\cdots$[$s_{n}$]\texttt{t}}
+\end{align*}%
+\hfill Where $t$ is the basic type of $\tau$ and $\text{d}(\tau)$ is
+the rank of $\tau$.
+\caption{Annotating types with shapes.}
+\label{fig:annotating bindings}
+\end{figure}
+
+We will use function \(\mathcal{T}(\tau~x,s)\) in
+Figure~\ref{fig:annotating bindings} to annotate a type \(\tau\) with
+the shapes in \(s\), which is a sequence of variable names whose
+length is equal to the rank of \(\tau\).  As an example,
+\[
+\mathcal{T}(\texttt{[][]i32}, \texttt{n}, \texttt{m}) = \texttt{[m][n]i32}
+\]
+
+\subsection{Transformation Functions}
+\label{sec:TransformationFunctions}
+
+The function \(\transformBnd{\Sigma}(b)\) computes the \textit{annotated}
+version of the body \(b\) in the environment \(\Sigma\) and returns
+shapes as well as values (that is, its type will contain
+existentials).  The environment \(\Sigma\) is a mapping from names of
+arrays to lists of variable names, where element \(i\) of the list
+denotes the size of dimension \(i\) of the corresponding array.  We
+will use conventional \(\head\), \(\tail\) and \(\drop\) operations to
+manipulate these lists, as well as bracket notation for arbitrary
+indexing; we write the ``cons'' operation as \(\cons{x}{xs}\).
+
+The function \(\transformFun(f)\) computes the existentially-quantified 
+function \(f_{\ext}\), by using  \(\transformBnd{\Sigma}\) to annotate
+the function's body (and result) with shapes information, and by modifying
+the function's type as described in the beginning of
+Section~\ref{sec:FundamentalTransformation}.
+
+We also have a function
+\(\transformLam{\Sigma}(\lambda,\seq{r},\seq{p})\).  This is
+similar to the function transformation, except that (i) we work within
+an environment \(\Sigma\), and (ii) we know in advance the intended shape
+of the result (\(\seq{r}\)) and parameters
+(\(\seq{p}\)), because the result shape of an anonymous function
+is never existentially quantified.
+
+\subsection{Simple Rules}
+\label{sec:SimpleRules}
+
+This section describes cases for the function
+\(\transformBnd{\Sigma}(e)\).  The core rules are listed in
+Figure~\ref{fig:simple-transformation-rules}, including the rule for
+\kw{let}-patterns, which is likely the most important one.  Here we
+create an existential size for \textit{every} dimension of the bound
+variables.  It is assumed that subsequent simplification will remove
+those that can be resolved statically.
+
+Observe how \texttt{size} expressions are completely removed from the
+annotated program, and instead replaced with the variable storing the
+desired size.  The rule for \kw{if} is completely straightforward, and
+simply applies the transformation to the subexpressions.  Most of the
+rules are of this form, and have been elided.  A call to a function
+\(f\) becomes a call to the function \(f_{\ext}\), where argument
+sizes are passed explicitly.
+
+\begin{figure}
+
+\[
+\begin{array}{l}
+  \transformBnd{\Sigma}{\Let{\nseq{v_{i}: \tau_{i}}{n}}{e_{1}}{e_{2}}} = \\
+  \quad \Let{\nseq{\textrm{sizes}(\tau_{i})}{n}}{\transformBnd{\Sigma}{e_{1}}}{\transformBnd{\Sigma'}{e_{2}}} \\
+  ~~ \textrm{where}
+  \begin{array}[t]{ll}
+    \textrm{sizes}(\tau_j) &= \nseq{d^{j}_{i}}{\textrm{d}(\tau_{j})} \\
+    \Sigma' &=\nseq{v_{i}\mapsto\textrm{sizes}(\tau_{i})}{n},\Sigma
+  \end{array}
+  \\
+  \\
+\transformBnd{\Sigma}(\Let{(v: \texttt{i32})}{\kw{size}~k~a}{e}) = \\
+\quad \Let{(v: \texttt{i32})}{\Sigma(a)[k]}{\transformBnd{\Sigma}(e)} \\
+\\
+\\
+\transformBnd{\Sigma}(\If{e_{1}}{e_{2}}{e_{3}}) = \\
+\quad \If{\transformBnd{\Sigma}(e_{1})}{\transformBnd{\Sigma}(e_{2})}{\transformBnd{\Sigma}(e_{3})}
+  \\
+  \\
+  \transformBnd{\Sigma}(f~\nseq{x}{n}) = \\
+  \quad f_{ext}~\nseq{\Sigma(x_{i})}{n}~\nseq{x}{n}
+\end{array}
+\]
+
+\caption{Simple transformation rules for expressions.}
+\label{fig:simple-transformation-rules}
+\end{figure}
+
+\subsection{SOAC-related Rules}
+\label{sec:SOACSizeRules}
+
+There are two issues to be dealt with when size-transforming SOACs.
+The first is that the type rules indicate that the outer dimension of
+all input arrays must be identical.  We deal with this by using
+\kw{reshape} to transform all input arrays to have the same outermost
+size as the first input array.
+
+The second, and bigger problem with annotating SOACs is that, in
+Futhark, anonymous functions cannot be existentially quantified.
+Hence, before evaluating the SOAC, we must know the shape of its
+return value.  For this section, we assume that given an anonymous
+function \(\lambda\), it is possible to compute \(\lambda_{\shape}\),
+which returns the shape of the values that would normally be returned
+by \(\lambda\).
+
+Similarly to function calls, when transforming $\kw{map}~\lambda~a$,
+there are two possible avenues of attack.
+
+\begin{description}
+\item[Pre-assertion] First, calculate $\kw{map}~\lambda_{\shape}~a$, and
+  assert, for each returned array, that all of its elements are
+  identical. That is, check in advance that the \kw{map} expression
+  results in a regular array.  After this check, we know with
+  certainty the shape of the values returned by the original map
+  computation (and that it will be regular), which we can then use to
+  annotate the \kw{map} computing the values.  This strategy would
+  require an extension to support an explicit \kw{assert} expression.
+
+\item[Intra-assertion] Alternatively, we can compute
+  \(\lambda_{\shape}~a[0]\), the shape of the first element of the
+  result.  Then, we modify $\lambda$ to explicitly \kw{reshape} its
+  result to the same shape as that computed for the first element - we
+  call this modified version \(\lambda_{\textrm{checking}}\).  This is
+  the approach we used on \cref{fig:RunEgTgt}, and is illustrated on
+  \cref{fig:sizeTransformMap}.  For brevity we have omitted the
+  \kw{if}-branch guarding the case when the input array is empty.
+\end{description}
+
+The former approach is only efficient if \(\lambda_{\text{\shape}}\)
+is efficient compared to \(\lambda\) - in practice, it must not
+contain any loops.  The latter approach is limited in that it forces
+shape checking inside the value computation, which means that we do
+not know in advance whether the shape annotation is correct.  However,
+in practice, the \kw{reshape} operations often end up being statically
+simplified away.  Hence, our compiler always applies the
+intra-assertion rule, with the expectation that a later optimisation
+will remove the assertions, if possible.
+
+\begin{figure}[t]
+  \[
+\begin{array}{l}
+  \transformBnd{\Sigma}(\kw{map}~\lambda~\nseq{a}{n})) = \\
+  \quad \kw{let}~s_{1}^{2} \ldots s_{1}^{\text{d}(\tau_{1})} \ldots s_{m}^{2}, \ldots, s_{m}^{\text{d}(\tau_{m})}~=~\lambda_{\text{\shape}}~\nseq{a_{i}\texttt{[0]}}{n} \\
+  \quad \kw{in}~\kw{map}~\lambda_{\text{checking}}~\nseq{\textrm{shapeup}(a_{i})}{n} \\
+  \text{where}
+  \begin{array}[t]{ll}
+    (\nseq{\tau}{m}) & = \mbox{Return type of $\lambda$} \\
+    \textrm{shapeup}(a_{i}) & = \kw{reshape}~(\head(\Sigma(a_{1})) :: \tail(\Sigma(a_{i})))~a_{i} \\
+    r_{i} & = \cons{s_{i}^{2}}{\cons{\ldots}{s_{i}^{\text{d}(\tau_{i})}}} \\
+    p_{i} & = \tail(\Sigma(a_{i})) \\
+    \lambda_{\text{\checking}} & = \transformLam{\Sigma}(\lambda,\nseq{r}{m},\nseq{p}{n}). \\
+
+  \end{array}
+\end{array}
+\]
+
+\caption{Transformation for \kw{map} using the intra-assertion strategy.  For brevity we have elided the branch guarding against the case where the input arrays are empty.}
+\label{fig:sizeTransformMap}
+\end{figure}
+
+Similar approaches are used for the remaining SOACs.  The cases for
+\kw{reduce}, \kw{scan}, \kw{scatter}, and \kw{stream\_red} are simple
+because the correct return shape for the anonymous functions can be
+deduced from the inputs to the SOAC.  The case for \kw{stream\_map} is
+simple because the return shape must match the chunk size.  These
+cases are all handled by inserting \kw{reshape} expressions in the
+functions.
 
 \section{Related Work}
 
