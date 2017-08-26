@@ -5,7 +5,7 @@ PDFLATEX        = xelatex -halt-on-error
 
 %.pdf: %.tex Makefile $(shell ls *.tex)
 	$(PDFLATEX) $<
-#	biber --output-safechars $*
+	biber --output-safechars $*
 	$(PDFLATEX) $<
 	$(PDFLATEX) $<
 	rm -f *~ *.bbl *.log *.blg *.aux *.out

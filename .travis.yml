@@ -4,6 +4,8 @@ sudo: false
 
 addons:
   apt:
+    sources:
+      - sourceline: 'ppa:jonathonf/texlive-2017'
     packages:
     - texlive-full
     - biber
