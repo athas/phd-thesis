@@ -5,7 +5,7 @@ sudo: required
 install:
   - sudo add-apt-repository ppa:jonathonf/texlive -y
   - sudo apt update
-  - sudo apt install texlive-base texlive-bin texlive-extra texlive-lang biber
+  - sudo apt install texlive-full
 
 
 script:
