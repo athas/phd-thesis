@@ -56,15 +56,16 @@ travel in a single cycle.
 
 Another, even greater, physical limitation is power dissipation:
 roughly, the power usage of the transistors in a processor is roughly
-proportional to the square of its clock frequency\fixme{cite}.  This
-prevents an increase in clock frequency unless we can compensate with
-an increase in the efficiency of the transistors.  For a sequential
-machine that executes instructions in exactly the order they are
-given, the only way to speed up execution of a program is to increase
-the rate at which instructions are executed.  If we can double the
-rate at which instructions are processed, we in effect halve the time
-it takes to execute some program (assuming no memory bottlenecks,
-which we will discuss later).
+proportional to the square of its clock
+frequency~\cite{Dubois:2012:PCO:2462779}.  This prevents an increase
+in clock frequency unless we can compensate with an increase in the
+efficiency of the transistors.  For a sequential machine that executes
+instructions in exactly the order they are given, the only way to
+speed up execution of a program is to increase the rate at which
+instructions are executed.  If we can double the rate at which
+instructions are processed, we in effect halve the time it takes to
+execute some program (assuming no memory bottlenecks, which we will
+discuss later).
 
 In the popular vernacular, \textit{Moore's Law} is typically rendered
 as ``computers double in speed every two years''.  But actually, the
@@ -215,12 +216,12 @@ of parallel programming.\footnote{\textit{Concurrency} was alive and
 Several interesting parallel computers were designed for
 \textit{high-performance computing} (HPC) applications.  One of the
 earliest and most influential was the Cray-1 from 1976, which was the
-first vector processor\fixme{cite}.  Only about 100 were sold, but this is a large
-number for a high-end supercomputer.  A different design was the CM-1
-from 1985, which was based on a computer containing a large number of
+first vector processor.  About 80 were sold, which was a large number
+for a high-end supercomputer.  A different design was the CM-1 from
+1985, which was based on a computer built from a large number of
 simple 1-bit microprocessors.  The CM-1 proved difficult to program
-and was not a success in the market, but was the first example of a
-\textit{massively parallel machine}\fixme{cite}.
+and was not a success in the market, but was an early example of a
+\textit{massively parallel machine}~\cite{hillis1989connection}.
 
 In the 90s, consumer demand for increasing visual fidelity in video
 games led to the rise of the \textit{graphics processing unit} (GPU),
@@ -551,7 +552,8 @@ permit the programmer to write their own higher-order functions, so
 new ones cannot be defined (this can be worked around via higher-order
 modules; see Section~\ref{sec:new-language}).  Futhark also contains
 two more exotic SOACs, \lstinline{stream_red} and
-\lstinline{stream_map}, which will be discussed later.\fixme{when?}
+\lstinline{stream_map}, which will be discussed in
+\cref{sec:streaming-soacs}.
 
 Requiring associativity and neutral elements for the functional
 arguments in \lstinline{reduce} and \lstinline{scan} is what enables a

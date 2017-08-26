@@ -1,23 +1,23 @@
 \documentclass[11pt,draft,a4paper,oneside,openany]{memoir}
 
+\usepackage[hyperindex,hidelinks]{hyperref}
+\usepackage[capitalise,noabbrev]{cleveref}
 \usepackage[final]{graphicx}
 
-% The ku-forside package breaks lots of things, so define it first
-% such that my prelude can fix it.
-\usepackage[titelside,en,nat]{ku-forside}
+\usepackage[english, science, titlepage]{ku-frontpage}
 
 \input{defaultprelude.tex}
 \input{futhark.tex}
 \renewcommand{\ttdefault}{pcr}
 
-\titel{Design and Implementation of the}
-\undertitel{Futhark Programming Language}
-\forfatter{Troels Henriksen -- \texttt{athas@sigkill.dk}}
-\forfatterET{}
-\forfatterTO{}
-\opgave{PhD thesis} % Findes kun under 'titelside'
-\dato{August, 2017}
-\vejleder{Supervisors: Cosmin Eugen Oancea and Fritz Henglein}
+\assignment{PhD thesis}
+\author{Troels Henriksen --- \texttt{athas@sigkill.dk}}
+\date{August, 2017}
+
+\title{Design and Implementation of the\\Futhark Programming Language}
+\subtitle{}
+\advisor{Supervisors: Cosmin Eugen Oancea and Fritz Henglein}
+\frontpageimage{img/hedgehog.jpg}
 
 % Write "Part II" etc. in TOC instead of just "II"
 \renewcommand*{\cftpartname}{Part\space}
