@@ -86,10 +86,11 @@ every time we cut the power consumption of a transistor in half via
 shrinkage, we can increase the clock frequency by 50\%.  For a
 sequential computer, this translates into a 50\% performance increase.
 We can partially circumvent the limits of $c$ by using techniques such
-as \textit{pipelining}.  While it is clear that Moore's Law will
-eventually stop, or else transistors would eventually be smaller than
-a single atom, this is not the issue that has hindered the illusion of the
-sequential machine.
+as \textit{pipelining}.  Instruction latency may not be decreased with
+pipelining, but throughput can increase significantly.  While it is
+clear that Moore's Law will eventually stop, or else transistors would
+eventually be smaller than a single atom, this is not the issue that
+has hindered the illusion of the sequential machine.
 
 The problem is that Dennard scaling began to break down around 2006.
 Physical properties of the circuit material leads to increased current
@@ -132,7 +133,7 @@ work that can be done in a clock cycle through various means:
   that is done in a single clock cycle.
 \end{description}
 
-These techniques are all based on merely extending and improving the
+These techniques are all based on merely extending and refining the
 classic CPU design.  While code may have to be re-written to take
 advantage of certain new hardware features (such as multiple cores or
 vector instructions), the programming experience is not too dissimilar
@@ -205,8 +206,8 @@ solving some problem, but the programming difficulties involved made
 it more palatable to simply wait for a faster computer to enter the
 market.  Only the largest computational problems were worth the pain
 of parallel programming.\footnote{\textit{Concurrency} was alive and
-  well, however, due to its significant importance in operating
-  systems and multiprocessing.  But most concurrent programs were
+  well, however, due to its importance in multiuser operating systems
+  and multitasking in general.  But most concurrent programs were
   executed on sequential machines, with the illusion of concurrency
   formed through multiplexing.  Many of the techniques developed for
   concurrent programming are also applicable to parallel programming,
