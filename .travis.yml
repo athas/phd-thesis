@@ -1,23 +1,12 @@
 language: c
 dist: trusty
-sudo: false
-
-addons:
-  apt:
-    sources:
-      - sourceline: 'ppa:jonathonf/texlive-2017'
-    packages:
-    - biber
-    - fonts-ebgaramond
-    - tex-common
-    - tex-gyre
-    - texlive-base
-    - texlive-bin
-    - texlive-extra
-    - texlive-lang
+sudo: required
 
 install:
- - make
+  - sudo add-apt-repository ppa:jonathonf/texlive-2017
+  - sudo apt update
+  - sudo apt install texlive-base texlive-bin texlive-extra texlive-lang biber
+
 
 script:
-  -
+  - make
