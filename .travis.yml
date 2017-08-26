@@ -7,9 +7,14 @@ addons:
     sources:
       - sourceline: 'ppa:jonathonf/texlive-2017'
     packages:
-    - texlive-full
     - biber
     - fonts-ebgaramond
+    - tex-common
+    - tex-gyre
+    - texlive-base
+    - texlive-bin
+    - texlive-extra
+    - texlive-lang
 
 install:
  - make
