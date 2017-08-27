@@ -827,16 +827,22 @@ respects the asymptotic behaviour of programs.  Thus, a program that
 is fully fused will only be a constant amount faster than one that is
 not fused at all.  This is in fact a \textit{feature}, as it means the
 tractability of a program does not depend on a compiler optimisation.
-Chapter~\ref{chap:fusion} goes into more detail.
+\cref{chap:fusion} goes into more detail.
 
 While the Futhark programming language does not correspond directly to
 any specific calculus, it is heavily based on the array combinator
-calculus discussed in Chapter~\ref{chap:calculus}.  This calculus
-serves as inspiration and justification for rewrite rules that are
-exploited to transform user-written programs into forms that are more
-efficient.
+calculus discussed in \cref{chap:calculus}.  This calculus serves as
+inspiration and justification for rewrite rules that are exploited to
+transform user-written programs into forms that are more efficient.
+As we shall see, the usual array combinators (\kw{map}, \kw{reduce},
+\kw{scan}, etc) are not adequate for fusion purposes.  Using these, we
+cannot even perform the classic case of \kw{map}-\kw{reduce} fusion,
+as we would invariably break either the type rules for the \kw{reduce}
+operator, or the requirement of associativity.  In
+\cref{sec:fusion-in-futhark} we introduce a new set of internal
+combinators that are used to perform aggressive fusion.
 
-\fixme{More stuff - map-reduce and such.}
+\subsection{How Combinators Aid Fusion}
 
 While loop fusion is not an unknown technique in compilers for
 imperative languages, it is significantly more complicated to
@@ -889,7 +895,8 @@ annotations discussed above.
 
 In a purely functional language, we avoid these issues by
 construction.  This allows the compiler (and the compiler writer!) to
-focus on exploiting parallel properties, rather than proving them.
+focus on \textit{exploiting} parallel properties, rather than
+\textit{proving} them.
 
 \section{Nested Parallelism}
 \label{sec:nested-parallelism}

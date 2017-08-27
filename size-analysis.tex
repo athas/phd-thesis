@@ -133,9 +133,9 @@ notation as previously.
 \Cref{fig:soacSizeType} also shows that this extension allows to
 encode most of the afore-mentioned invariants into size-dependent
 types.  The requirement for non-negative input to \lstinline{iota} and
-\lstinline{replicate} remains a dynamic property.  We see that most
-parameters remain unnamed, but are crucially used to encode the shape
-properties of \lstinline{iota} and \lstinline{replicate}.
+\lstinline{replicate} remains only dynamically checked.  We see that
+most parameters remain unnamed, but are crucially used to encode the
+shape properties of \lstinline{iota} and \lstinline{replicate}.
 
 The type of \lstinline{map} is interesting because the result array
 types do not follow immediately from the input array types.  Instead,
@@ -569,7 +569,7 @@ rules for reflexivity and transitivity, we define alpha substitution
 (it is valid to change the names bound by the existential context),
 and \textit{weakening}.  In our contxt, weakening corresponds to
 making the size of an array type less concrete.  For example, we can
-weaken the type $[x]\texttt{i32}$ to $\exists x.[x]\texttt[i32]$ (we
+weaken the type $[x]\texttt{i32}$ to $\exists x.[x]\texttt{i32}$ (we
 would usually also rename $x$ to avoid confusion).  The need for
 weakening arises in particular due to the typing rules for \kw{let}
 and \kw{if}, as we shall see.
