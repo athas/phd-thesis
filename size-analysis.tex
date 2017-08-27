@@ -1,3 +1,5 @@
+\newcommand{\subtype}{<:}
+
 \chapter{Size Inference}
 \label{chap:size-analysis}
 
@@ -472,49 +474,150 @@ let f (m: i32) (k: i32) (vss: [m][k]f64): d.[d]f64 =
 \section{New Type Rules}
 \label{sec:size-type-rules}
 
+\begin{figure}
+\sempart{Existential subtyping}{\exists\seq{x}.\rho' \subtype \exists\seq{y}.\rho}
+
+\fracc{
+}{
+  \exists\nseq{x}{n}.\rho \subtype \exists\nseq{x}{n}.\rho
+}
+
+\fracc{
+  \exists\nseq{z}{l}.\rho'' \subtype \exists\nseq{y}{m}.\rho' \sp \exists\nseq{y}{m}.\rho' \subtype \exists\nseq{x}{n}.\rho
+}{
+  \exists\nseq{z}{l}.\rho'' \subtype \exists\nseq{x}{n}.\rho
+}
+
+\fracc{
+  \mbox{$S$ is bijective from $\nseq{x}{n}$ to $\nseq{y}{n}$} \\
+  \mbox{None of $y$ used free in $\rho$.}
+}{
+  \exists\nseq{y}{n}.S(\rho') \subtype \exists\nseq{x}{n}.\rho
+}
+
+\fracc{
+  \mbox{$y$ used free in $\rho'$}
+}{
+  \exists~y~\nseq{x}{n}.\rho \subtype \exists~\nseq{x}{n}.\rho
+}
+
+\caption{The subtyping relationship for existential types.  The four
+  rules describe reflexivity, transitivity, renaming, and weakening.}
+  \label{fig:ext-type-operations}
+\end{figure}
+
+\begin{figure}
+
+  \sempart{Expressions}{\Gamma \vd e : \exists\seq{d}.\rho}
+
+  \fracc{
+    \Gamma \vd e : \exists\seq{x}.\rho \quad \exists\seq{y}.\rho' \subtype \exists\seq{x}.\rho
+  }{
+    \Gamma \vd e : \exists\seq{y}.\rho'
+  }
+
+  \fracc{
+    \vdp p : (\nseq{d_i: \texttt{i32}}{l},\rho) \sp \Gamma \vd e_1 : \exists\nseq{d}{l}.\rho \sp
+    \\
+    \Gamma,p \vd e_2 : \exists\nseq{d^r}{k}.\rho'
+    \\
+    \mbox{No name bound by $p$ used in $\rho'$}
+  }{
+    \Gamma \vd \Let{p}{e_1}{e_2} : \exists\nseq{d^r}{k}.\rho'
+  }
+
+\fracc{
+  \textrm{lookup}_{\textrm{fun}}(f) = \nseq{(p_i: \tau_i)}{n} \rightarrow \exists\nseq{d}{l}\nseq{\tau'}{m}
+    \\
+    S = \langle \nseq{p_i \mapsto x_i}{n} \rangle \quad \forall i \in \Set{1,\ldots,n}.\Gamma(x_i) = S(\tau_i)
+}
+{\Gamma \vd f~x_{1}~\ldots~x_n : \exists\nseq{d}{l}.S(\nseq{\tau'}{m})}
+
+\fracc{
+  \Gamma \vda a_i : \etau^p_i \sp i \in \Set{1, \ldots, n}\\
+  \textrm{TySch}(\emph{op}) = \nseq{(p_i: \etau_i)}{n} \rightarrow \exists\nseq{d}{l}.\nseq{\tau'}{m} \\
+  S = \langle \nseq{p_i \mapsto x_i}{n}~|~\textrm{where $x_{i}=a_{i}$} \rangle \quad \forall i \in \Set{1,\ldots,n}.\etau^p_i = S(\etau_i)}{
+  \Gamma \vd \emph{op}~\nseq{a}{n} : \exists\nseq{d}{l}.S(\nseq{\tau'}{m})
+}
+
+\fracc{
+  \Gamma(s) = \texttt{bool} \\
+  \Gamma \vd e_1 : \exists \seq{x}.\rho \sp \Gamma \vd e_2 : \exists \seq{x}.\rho
+}{
+  \Gamma \vd \If{s}{e_1}{e_2} : \exists\seq{x}.\rho
+}
+
+\fracc{
+  \vdp p : \exists\nseq{d}{n}.\rho \sp \Gamma \vd \exists\nseq{d}{n}.e_1 : \rho \sp \Gamma \vd \exists\nseq{d}{n}.e_3 : \rho \\
+  \Gamma \vd e_2 : \texttt{i32}
+}{
+  \Gamma \vd \Loop{\nseq{(d_i: \texttt{i32})}{n}~p}{e_1}{x}{e_2}{e_3} : \exists\nseq{d}{n}.\rho
+}
+
+\caption{Size-aware typing rules for interesting expressions.  The
+  subtyping relationship is defined on
+  \cref{fig:ext-type-operations}.}
+  \label{fig:sizeTypeRules}
+\end{figure}
+
 The addition of size-dependent types requires an extension of the
 typing rules.  The main problem is the handling of an existential
-context in the return type of an expression.  We extent the type
-judgment for expressions such that it now returns an a type with an
-existentially quantified part (which may be empty).  The most
-interesting rules are shown on \cref{fig:sizeTypeRules} and discussed
-below.
+context in the type of an expression.  First, we define a subtyping
+relation on existential types.  The judgment and its associated rules
+is shown on \cref{fig:ext-type-operations}.  Apart from the usual
+rules for reflexivity and transitivity, we define alpha substitution
+(it is valid to change the names bound by the existential context),
+and \textit{weakening}.  In our contxt, weakening corresponds to
+making the size of an array type less concrete.  For example, we can
+weaken the type $[x]\texttt{i32}$ to $\exists x.[x]\texttt[i32]$ (we
+would usually also rename $x$ to avoid confusion).  The need for
+weakening arises in particular due to the typing rules for \kw{let}
+and \kw{if}, as we shall see.
 
-The rule for \kw{let}-bindings is interesting in that it may
-``increase'' the existensiality of a type.  As an example, consider an
+We extend the type judgment for expressions such that it now returns
+an a type with an existentially quantified part (which may be empty).
+The most interesting rules are shown on \cref{fig:sizeTypeRules} and
+discussed below.  We ignore uniqueness attributes here, as they have
+no influence on size-dependent typing.
+
+The rule for \kw{let} requires that the names bound may not be present
+in the type of the returned value.  As an example, consider an
 expression \lstinline{replicate x v}.  Supposing $\texttt{v}: \tau$,
 this expression has type $[x]\tau$ %
 while \mbox{\lstinline{let x = y in replicate x v}} has type
-$\exists d.[d]\tau$.  The specific names used in the existential
-quantification do not matter.
+$\exists d.[d]\tau$ (with $d$ picked arbitrarily).  It is crucial that
+we are able to use weakening to loosen the type of the body of the
+\kw{let}-binding, or else we could not type it.
 
 It is also in the rule for \kw{let}-bindings that we bind the
 existential sizes to concrete variables.  For example, if the return
 type of the function contains $l$ existential sizes, then we require
 that the pattern begins with $l$ names of type \texttt{i32}.
 Operationally, these will be bound to the actual sizes of the value
-returned by the function.  For the type rule, there must be some
-substitution $S_{r}$ such that, when $S_{r}$ is applied to the type of
-the bound value, the resulting type matches the types bound by the
-non-existential part of the pattern.  For example, given a function
+returned by the function.  As a slight hack, we require that these
+names match exactly the corresponding existential context.  We can
+always use alpha substitution to ensure a match.  For example, given a
+function
 \[
   \texttt{f}: (\texttt{x}: \texttt{i32}) \rightarrow (\texttt{y}: \tau) \rightarrow \exists \texttt{n}.[\texttt{x}][\texttt{n}]\tau
 \]
-we can conclude that the \kw{let}-binding
+we can derive a typing judgment for the \kw{let}-binding
 \[
 \Let{(\texttt{m}: \texttt{i32}, \texttt{v}: [\texttt{a}][\texttt{m}]\tau)}{\texttt{f}~\texttt{a}~\texttt{b}}{e}
 \]
-is well-typed (assuming $\texttt{a}: \texttt{i32}$ and $e$ is
-well-typed), but
+if we assume that $\texttt{a}: \texttt{i32}$ and $e$ is well-typed,
+but
 \[
 \Let{(\texttt{m}: \texttt{i32}, \texttt{v}: [\texttt{m}][\texttt{a}]\tau)}{\texttt{f}~\texttt{a}~\texttt{b}}{e}
 \]
-is not (note the swapped dimensions in the type of \texttt{v}).
+cannot be typed using the given rules (note the swapped dimensions in
+the type of \texttt{v}).
 
-A pattern can contain existential parts that are not existential in
-the type.  This is useful for supporting gradual simplification of
-existential sizes, without having the intermediate steps be ill-typed
-For example, consider this expression:
+Using weakening, a pattern can also contain existential parts that are
+not immediately existential in the type.  This is useful for
+supporting gradual simplification of existential sizes, without having
+the intermediate steps be ill-typed For example, consider this
+expression:
 
 \[
 \Let{\mbox{\lstinline{(d: i32) (a: [d]i32)}}}{\mbox{\lstinline{(let y = x in replicate y 0)}}}{e}
@@ -557,62 +660,24 @@ inserting the existential information, as shown in the next section.
 However, making a type \textit{more} existential would still require
 us to fix up the relevant patterns.
 
-Another interesting case is for functions and operators, because of
-the named parameters.  We assume that all arguments to the function
-are variable names.  Intuitively, we then construct a substitution
-$S_{p}$ from the parameter names in the type of the function to the
-concrete names of the arguments, and apply this substitution before
-checking whether the argument types match the parameter types.  The
-substitution is also applied to the result type.
+Another interesting case is for functions and operators, due to named
+parameters.  We assume that all arguments to the function are variable
+names.  Intuitively, we then construct a substitution $S_{p}$ from the
+parameter names in the type of the function to the concrete names of
+the arguments, and apply this substitution before checking whether the
+argument types match the parameter types.  The substitution is also
+applied to the result type.
 
-\begin{figure}[bt]
-  \textrm{\textit{Further existentialising an existential type}}
-  \begin{align*}
-    \textrm{ext}(\nseq{x}{n},\exists\nseq{d}{m}.\rho) = %
-    \exists \seq{y}~\nseq{d}{m}.\rho \\
-    \textrm{where}~\seq{y} = \textrm{those of $\nseq{x}{n}$ free in $\rho$}
-  \end{align*}
-
-  \sempart{Expressions}{\Gamma \vd e : \exists\seq{d}.\rho}
-
-  \fracc{
-    \Gamma \vd e_1 : \exists\nseq{d}{k}.\rho
-    \\
-    p = (\nseq{d^p}{l},\nseq{y}{m})
-    \\
-    \textrm{$S_{r}$ is surjective substitution from $\nseq{d^{p}}{l}$ to $\nseq{d}{k}$} \quad S_r(\rho) = (\nseq{\texttt{i32}}{l}, \nseq{\tau'}{m})
-    \\
-    \Gamma,p \vd e_2 : \exists\nseq{d^r}{k}.\rho'
-  }{
-    \Gamma \vd \Let{p}{e_1}{e_2} : \textrm{ext}(\nseq{x}{n}, \exists\nseq{d^r}{k}.\rho')
-  }
-
-\fracc{
-  \textrm{lookup}_{\textrm{fun}}(f) = \nseq{(p_i: \tau_i)}{n} \rightarrow \exists\nseq{d}{l}\nseq{\tau'}{m}
-    \\
-    S = \langle \nseq{p_i \mapsto x_i}{n} \rangle \quad \forall i \in \Set{1,\ldots,n}.\Gamma(x_i) = S(\tau_i)
-}
-{\Gamma \vd f~x_{1}~\ldots~x_n : \exists\nseq{d}{l}.S(\nseq{\tau'}{m})}
-
-\fracc{
-  \Gamma \vda a_i : \etau^p_i \sp i \in \Set{1, \ldots, n}\\
-  \textrm{TySch}(\emph{op}) = \nseq{(p_i: \etau_i)}{n} \rightarrow \exists\nseq{d}{l}.\nseq{\tau'}{m} \\
-  S = \langle \nseq{p_i \mapsto x_i}{n}~\textrm{where $x_{i}=a_{i}$} \rangle \quad \forall i \in \Set{1,\ldots,n}.\etau^p_i = S(\etau_i)}{
-  \Gamma \vd \emph{op}~\nseq{a}{n} : \exists\nseq{d}{l}.S(\nseq{\tau'}{m})
-}
-
-\fracc{
-  \Gamma(s) = \texttt{bool} \\
-  \Gamma \vd e_1 : \exists \seq{x}.\rho_1 \sp \Gamma \vd e_2 : \exists \seq{y}.\rho_2
-  \\
-  (\exists\seq{z}.\rho') = \textrm{Unification of $\exists\seq{x}.\rho_1$ and $\exists\seq{y}.\rho_2$}
-}{
-  \Gamma \vd \If{s}{e_1}{e_2} : \exists\seq{z}.\rho'
-}
-
-  \caption{Size-aware typing rules for interesting expressions.}
-  \label{fig:sizeTypeRules}
-\end{figure}
+We use a similar trick for \kw{if} expressions, where both branches
+must return existential types with identical existential contexts.
+For example, consider the following expression:
+\[
+  \If{c}{\kw{replicate}~x~(\kw{iota}~y)}{\kw{replicate}~y~(\kw{iota}~x)}
+\]
+The ``true'' branch has type $[x][y]\texttt{i32}$, while the ``false''
+branch has type $[y][x]\texttt{i32}$.  The least existential type that
+can encompass both of these is $\exists n m.[n][m]\texttt{i32}$, which
+must thus be the type of the \kw{if}-expression.
 
 \section{Size Inference}
 \label{sec:size-inference}
@@ -704,8 +769,6 @@ single size parameter and use that for all the dimensions in question.
 \begin{align*}
   \mathcal{T}(\texttt{[]}_{1}\cdots\texttt{[]}_n\texttt{t},\nseq{s}{n}) = \texttt{[$s_{1}$]$\cdots$[$s_{n}$]\texttt{t}}
 \end{align*}%
-\hfill Where $t$ is the basic type of $\tau$ and $\text{d}(\tau)$ is
-the rank of $\tau$.
 \caption{Annotating types with shapes.}
 \label{fig:annotating bindings}
 \end{figure}
@@ -879,10 +942,14 @@ functions.
 An important piece of related work is the work on the FISh \cite{fish}
 programming language, which uses partial evaluation and program
 specialization for resolving shape information at compile time.  The
-semantics of FISh guarantees that this is possible.  Futhark uses
-approximately the same strategy, but extends it to handle constructs
-such as \kw{filter}, at the cost of no longer being able to fully
-resolve shape informatation statically in all cases.
+semantics of FISh guarantees that this is possible.  A similar
+approach is used in \~{F}~\cite{shaikhha2017using}, with the specific
+motivation of being able to efficiently pre-allocate memory.
+
+Futhark uses approximately the same strategy, but adds existential
+types to handle constructs such as \kw{filter}, at the cost of no
+longer being able to fully resolve shape information statically in all
+cases.
 
 Much work has also gone into investigating expressive type systems,
 based on dependent types, which allow for expressing more accurately,

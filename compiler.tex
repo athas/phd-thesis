@@ -572,30 +572,55 @@ $\Gamma$, the program $P$ has tuple type $\rho$.''
 
 \begin{figure}[bt]
 \sempart{Expressions}{\Gamma \vd e : \rho}
+
+\fracc{
+  \vdp \hat{p} : \rho \sp \Gamma \vd e_1 : \rho \\
+  \Gamma, p \vd e_2 : \rho'
+}{
+  \Gamma \vd \Let{p}{e_1}{e_2} : \rho'
+}
+
 \fracc{}{\Gamma \vd (x_1,\cdots,x_n) : (\Gamma(x_1),\cdots,\Gamma(x_n))}
 
-\fracc{\Gamma(y) = []\tau \sp \Gamma(s) = \texttt{i32} \sp \Gamma,x:\tau \vd e : \rho}
-{\Gamma \vd \Let{x:\tau}{y[s]}{e} : \rho}
+\fracc{
+  \Gamma(x) = []\tau \sp \Gamma(s) = \texttt{i32}
+}{
+  \Gamma \vd x[s] : \tau
+}
 
-\fracc{\textrm{ConstType}(\emph{ct}) = \tau \sp \Gamma, x:\tau \vd e : \rho}{\Gamma \vd \Let{x:\tau}{\emph{c}}{e} : \rho}
+\fracc{
+  \textrm{ConstType}(\emph{ct}) = \tau
+}{
+  \Gamma \vd \emph{c} : \tau
+}
 
 \fracc{\Gamma \vda a_i : \etau_i \sp i \in \Set{1, \ldots, n}\\
-\textrm{TySch}(\emph{op}) \geq (\nseq{\etau}{n}) \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vd e : \rho'}
-{\Gamma \vd \Let{p}{\emph{op}~\nseq{a}{n}}{e} : \rho'}
+  \textrm{TySch}(\emph{op}) \geq (\nseq{\etau}{n}) \rightarrow \rho
+}{
+  \Gamma \vd \emph{op}~\nseq{a}{n} : \rho
+}
 
-\fracc{\Gamma(x_i) = \tau_i \sp i \in \Set{1, \ldots, n} \\
-\textrm{lookup}_{\textrm{fun}}(f) = \tau_1 \rightarrow \cdots \rightarrow \tau_n \rightarrow \rho \sp \vdp p : \rho \sp \Gamma,p \vd e : \rho'}
-{\Gamma \vd \Let{p}{f~x_{1}~\ldots~x_n}{e} : \rho'}
+\fracc{
+  \Gamma(x_i) = \tau_i \sp i \in \Set{1, \ldots, n} \\
+  \textrm{lookup}_{\textrm{fun}}(f) = \tau_1 \rightarrow \cdots \rightarrow \tau_n \rightarrow \rho
+}{
+  \Gamma \vd f~x_{1}~\ldots~x_n : \rho
+}
 
-\fracc{\Gamma(s) = \texttt{bool} \sp \Gamma \vd e_1 : \rho \sp \Gamma \vd e_2 : \rho \\
-\vdp p : \rho \sp \Gamma,p \vd e_3 : \rho'}
-{\Gamma \vd \Let{p}{\If{s}{e_1}{e_2}}{e_3} : \rho'}
+\fracc{
+  \Gamma(s) = \texttt{bool} \sp \Gamma \vd e_1 : \rho \sp \Gamma \vd e_2 : \rho
+}{
+  \Gamma \vd \If{s}{e_1}{e_2} : \rho
+}
 
-\caption{Typing rules for expressions in Futhark's core IR.  For
-  simplicity, we assume that the only expressions that occur after
-  ``\kw{in}'' is another \kw{let}-binding, a variable name, or a
-  tuple, meaning that all other expressions are always bound to a
-  pattern.}
+\fracc{
+  \vdp \hat{p} : \rho \sp \Gamma \vd e_1 : \rho \sp \Gamma \vd e_3 \rho \\
+  \Gamma \vd e_2 : \texttt{i32}
+}{
+  \Gamma \vd \Loop{\hat{p}}{e_1}{x}{e_2}{e_3} : \rho
+}
+
+\caption{Typing rules for expressions in Futhark's core IR.}
 \label{fig:srcTypeRulesExps}
 
 \end{figure}
