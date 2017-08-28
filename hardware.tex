@@ -818,7 +818,9 @@ As shown in \cref{sec:gpu-transposition}, transpositions can be
 implemented efficiently on GPUs, so this extra memory traffic is a
 small price to pay, if the alternative is non-coalesced access.  In
 practise, most operators we wish to use in reductions are commutative,
-in which case the pre-transposition is not necessary.
+in which case the pre-transposition is not necessary.  A
+generalisation of this technique is is used by the Futhark compiler,
+as discussed in \cref{sec:automatic-coalescing}.
 
 \begin{figure}
 \begin{lstlisting}[language={},mathescape]
@@ -839,7 +841,7 @@ thread(in, out, k, w, n):
 \end{lstlisting}
 
   \caption{A rewriting of the per-chunk folding of
-    \cref{fg:redomap-on-gpu} such that memory accesses are coalesced.
+    \cref{fig:redomap-on-gpu} such that memory accesses are coalesced.
     This only works if the reduction is commutative.}
   \label{fig:redomap-on-gpu-commutative}
 \end{figure}
