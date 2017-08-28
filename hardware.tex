@@ -518,21 +518,23 @@ top of which other synchronisation primitives could be
 built~\cite{fraser2004practical}.
 
 Using atomic addition, we could represent a summation kernel that
-needs only one kernel launch instead of two.  The reason we do not
-exploit these atomic operations is due to their lack of generality.
-To the Futhark compiler, there is nothing special about a summation:
-it is treated like any other commutative reduction.  Could the code
-generator, or some intermediate optimisation pass, employ pattern
-matching to recognise known patterns that have particularly efficient
+needs only one kernel launch instead of two (see
+\cref{sec:calculus-implementation} for a general treatment of how
+reduction is implemented).  The reason we do not exploit these atomic
+operations is due to their lack of generality.  To the Futhark
+compiler, there is nothing special about a summation: it is treated
+like any other commutative reduction.  Could the code generator, or
+some intermediate optimisation pass, employ pattern matching to
+recognise known patterns that have particularly efficient
 realisations?  Certainly, and perhaps we will do so in the future, but
 for the present work we have chosen to focus on the general case, in
 the interest of simplicity.  Using compare-and-swap, it is feasible to
 implement single-state reduction for arbitrary operators, but it is
 unclear whether it is worth the cost in complexity, as the memory
-traffic would not be smaller than for the two-stage
-kernel.\fixme{Write a small benchmark for testing this.}  The primary
-savings would be in avoiding the overhead of launching the second
-(single-group) kernel, which by itself is not all that expensive.
+traffic would not be smaller than for the two-stage kernel.  The
+primary savings would be in avoiding the overhead of launching the
+second (single-group) kernel, which by itself is not all that
+expensive.
 
 Atomic operations are most useful when used to implement communication
 between workgroups.  An implementation of prefix sum (scan) in CUDA

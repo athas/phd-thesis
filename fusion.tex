@@ -24,21 +24,20 @@ new contributions:
 \end{enumerate}
 
 However, before we can move on to the new contributions, we must
-establish the basic fusion algorithm.
-
-The rules by which we combine SOACs through fusion is called the
-\textit{fusion algebra}.  The fusion algebra used by the Futhark
-compiler has as its central goals to never duplicate computation, and
-never reduce available parallelism.  This ensures that the asymptotics
-of the program under optimisation are not affected.  Instead, the goal
-of fusion is to eliminate the overhead of storing intermediate results
-in memory.
+establish the basic fusion algorithm.  The algorithm identifies pairs
+of SOACs that can be fuesed.  The rules by which we combine SOACs
+through fusion is called the \textit{fusion algebra}.  The fusion
+algebra used by the Futhark compiler has as its central goals to never
+duplicate computation, and never reduce available parallelism.  This
+ensures that the asymptotics of the program under optimisation are not
+affected.  Instead, the goal of fusion is to eliminate the overhead of
+storing intermediate results in memory.
 
 Most fusion algorithms in the literature are unable to handle fusion
-across \kw{zip}/\kw{unzip}, and more generally the case
-where the output of a producer is used by several consumers.  The
-algorithm presented in this chapter is capable of fusing such cases
-if this is possible without duplicating computation, as demonstrated on
+across \kw{zip}/\kw{unzip}, and more generally the case where the
+output of a producer is used by several consumers.  The algorithm used
+by the Futhark compiler is capable of fusing such cases if this is
+possible without duplicating computation, as demonstrated on
 \cref{fig:fusion-multiple-consumers}.  The linchpin of this capability
 is our choice of internal representation, in which arrays of tuples
 (and therefore \lstinline{zip}/\lstinline{unzip}) does not occur.
@@ -69,11 +68,12 @@ map (\x ->
 \end{figure}
 
 This chapter covers two main themes: \Cref{sec:fusion-algorithm}
-describes our aggressive fusion algorithm, in particular when a
-producer result may be used by multiple consumers, without duplicating
-computation.  \Cref{sec:fusionalgebra} describes the rewrite rules
-used to fuse two SOACs.  However, first we define an extended set of
-SOACs with improved fusion properties.
+describes our aggressive fusion algorithm, which in particular
+supports fusion for producers whose result are used by multiple
+consumers, without duplicating computation.  \Cref{sec:fusionalgebra}
+describes the rewrite rules used to fuse two SOACs.  However, first we
+define an extended set of SOACs with better fusion properties than the
+SOACs used in previous chapters.
 
 \section{New SOACs}
 \label{sec:fusion-in-futhark}
@@ -98,7 +98,8 @@ those in the source languages, have two important qualities:
 
 The types of the new SOACs are shown on \Cref{fig:newSoacType}.  An
 individual description now follows, which also shows how instances of
-the previous SOACs are mapped to the new ones.
+the previous SOACs are mapped to the new ones.  It may prove useful to
+refer to the types while reading the descriptions.
 
 \begin{description}
 \item[{\kw{map}}] is unchanged from before.
@@ -112,25 +113,36 @@ the previous SOACs are mapped to the new ones.
   \lstinline{dest} is in parentheses to distinguish the destination
   arrays from the input arrays.
 \item[\kw{redomap}] is a composition of \kw{map} and \kw{reduce} that
-  permits a particularly efficient implementation.  \fixme{refer to
-    formalism.}  The \kw{redomap} fold operator returns $m+l$ values.
-  The first $m$ are reduced with the reduction operator, while the
-  remaining $l$ are simply returned as an array in the final result.
-  We shall soon see how this enables horizontal fusion.  The
-  relationship between source-language \kw{reduce} and \kw{redomap} is
-  by the
+  permits a particularly efficient implementation.  It corresponds to
+  a variation of the $\credomap$ operator from
+  \cref{sec:formal-redomap}.  A \kw{redomap} has two functional
+  arguments: an associative reduction operator and a fold function.
+  The fold function takes as parameters a current
+  \textit{accumulator}, and an element of the input.  The \kw{redomap}
+  fold function returns $m+l$ values.  The first $m$ are called the
+  \textit{reduced results}, and are reduced with the reduction
+  operator, while the remaining $l$ \textit{mapped results} are simply
+  returned as an array in the final result.  We shall soon see how
+  this enables horizontal fusion.  The relationship between
+  source-language \kw{reduce} and \kw{redomap} is by the
   following equivalence:\\
   \centerline{\lstinline{reduce f x a} = \lstinline{redomap f f x a}}
+  The way we construct the fold function in \kw{redomap} ensures that
+  the mapped results do not depend on the accumulator.  It trivially
+  holds when a \kw{redomap} is first constructed from a \kw{reduce}
+  (because there are no mapped results), and is maintained by the
+  fusion algebra.  This is crucial for generating parallel code from
+  \kw{redomap}.
 \item[\kw{scanomap}] is similar to \kw{redomap}, but performs a scan
   instead of a reduction.  The following equivalence holds:\\
   \centerline{\lstinline{scan f x a} = \lstinline{scanomap f f x a}}
 \item[\kw{stream\_par}] functions as a unification of the
-  \kw{stream\_map} and \kw{stream\_red} of the source language.  As
-  with \kw{redomap}, the chunk operator returns $m+l$ values, of which
-  the first $m$ take part in reduction, and the latter $l$ are simply
-  returned.  One restriction is that the latter $l$ values must all be
-  arrays of size $x$, where $x$ is the size of the chunk of the input
-  given to the operator.
+  \kw{stream\_map} and \kw{stream\_red} constructs from the source
+  language.  As with \kw{redomap}, the chunk operator returns $m+l$
+  values, of which the first $m$ take part in reduction, and the
+  latter $l$ are simply returned.  One restriction is that the latter
+  $l$ values must all be arrays of size $x$, where $x$ is the size of
+  the chunk of the input given to the operator.
 \item[\kw{stream\_seq}] is a SOAC used to fuse otherwise infusible
   cases, without losing potential parallelism, by performing what is
   semantically a fold over chunks of the input array.  The chunk
@@ -148,37 +160,25 @@ We exclude \kw{filter} from our discussion of fusion.  While
 compiler implements \kw{filter} by a decomposition into \kw{scan} and
 \kw{scatter}.
 
-\begin{figure}[hbt]
+\begin{figure}
 \begin{tabular}{lcl}
 \emph{op} & & \textrm{TySch}(\emph{op}) \\ \hline
   {\lstinline!map!} & : & $\forall d \bar{\alpha}^{(n)}\bar{\beta}^{(m)}. (\nseq{\alpha_{i}}{n} \rightarrow (\bar{\beta_{i}}^{(m)})) \rightarrow \nseq{[d]\alpha_{i}}{n} \rightarrow (\nseq{[d]\beta_{i}}{m})$ \\
   {\lstinline!scatter!} & : & $\forall d \nseq{x}{m} \bar{\alpha}^{(n)}\bar{\beta}^{(m)}.$\\
-          & & ~~~~~~~~~~~~~~ $(\nseq{\alpha}{n} \rightarrow (\nseq{\texttt{i32}, \beta_{1}}{m}))$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[x_{i}]\beta_{i}}{m})$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[d]\alpha_i}{n})$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[x_{i}]\beta_i}{m})$\\
+          & & ~~~~ $(\nseq{\alpha}{n} \rightarrow (\nseq{\texttt{i32}, \beta_{1}}{m})) \rightarrow (\nseq{[x_{i}]\beta_{i}}{m}) \rightarrow (\nseq{[d]\alpha_i}{n}) \rightarrow (\nseq{[x_{i}]\beta_i}{m})$\\
   {\lstinline!redomap!} & : & $\forall d \bar{\alpha}^{(m)}\bar{\beta}^{(n)}\nseq{\gamma}{l}.$\\
-          & & ~~~~~~~~~~~~~~ $(\nseq{\alpha}{m} \rightarrow \nseq{\alpha}{m} \rightarrow (\bar{\alpha}^{(m)}))$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m} \rightarrow \nseq{\beta}{n} \rightarrow (\bar{\alpha}^{(m)}, \bar{\gamma}^{(l)}))$ \\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$\\
-          & & ~~~~~~~~~~ $\rightarrow \nseq{[d]\beta_i}{n}$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m},\nseq{[d]\gamma_{i}}{l})$ \\
+          & & ~~~~ $(\nseq{\alpha}{m} \rightarrow \nseq{\alpha}{m} \rightarrow (\bar{\alpha}^{(m)})) \rightarrow (\nseq{\alpha}{m} \rightarrow \nseq{\beta}{n} \rightarrow (\bar{\alpha}^{(m)}, \bar{\gamma}^{(l)}))$ \\
+          & & $\rightarrow (\nseq{\alpha}{m}) \rightarrow \nseq{[d]\beta_i}{n} \rightarrow (\nseq{\alpha}{m},\nseq{[d]\gamma_{i}}{l})$ \\
   {\lstinline!scanomap!} & : & $\forall d \bar{\alpha}^{(m)}\bar{\beta}^{(n)}\nseq{\gamma}{l}.$\\
-          & & ~~~~~~~~~~~~~~ $(\nseq{\alpha}{m} \rightarrow \nseq{\alpha}{m} \rightarrow (\bar{\alpha}^{(m)}))$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m} \rightarrow \nseq{\beta}{n} \rightarrow (\bar{\alpha}^{(m)}, \bar{\gamma}^{(l)}))$ \\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[d]\beta_i}{n}$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{[d]\alpha}{m},\nseq{[d]\gamma_{i}}{l})$ \\
+          & & ~~~~ $(\nseq{\alpha}{m} \rightarrow \nseq{\alpha}{m} \rightarrow (\bar{\alpha}^{(m)})) \rightarrow (\nseq{\alpha}{m} \rightarrow \nseq{\beta}{n} \rightarrow (\bar{\alpha}^{(m)}, \bar{\gamma}^{(l)}))$ \\
+          & & $\rightarrow (\nseq{\alpha}{m}) \rightarrow \nseq{[d]\beta_i}{n} \rightarrow (\nseq{[d]\alpha}{m},\nseq{[d]\gamma_{i}}{l})$ \\
   {\lstinline!stream_par!} & : & $\forall d x \bar{\alpha}^{(m)}\bar{\beta}^{(n)}\nseq{\gamma}{l}.$\\
-          & & ~~~~~~~~~~~~~~ $(\nseq{\alpha}{m} \rightarrow \nseq{\alpha}{m} \rightarrow (\nseq{\alpha}{m}))$\\
-          & & ~~~~~~~~~~ $\rightarrow ((x: \texttt{i32}) \rightarrow \nseq{[x]\beta_i}{n} \rightarrow (\bar{\alpha}^{(m)}, \nseq{[x]\gamma_{i}}{l}))$ \\
-          & & ~~~~~~~~~~ $\rightarrow \nseq{[d]\beta_i}{n}$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m},\nseq{[d]\gamma_{i}}{l})$ \\
+          & & ~~~~ $(\nseq{\alpha}{m} \rightarrow \nseq{\alpha}{m} \rightarrow (\nseq{\alpha}{m}))$ \\
+          & & $\rightarrow ((x: \texttt{i32}) \rightarrow \nseq{[x]\beta_i}{n} \rightarrow (\bar{\alpha}^{(m)}, \nseq{[x]\gamma_{i}}{l}))$ \\
+          & & $\rightarrow \nseq{[d]\beta_i}{n} \rightarrow (\nseq{\alpha}{m},\nseq{[d]\gamma_{i}}{l})$ \\
   {\lstinline!stream_seq!} & : & $\forall d x \bar{\alpha}^{(m)}\bar{\beta}^{(n)}\nseq{\gamma}{l}.$\\
-          & & ~~~~~~~~~~ $\rightarrow ((x: \texttt{i32}) \rightarrow \nseq{\alpha}{m} \rightarrow \nseq{[x]\beta_i}{m} \rightarrow (\bar{\beta}^{(m)}, \nseq{[x]\gamma}{l}))$ \\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$\\
-          & & ~~~~~~~~~~ $\rightarrow \nseq{[d]\beta_i}{n}$\\
-          & & ~~~~~~~~~~ $\rightarrow (\nseq{\alpha}{m})$ \\
+          & & ~~~~ $((x: \texttt{i32}) \rightarrow \nseq{\alpha}{m} \rightarrow \nseq{[x]\beta_i}{m} \rightarrow (\bar{\beta}^{(m)}, \nseq{[x]\gamma}{l}))$ \\
+          & & $\rightarrow (\nseq{\alpha}{m}) \rightarrow \nseq{[d]\beta_i}{n} \rightarrow (\nseq{\alpha}{m})$ \\
 
 \end{tabular}
 \caption{Extended SOACs used for fusion and later stages of the compiler.}
@@ -211,7 +211,10 @@ The entire algorithm consists of two distinct stages:
 
 Futhark, as a block-structured language, is suited to region-based
 analysis, and the fusion algorithm is indeed designed as a reduction
-of a dataflow graph.
+of a dataflow graph.  Our structural analysis is inspired by the
+T$_{1}$-T$_{2}$-reduction~\cite{red_dragon}.  We say that a flow graph
+is reducible if it can be reduced to a single node by the following
+two transformations:
 
 \begin{figure}
 \begin{center}
@@ -220,11 +223,6 @@ of a dataflow graph.
 \caption{T$_{1}$-T$_{2}$-reduction}
 \label{fig:t1t2-1}
 \end{figure}
-
-Our structural analysis is inspired by the
-T$_{1}$-T$_{2}$-reduction~\cite{red_dragon}.  We say that a flow graph
-is reducible if it can be reduced to a single node by the following
-two transformations:
 
 \begin{description}
   \item[T$_{1}$:] Remove an edge from a node to itself.
@@ -279,8 +277,8 @@ only one incoming edge, hence it can be fused.  This is achieved by:
   which computes the per-element output of the child,
 \item Removing duplicate input arrays of the resulting SOAC.
 \end{enumerate}
-The above is the procedure for fusing two \kw{map} SOACs.
-\Cref{sec:fusionalgebra} contains the rules used for other cases.
+This is the procedure for fusing two \kw{map} SOACs.
+\Cref{sec:fusionalgebra} gives the rules used for other cases.
 
 The top-right part of \cref{fig:fusion-on-graph} shows the
 (simplified) result of the first fusion, where the copy statements
@@ -292,29 +290,95 @@ bottom-right graph of \cref{fig:fusion-on-graph}.  At this point no
 further $T_2$ reduction is possible, because the SOAC computing
 \texttt{x1} has two incoming edges.  This example demonstrates a key
 benefit of removing \kw{zip}/\kw{unzip} and using our tupleless SOACs
-representation: There are no intermediate nodes in the data-dependency
+representation: there are no intermediate nodes in the data-dependency
 graph between fusable producer and consumer.
+
+\subsection{Optimality of Fusion}
+
+With a sufficiently rich fusion algebra it is sometimes the case that
+the data dependency graph can be reduced in multiple different ways.
+Consider the following example
+from~\cite{Robinson:2014:FFI:2636228.2636235}.
+
+\begin{lstlisting}
+let ys = map (\x -> x + 1.0) xs
+let sum = reduce (+) 0.0 xs
+in map (\y -> y / sum) ys
+\end{lstlisting}
+
+There are three mutually incompatible ways to fuse in this expression.
+
+\begin{itemize}
+\item Do not fuse (\cref{fig:label:three-fusion-no-fusion}).
+\item Fuse the two \kw{map}s together, yielding a single \kw{map} that
+  has a dependency on the \kw{reduce} through \texttt{sum}
+  (\cref{fig:three-fusion-map-map}).
+\item Horizontally fuse the first \kw{map} with the \kw{reduce},
+  yielding a \kw{redomap}.  This \kw{redomap} cannot be fused with the
+  final \kw{map} (\cref{fig:three-fusion-map-reduce}).
+\end{itemize}
+
+\begin{figure}
+  \centering
+
+  \begin{subfigure}[t]{0.32\textwidth}
+      \input{img/fusion-nofusion.tex}
+      \caption{No fusion.}
+      \label{fig:three-fusion-no-fusion}
+  \end{subfigure}
+  \begin{subfigure}[t]{0.32\textwidth}
+    \input{img/fusion-vertical.tex}
+    \caption{Horizontal fusion of \kw{map} and \kw{reduce} into \kw{redomap}.}
+      \label{fig:three-fusion-map-map}
+  \end{subfigure}
+  \begin{subfigure}[t]{0.32\textwidth}
+    \input{img/fusion-horizontal.tex}
+    \caption{Vertical fusion of the two \kw{map} operations.}
+      \label{fig:three-fusion-map-reduce}
+  \end{subfigure}
+
+
+  \caption{Three fusion possibilities for the example program. Figure
+    taken from \cite{dybdal2017array} with permission.}
+  \label{fig:three-fusion-opportunities}
+\end{figure}
+
+The crossed-out edge indicates in incontractable edge, because while
+there is a data dependency between the \kw{reduce} and the final
+\kw{map}, it is not of a form that permits fusion.
+
+Looking at the expression in isolation, we might be able to use
+hardware heuristics to determine whether it is better to fuse one way
+or the other.  However, for larger expressions the choice made might
+affect fusibility of other SOACs that are in a producer- or
+consumer-relationship with those fused.  Determining optimal fusion is
+equivalent to graph clustering, an NP-hard problem.  However,
+practical solutions based on integer linear
+programming~\cite{Megiddo:1997:OWL:258492.258520} or graph
+partitioning~\cite{Kristensen:2016:FPA:2967938.2967945} have been
+developed.  The Futhark compiler presently uses a \textit{greedy}
+approach: the first succesful candidate for fusion is used (where the
+iteration order is essentially just the bottom-up traversal of the
+AST).  We have not yet in practise observed cases where the greedy
+approach leads to suboptimal code, but if such cases were to become
+prevalent, the techniques mentioned above could readily be adopted.
 
 \subsection{Invalid fusion}
 \label{sec:invalidfusion}
 
 We must be careful not to violate the uniqueness rules when performing
 fusion.  For example, consider the following program.
-
 \begin{lstlisting}
 let b = map f a
 let c = a with [i] <- x
 in map g b
 \end{lstlisting}
-
 Without the constraints imposed upon us by the semantics of in-place
 modification, we could fuse to the following program.
-
 \begin{lstlisting}[mathescape]
 let c = a with [i] <- x
 in map (g $\circ$ f) a
 \end{lstlisting}
-
 However, this results in a violation of Uniqueness Rule 1, and the
 resulting program is thus invalid.  In general, we must track the
 possible execution paths from the producer-SOAC to the consumer-SOAC,
@@ -323,6 +387,41 @@ and only fuse if none of the inputs of the producer have been consumed
 function call on any possible execution paths.  This is easier than it
 may appear at first glance, as the fusion algorithm will only fuse
 when the consumer is within the lexical scope of the producer anyway.
+
+Another, subtler, issue is that a fused SOAC may consume more of its
+input than the original constituent SOAC.  Consider the following
+expression.
+\begin{lstlisting}
+let b = map (\x -> x) a
+in map g b
+\end{lstlisting}
+Suppose that the function \texttt{g} consumes its input.  This means
+that in the expression as a whole, the array \texttt{b} is being
+consumed, but \texttt{a} is not (by the fusion rules, the array
+produced by a \kw{map} has no aliases).  After \kw{map}-\kw{map}
+fusion (and copy propagation), we obtain
+\begin{lstlisting}
+map (\x -> g x) a
+\end{lstlisting}
+This expression \textit{does} consume \texttt{a}.  While this example
+is contrived, it is not impossible for \texttt{f} to be a function
+whose output aliases its input, which will give the same problem.
+
+The solution is to track which inputs are consumed, for each SOAC that
+contributed to the final SOAC produced at the end of fusion.  For each
+array that the final SOAC consumes, yet which were not consumed by any
+of the original SOACs, we add a \texttt{copy}.  In the example above,
+this would correspond to the following.
+\begin{lstlisting}
+let a' = copy a
+in map (\x -> g x) a'
+\end{lstlisting}%
+This ensures that the result of fusion never consumes more than the
+original expression.  In this case, it also makes the fusion a little
+pointless, as the \kw{copy} is just as slow as an identity \kw{map}.
+However, this is the worst-case situation: at most we one \kw{copy}
+per SOAC input fused, which will never be worse than not fusing in the
+first place, but also might not be an improvement.
 
 \subsection{When to fuse}
 \label{sec:whentofuse}

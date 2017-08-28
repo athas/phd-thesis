@@ -1,0 +1,31 @@
+\begin{tikzpicture}
+\tikzset{
+    markedge/.style={
+    decoration={ markings,
+      mark=at position .5 with {\node (0,0) {\rotatebox{-35}{$\times$}};}  %% adjust 2mm etc as you wish
+    },
+    postaction={decorate}
+  },
+}
+
+\node (input) {\footnotesize \textit{input}};
+\node (map1) [below of=input] {\texttt{map}}
+  edge [pre] (input);
+\node (reduce) [right of=map1,xshift=1cm] {\texttt{reduce}}
+  edge [pre] (input);
+\node (map2) [below of=map1,yshift=-5mm] {\texttt{map}};
+
+\draw[post] (map1) to  node[midway,xshift=2mm] {\footnotesize\textit{xs}} (map2);
+
+\draw[post,draw,bend left,markedge] (reduce) to  node[pos=0.28,right] {\footnotesize\textit{sum}} (map2);
+
+\node (ys) [below of=map2] {\footnotesize\textit{ys}}
+   edge [pre] (map2);
+
+
+  \begin{pgfonlayer}{background}
+    \filldraw [line width=4mm,join=round,black!10]
+      (map1.north -| map1.east) rectangle (map2.south -| map1.west)
+      (reduce.north -| reduce.east) rectangle (reduce.south -| reduce.west);
+  \end{pgfonlayer}
+\end{tikzpicture}

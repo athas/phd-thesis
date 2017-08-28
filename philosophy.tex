@@ -1185,7 +1185,7 @@ compositions of bulk parallel operators.
 
 \begin{figure}
   \centering
-\begin{lstlisting}
+\begin{lstlisting}[xleftmargin=0pt]
 -- A parametric module (functor) taking as argument
 -- a module, and producing a module.
 module map2(fm: { type c_t -- "closure" type
@@ -1240,7 +1240,7 @@ matrix multiplication.
 \begin{figure}
   \centering
   \begin{subfigure}{1\textwidth}
-    \begin{lstlisting}
+    \begin{lstlisting}[xleftmargin=0pt]
 let dotprod [n] (xs: [n]i32) (ys: [n]i32): i32 =
   reduce (+) 0 (map (+) (zip xs ys))
 \end{lstlisting}
@@ -1249,7 +1249,7 @@ let dotprod [n] (xs: [n]i32) (ys: [n]i32): i32 =
   \end{subfigure}
 \par\bigskip
   \begin{subfigure}{1\textwidth}
-\begin{lstlisting}
+\begin{lstlisting}[xleftmargin=0pt]
 let matmul [n][m][p]
     (xss: [n][m]i32) (yss: [m][p]i32): [n][p]i32 =
   map (\xs -> map (dotprod xs) (transpose yss)) xss
@@ -1483,7 +1483,7 @@ not alias either of the input parameters.  The need for this will be
 apparent shortly.
 
 \begin{figure}
-\begin{lstlisting}[numbers=left,escapechar=|]
+\begin{lstlisting}[numbers=left,escapechar=|,xleftmargin=0pt]
 let add_centroids [d] (x: [d]f32, y: [d]f32)
                       : *[d]f32 = |\label{line:add_centroids_begin}|
   map (+) (zip x y) |\label{line:add_centroids_end}|
@@ -1561,7 +1561,7 @@ arrays.\footnote{\Cref{chap:kernel-extraction} shows how the compiler
   can do this automatically, but here we do it by hand for clarity.}
 
 \begin{figure}
-\begin{lstlisting}[numbers=left,escapechar=|]
+\begin{lstlisting}[numbers=left,escapechar=|,xleftmargin=0pt]
 let cluster_sums_par [k] [n] [d]
                      (counts: [k]i32)
                      (points: [n]([d]f32,i32))
@@ -1618,7 +1618,7 @@ is matrix addition, and the chunk function applies the sequential
 \lstinline{counts}) previously shown in \cref{fig:sequential-means}.
 
 \begin{figure}
-\begin{lstlisting}[numbers=left,escapechar=|]
+\begin{lstlisting}[numbers=left,escapechar=|,xleftmargin=0pt]
 let cluster_sums_stream [k] [n] [d]
                         (counts: [k]i32)
                         (points: [n][d]f32)
@@ -1692,7 +1692,7 @@ code, and when compiled to sequential code.
 \label{sec:sobolsequences}
 
 \begin{figure}
-\begin{lstlisting}[numbers=left]
+\begin{lstlisting}[numbers=left,xleftmargin=0pt]
 let gray_code (x: i32): i32 =
   (x >> 1) ^ x
 
@@ -1738,7 +1738,7 @@ the chunk function applies the \kw{map}-parallel formula once, then
 applies the \kw{scan} formula.
 
 \begin{figure}
-\begin{lstlisting}[numbers=left]
+\begin{lstlisting}[numbers=left,xleftmargin=0pt]
 let index_of_least_significant_0 (x: i32): i32 =
   loop (i = 0) while i < 32 && ((x>>i)&1) != 0 do i + 1
 
@@ -1974,7 +1974,7 @@ semantically equivalent with the original sequential loop.
 
 \begin{figure}[bt]
 
-\begin{lstlisting}[language=fortran]
+\begin{lstlisting}[xleftmargin=0pt,language=fortran]
 SUBROUTINE solvh(HE,XE,IA,IB)     SUBROUTINE geteu(XE,SYM,NP)
  DIMENSION  HE(32, *), XE(*)       DIMENSION  XE(16,*)
  READ(*,*) SYM, NS, NP, N
@@ -2090,7 +2090,7 @@ parallelized by by computing the changes to \texttt{A} locally on each
 processor and by merging (adding) them in parallel at the end of the
 loop.
 
-\begin{lstlisting}[language=fortran]
+\begin{lstlisting}[xleftmargin=0pt,language=fortran]
 DO i = 1, N, 1
     A(B(i)) = A(B(i)) + C(i)
 ENDDO
@@ -2126,7 +2126,7 @@ to inside the loop.   Another example is when two semantically
 different arrays are combined into the same array, as 
 illustrated in the example below. 
 
-\begin{lstlisting}[language=fortran]
+\begin{lstlisting}[xleftmargin=0pt,language=fortran]
       DO i = 1, N, 1
 S1:       A(i) = C(i)*2
 S2:       A(B(i)) = A(B(i)) + C(i)
@@ -2166,7 +2166,7 @@ Another challenge for automatic parallelisation are the so called
 do not form a uniform recurrence, e.g., their increment is not
 constant across the iteration space of the analysed loop.
 
-\begin{lstlisting}[language=fortran,mathescape=true,escapechar=|]
+\begin{lstlisting}[xleftmargin=0pt,language=fortran,mathescape=true,escapechar=|]
     civ@1 = 0
     DO i = 1, N, 1
       civ@2=$\phi$(civ@1, civ@4)

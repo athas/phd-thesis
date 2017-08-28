@@ -109,7 +109,7 @@ allocate arrays in the first place.  Our approach is guaranteed to
 resolve coalescing if the sequential-dimension indices are invariant
 to the parallel array dimensions. For example, consider the following
 expression:
-\begin{lstlisting}[xleftmargin=0.5cm,numbers=none]
+\begin{lstlisting}[numbers=none]
 kernel (n) (\i -> stream_seq f (0) xss[i])
 \end{lstlisting}
 Assuming that \lstinline{f} performs a sequential in-order traversal
@@ -117,7 +117,7 @@ of its input, the expression is optimized by changing the
 representation of \texttt{xss} to be column major (the default is row
 major), via transposition in memory, as follows:
 
-\begin{lstlisting}[xleftmargin=0.5cm,numbers=none]
+\begin{lstlisting}[numbers=none]
 let xss' = manifest (1,0) xss
 in kernel (n) (\i -> stream_seq f (0) xss'[i])
 \end{lstlisting}
@@ -155,18 +155,18 @@ Two patterns are recognised by the inspection:
   The indices $\nseq{y}{n}$ are a permutation $\nseq{c}{m}$ of the
   thread indices.  We then copy the array with permutation
   $\nseq{c}{m}$.  An example is a kernel
-\begin{lstlisting}[xleftmargin=0.5cm,numbers=none]
+\begin{lstlisting}[numbers=none]
 kernel (n,m) (\i j -> xss[j][i] + 2)
 \end{lstlisting}
 which is transformed into
-\begin{lstlisting}[xleftmargin=0.5cm,numbers=none]
+\begin{lstlisting}[numbers=none]
 let xss' = manifest (1,0) xs
 in kernel (n,m) (\i j -> xss'[j][i] + 2)
 \end{lstlisting}
 
 For this example, we could also have transposed the kernel dimensions
 themselves, followed by transposing the result:
-\begin{lstlisting}[xleftmargin=0.5cm,numbers=none]
+\begin{lstlisting}[numbers=none]
 let r = kernel (m,n) (\j i -> xss'[j][i] + 2)
 in rearrange (1,0) r
 \end{lstlisting}
@@ -280,7 +280,7 @@ One-dimensional tiling is performed when the input arrays of a
   streamSeq construct into a nest of two streamSeq constructs.}
 
 For example, the kernel
-\begin{lstlisting}[xleftmargin=0.5cm]
+\begin{lstlisting}
 kernel (n) (\i -> stream_seq (f i) (ne) ps)
 \end{lstlisting}
 
@@ -288,7 +288,7 @@ kernel (n) (\i -> stream_seq (f i) (ne) ps)
 array \lstinline{ps}, as it is invariant to the first (and only)
 dimension, and is transformed into:
 
-\begin{lstlisting}[xleftmargin=0.5cm]
+\begin{lstlisting}
 kernel (n) (\i -> stream_seq
                     (\q a (ps': [q]int) ->
                       let ps'' = local 1 ps'
@@ -320,7 +320,7 @@ Futhark also supports two-dimensional tiling, where two streamed
 arrays are invariant to different parallel dimensions.  A matrix
 multiplication that exhibits the pattern appears as follows:
 
-\begin{lstlisting}[xleftmargin=0.5cm]
+\begin{lstlisting}
 let yss' = rearrange (1,0) yss
 in kernel (n,l) (\i j ->
      let xs = xss[i]
@@ -345,7 +345,7 @@ extraction, the \StreamSeq{} was in the form of a \kw{redomap}.  The
 arrays \lstinline{xs} and \lstinline{ys} are both invariant to at
 least one dimension of the kernel, so they can be tiled as follows:
 
-\begin{lstlisting}[xleftmargin=0.5cm]
+\begin{lstlisting}
 let yss' = rearrange (1,0) yss
 in kernel (n,l) (\i j ->
      let xs = xss[i]
@@ -379,7 +379,7 @@ tiling pattern, in which the to-be-tiled array is the result of an
 indirect index computed by a function \texttt{f}, all nested inside of
 a sequential loop.  A simplified reproduction:
 
-\begin{lstlisting}[xleftmargin=0.5cm]
+\begin{lstlisting}
 kernel (n,l) (\i j ->
   loop (outer_acc) = (...) for l < k do
     let j' = f l j
@@ -401,7 +401,7 @@ kernel (n,l) (\i j ->
 Since the computation of the array \texttt{xss} is invariant to the
 first dimension of the kernel, it can be tiled as follows:
 
-\begin{lstlisting}[xleftmargin=0.5cm]
+\begin{lstlisting}
 kernel (n,l) (\i j ->
   loop (outer_acc) = (...) for l < k do
     let j' = f l j

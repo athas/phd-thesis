@@ -495,7 +495,7 @@ C code in \cref{fig:bfs-imperative}, and furthermore generate both
 versions of the code.
 
 \begin{figure}[ht]
-\begin{lstlisting}[language=C,numbers=left,escapechar=|]
+\begin{lstlisting}[xleftmargin=0pt,language=C,numbers=left,escapechar=|]
 // n is the number of graph nodes
 for (int src_id = 0; src_id < n; src_id++ ) { // parallel
     if (mask[src_id] == true) {
@@ -519,7 +519,7 @@ for (int src_id = 0; src_id < n; src_id++ ) { // parallel
 
 \begin{figure}[ht]
 \small
-\begin{lstlisting}[language=futhark,numbers=left,escapechar=|]
+\begin{lstlisting}[xleftmargin=0pt,language=futhark,numbers=left,escapechar=|]
 let step [n][e] (cost: [n]i32)
                 (nodes_starting: [n]i32)
                 (nodes_num_edges: [n]i32)

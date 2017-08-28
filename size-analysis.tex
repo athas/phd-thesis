@@ -306,7 +306,7 @@ various intermediate arrays need to be computed (or at least
 overestimated) and verified before the kernel is run.
 
 \begin{figure}
-\begin{lstlisting}
+\begin{lstlisting}[xleftmargin=0pt]
 let main (n: i32) (m: i32) (k: i32)
          (vsss: [n][m][k]f64): d1 d2.[d][d1][d2]f64 =
   let l = if n != 0 then m+m else 0
@@ -388,7 +388,7 @@ computation and assumed-invariant verification introduce negligible
 overhead, i.e., $O(1)$ number of operations.
 
 \begin{figure}
-\begin{lstlisting}
+\begin{lstlisting}[xleftmargin=0pt]
 let main (n: i32) (m: i32) (k: i32)
          (vsss: [n][m][k]f64): d1 d2.[d][d1][d2]f64 =
   let l = if n != 0 then m+m else 0
@@ -443,7 +443,7 @@ and performed equally well for our purposes.
 
 \begin{figure}
 
-\begin{lstlisting}
+\begin{lstlisting}[xleftmargin=0pt]
 let concat_shape (n: i32) (m: i32)
                  (xs: [n]f64) (ys: [m]f64): i32 =
   n+m
