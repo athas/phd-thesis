@@ -406,10 +406,6 @@ thread(in, out, n, m):
   \label{fig:coalesced-gpu-transposition}
 \end{figure}
 
-\begin{table}
-  \centering
-\end{table}
-
 We use a memory barrier between reading the input and writing the
 output.  This is necessary to ensure that the element we read from
 \texttt{block} has been written by the responsible thread, as GPUs do
@@ -664,7 +660,190 @@ process of generating flat parallel GPU kernels from a nested parallel
 Futhark program, is primarily a process of rewriting the program into
 a composition of recognisable primitives.  This section shows how a
 subset of these are handled with respect to the GPU model introduced
-above.
+above.  In order to focus on mapping the parallelism and exploiting
+certain crucial optimisations, we will ignore some technicalities.
+
+The simplest case is implementing $\cmap~f~a$.  This can be done with
+a kernel that conceptually runs one thread for every element in $a$,
+which applies $f$ and writes the result.  Supose that $a$ contains $n$
+elements, and that our desired workgroup size is $w$.  We then use
+$n/w$ workgroups (rounding up).  Since the size of $a$ may not be
+divisible by the optimal group size for the GPU, the last workgroup
+might have threads that are idle.  The kernel is shown on
+\cref{fig:map-on-gpu}.  We assume that $f$ is merely executed
+sequentially within each thread.
+
+\begin{figure}
+
+\begin{lstlisting}[language={},mathescape]
+thread(in, out, n):
+  gtid <- get_global_id()
+
+  if gtid < n:
+    x <- in[gtid]
+    y <- $f$(x)
+    out[gtid] <- y
+\end{lstlisting}
+
+  \caption{A GPU implementation of $\cmap~f~a$.  We assume the array
+    $a$ is stored in memory pointed at by the parameter \texttt{in}.}
+  \label{fig:map-on-gpu}
+\end{figure}
+
+Mapping a reduction such as $\creduce~\oplus~0_{\oplus}~a$ is more
+complicated.  Again supposing that $a$ contains $n$ elements, one
+solution is to launch $n/2$ threads.  Each thread reads 2 elements,
+applies $\oplus$, and writes its result.  The process is then
+recursively applied on the resulting $n/2$ elements until only a
+single one is left.  This implementation is shown on
+\cref{fig:reduce-on-gpu}.
+
+The reduction thus computed is correct and fully parallel, but it
+requires manifesting $O(\log n)$ intermediate results in global
+memory.  The time taken to shuffle memory around is likely to
+significantly dominate the cost of computing $\oplus$.  Further, it is
+awkward if we want to support not just ordinary reductions, but the
+$\credomap$ construct, where reduction is preceded by a fold.  A
+better solution, one that takes more direct advantage of the GPU
+architecture, is needed.
+
+\begin{figure}
+
+\begin{lstlisting}[language={},mathescape]
+thread(in, out, n):
+  gtid <- get_global_id()
+
+  z <- $0_{\oplus}$
+
+  if gtid < n:
+    x <- in[gtid*2]
+    y <- in[gtid*2+1]
+    z <- x $\oplus$ y
+
+  out[gtid] <- z
+\end{lstlisting}
+
+  \caption{A GPU implementation of $\creduce~\oplus~0_{\oplus}~a$.  We
+    assume the array $a$ is stored in memory pointed at by the
+    parameter \texttt{in}.  The kernel is invoked several times while
+    swapping \texttt{in} and \texttt{out}.}
+  \label{fig:reduce-on-gpu}
+\end{figure}
+
+An implementation of $\credomap~\oplus~f~0_{\oplus}~a$ is shown on
+\cref{fig:redomap-on-gpu}.  The idea is to divide the $n$ input
+elements into \textit{chunks}, where each thread processes a chunk of
+the input sequentially using the $f$ function, followed by all threads
+within a workgroup collaboratively reducing together, yielding one
+result per workgroup (which here is written by thread 0 of the group).
+These per-workgroup results can then be reduced using a simple
+single-workgroup reduction to a single, final result.  The result is
+that reduction of an arbitrarily-sized input array can be done using
+two GPU kernel invocations.
+
+Assume that we are launching $k$ workgroups each of size $w$, for a
+total of $k\cdot{}w$ threads.  For simplicity we assume that $n$ is
+divisible by $k\cdot{}w$, whhich means that each thread processes
+exactly $\frac{n}{k\cdot{}w}$ elements.  This assumption can be
+removed by having each thread explicitly compute its chunk size.  We
+also assume that $w$ is a power of two, as this simplifies the the
+intra-group reduction.
+
+\begin{figure}
+
+\begin{lstlisting}[language={},mathescape]
+local block[]
+
+thread(in, out, k, w, n):
+  gtid <- get_global_id()
+  ltid <- get_local_id()
+  gid <- get_group_id()
+
+  chunk_size <- n/(k*w)
+
+  -- Compute a fold of the chunk.
+  i <- 0
+  x <- $0_{\oplus}$
+  while i < chunk_size:
+    y <- $f$(in[gtid*chunk_size + i])
+    x <- x $\oplus$ y
+    i <- i + i
+
+  block[ltid] <- x
+  barrier()
+
+  i <- w/2
+  while i > 0:
+    if ltid < i:
+      x <- block[ltid*2]
+      y <- block[ltid*2+1]
+      z <- x $\oplus$ y
+    barrier()
+    if ltid < i:
+      block[ltid] <- z
+    barrier()
+    i <- i / 2
+
+  if ltid == 0:
+    out[gid] <- block[0]
+\end{lstlisting}
+
+  \caption{A GPU implementation of $\credomap~\oplus~0_{\oplus}~a$.  We
+    assume the array $a$ is stored in memory pointed at by the
+    parameter \texttt{in}.  The result is one partial result per
+    workgroup, which will have to be processed by a final (much
+    smaller) reduction.}
+  \label{fig:redomap-on-gpu}
+\end{figure}
+
+Unfortunately, the kernel shown on \cref{fig:redomap-on-gpu} has a
+significant problem: the memory accesses performed during the
+sequential per-chunk processing are non-coalesced.  This is because
+the chunk processed by a given thread is sequential in memory.  At an
+abstract level, we are treating the input as a two-dimensional array
+of shape $\frac{n}{(k\cdot{}w)}\times(k\cdot{}w)$ represented in
+\textit{row-major order}.
+
+A simple solution is to \textit{stride} the chunks, such that each
+element within a chunk is separated by $k\cdot{}w$ elements in the
+array as a whole.  Using the matrix metaphor, this corresponds to
+representing the input in \textit{column-major order}.  This approach
+is shown in \cref{fig:redomap-on-gpu-commutative}.  Unfortunately,
+this solution changes the order of application of, which means that
+unless $\oplus$ is commutative, the result of the reduction is now
+wrong.  We can solve this by treating the input as a two-dimensional
+array and \textit{pre-transposing} the input, after which the
+``wrong'' iteration order will actually restore the original order.
+As shown in \cref{sec:gpu-transposition}, transpositions can be
+implemented efficiently on GPUs, so this extra memory traffic is a
+small price to pay, if the alternative is non-coalesced access.  In
+practise, most operators we wish to use in reductions are commutative,
+in which case the pre-transposition is not necessary.
+
+\begin{figure}
+\begin{lstlisting}[language={},mathescape]
+local block[]
+
+thread(in, out, k, w, n):
+  ...
+
+  -- Compute a fold of the chunk.
+  i <- 0
+  x <- $0_{\oplus}$
+  while i < chunk_size:
+    y <- $f$(in[gtid + i*(w*n)])
+    x <- x $\oplus$ y
+    i <- i + i
+
+  ...
+\end{lstlisting}
+
+  \caption{A rewriting of the per-chunk folding of
+    \cref{fg:redomap-on-gpu} such that memory accesses are coalesced.
+    This only works if the reduction is commutative.}
+  \label{fig:redomap-on-gpu-commutative}
+\end{figure}
+
 
 %%% Local Variables:
 %%% mode: latex
