@@ -1548,8 +1548,8 @@ question.  This computation is done on lines
 In-place updates are used only in a trivial form.  The result is an
 array of matrices, which we then sum on lines
 \ref{line:cluster_sums_par_sum_begin}--\ref{line:cluster_sums_par_sum_end}
-to get the final result.  The \kw{rearrange} construct produces a view
-of the given
+to get the final result.  The \kw{rearrange} construct is a
+generalisation of transposition, and produces a view of the given
 array where the dimensions have been reordered by the given permutation.  For example, if\\
 \centerline{\lstinline{b = rearrange (1,2,0) a},}\\
 then\\
@@ -1557,8 +1557,9 @@ then\\
 In the program, the \kw{rearrange} construct is used to bring the
 dimension we wish to reduce across innermost, which allows us to avoid
 a reduction where the operator operates on large
-arrays.\footnote{\Cref{chap:kernel-extraction} shows how the compiler
-  can do this automatically, but here we do it by hand for clarity.}
+arrays.\footnote{\Cref{chap:kernel-extraction} shows that the Futhark
+  compiler can do this automatically, but here we do it by hand for
+  clarity.}
 
 \begin{figure}
 \begin{lstlisting}[numbers=left,escapechar=|,xleftmargin=0pt]

@@ -405,8 +405,9 @@ as strictly required by the syntax, in order to match the source
 language.  For brevity, we will also sometimes elide some type
 annotations.  In such cases we may also elide the parentheses when
 only a single name is bound by the pattern.  We will often stray from
-the strict lambda syntax, and write for example \lstinline{(+2)}
-instead of \lstinline{(\x.x+2)}.
+the strict syntax for lambdas, and write for example \lstinline{(+)}
+for \lstinline{(\x y->x+y)}, or \lstinline{(+2)} instead of
+\lstinline{(\x->x+2)}.
 
 \begin{figure}
 \centering

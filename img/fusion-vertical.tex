@@ -8,18 +8,18 @@
   },
 }
 
-\node (input) {\footnotesize \textit{input}};
+\node (input) {\footnotesize \textit{xs}};
 \node (map1) [below of=input] {\texttt{map}}
   edge [pre] (input);
 \node (reduce) [right of=map1,xshift=1cm] {\texttt{reduce}}
   edge [pre] (input);
 \node (map2) [below of=map1,yshift=-5mm] {\texttt{map}};
 
-\draw[post] (map1) to  node[midway,xshift=2mm] {\footnotesize\textit{xs}} (map2);
+\draw[post] (map1) to  node[midway,xshift=2mm] {\footnotesize\textit{ys}} (map2);
 
 \draw[post,draw,bend left,markedge] (reduce) to  node[pos=0.28,right] {\footnotesize\textit{sum}} (map2);
 
-\node (ys) [below of=map2] {\footnotesize\textit{ys}}
+\node (ys) [below of=map2] {\footnotesize\textit{zs}}
    edge [pre] (map2);
 
 

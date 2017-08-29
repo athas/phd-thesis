@@ -43,27 +43,28 @@ is our choice of internal representation, in which arrays of tuples
 (and therefore \lstinline{zip}/\lstinline{unzip}) does not occur.
 
 \begin{figure}
-\begin{subfigure}[t]{0.4\textwidth}
-\begin{lstlisting}
+\begin{subfigure}[b]{0.4\textwidth}
+\begin{lstlisting}[xleftmargin=0pt]
 let @b@ = map (+1) a
 let c = map (+2) @b@
 let d = map (+3) @b@
 in map (+) c d
 \end{lstlisting}
-\caption{Unfused}
+\caption{Before fusion.}
 \end{subfigure}%
 \hspace{.1\textwidth}
-\begin{subfigure}[t]{0.4\textwidth}
-\begin{lstlisting}
+\begin{subfigure}[b]{0.4\textwidth}
+\begin{lstlisting}[xleftmargin=0pt]
 map (\x ->
+      let b = x + 1
       let c = x + 2
       let d = x + 3
       in c + d)
     a
 \end{lstlisting}
-\caption{Fused}
+\caption{After fusion.}
 \end{subfigure}%
-\caption{Fusing multiple consumers without duplicating computation}
+\caption{Fusing multiple consumers without duplicating computation.}
 \label{fig:fusion-multiple-consumers}
 \end{figure}
 
@@ -132,7 +133,29 @@ refer to the types while reading the descriptions.
   holds when a \kw{redomap} is first constructed from a \kw{reduce}
   (because there are no mapped results), and is maintained by the
   fusion algebra.  This is crucial for generating parallel code from
-  \kw{redomap}.
+  \kw{redomap}.  As an example of \kw{redomap} fusion, consider the
+  following expression fragment:
+\begin{lstlisting}
+let (ys: [n]i32) = map (\x -> 0 - x) xs
+let (zs: [n]i32) = map (\x -> x + 1) xs
+let (sum: i32)   = reduce (+) (0) xs
+in (ys, zs, sum)
+\end{lstlisting}
+  This can be fused into a single \kw{redomap}
+\begin{lstlisting}
+let (sum: i32) (ys: [n]i32) (zs: [n]i32) =
+  redomap (+)
+          (\x ->
+            (x,     -- reduced result
+             0 - x, -- mapped result
+             x + 1) -- mapped result
+          )
+          (0)
+          xs
+in (ys, zs, sum)
+\end{lstlisting}
+  This fusion operation would not be possible without the notion of
+  mapped results.
 \item[\kw{scanomap}] is similar to \kw{redomap}, but performs a scan
   instead of a reduction.  The following equivalence holds:\\
   \centerline{\lstinline{scan f x a} = \lstinline{scanomap f f x a}}
@@ -151,7 +174,9 @@ refer to the types while reading the descriptions.
   accumulator.  We can recover all parallelism in the chunk operator
   by applying it to ``chunks'' containing the full input arrays, or
   fully sequentialise by adding an outer sequential loop and setting
-  the chunk size to 1.  This aids in efficient sequentialisation.
+  the chunk size to 1.  This aids in efficient sequentialisation.  We
+  discuss \kw{stream\_seq} in greater detail in
+  \cref{sec:streamseq-fusion}.
 \end{description}
 
 We exclude \kw{filter} from our discussion of fusion.  While
@@ -302,14 +327,15 @@ from~\cite{Robinson:2014:FFI:2636228.2636235}.
 
 \begin{lstlisting}
 let ys = map (\x -> x + 1.0) xs
-let sum = reduce (+) 0.0 xs
-in map (\y -> y / sum) ys
+let sum = reduce (+) (0.0) xs
+let zs = map (\y -> y / sum) ys
+in zs
 \end{lstlisting}
 
 There are three mutually incompatible ways to fuse in this expression.
 
 \begin{itemize}
-\item Do not fuse (\cref{fig:label:three-fusion-no-fusion}).
+\item No fusion. (\cref{fig:three-fusion-no-fusion}).
 \item Fuse the two \kw{map}s together, yielding a single \kw{map} that
   has a dependency on the \kw{reduce} through \texttt{sum}
   (\cref{fig:three-fusion-map-map}).
@@ -417,8 +443,8 @@ let a' = copy a
 in map (\x -> g x) a'
 \end{lstlisting}%
 This ensures that the result of fusion never consumes more than the
-original expression.  In this case, it also makes the fusion a little
-pointless, as the \kw{copy} is just as slow as an identity \kw{map}.
+original expression(s).  For this example, it also makes fusion
+ineffective, as the \kw{copy} is just as slow as an identity \kw{map}.
 However, this is the worst-case situation: at most we one \kw{copy}
 per SOAC input fused, which will never be worse than not fusing in the
 first place, but also might not be an improvement.
@@ -483,43 +509,26 @@ duplicate small amounts of scalar computation.
 \section{Fusion Rules}
 \label{sec:fusionalgebra}
 
-The rules describe the fusion of two SOACs with associated patterns,
-termed $A$ and $B$, where $A$ produces some arrays that are inputs to
-$B$.  Syntactically, we write the SOACs as a \kw{let}-binding without
-the \kw{in} part, as $\kw{let}~p~=~e$.  This is important because
-fusion not only rewrites the SOAC itself, but also the pattern to
-which it is bound.  After fusion, SOAC $A$ is removed from the
-program, and therefore soac $C$ must bind the same names as $A$ and
-$B$.  It is likely that some of these names will be dead after fusion,
-but they will be removed by subsequent simplification, not by the
-fusion algorithm itself.
+The rules of the fusion algebra describe the fusion of two SOACs with
+associated patterns, termed $A$ and $B$, where $A$ produces some
+arrays that are inputs to $B$.  Syntactically, we write the SOACs as a
+\kw{let}-binding without the \kw{in} part, as $\kw{let}~p~=~e$.  This
+is important because fusion not only rewrites the SOAC itself, but
+also the pattern to which it is bound.  A crucial property is that,
+when fusing SOACs $A$ and $B$, the resulting SOAC $C$ binds (at least)
+the same names as $A$ and $C$.  This permits us to remove $A$
+entirely, and replace $B$ with $C$.  It is likely that some of these
+names will be dead after fusion, but they will be removed by
+subsequent simplification, not by the fusion algorithm itself.
 
-For simplicity, we will assume that the inputs to $B$ have been
-arranged such that those arrays that are produced by $A$ come first.
-We commit some abuse of notation when describing the composition of
-the lambda functions, as we permit ourselves to invoke lambda operands
-as if they were functions.  This is not strictly permitted by the
-grammar we use for the core language, but it avoids a significant
+For simplicity, when fusing $A$ into $B$, we will assume that the
+inputs to $B$ have been arranged such that those arrays that are
+produced by $A$ come first.  This causes no loss of generality, as
+this rearranging is always possible.  We commit some abuse of notation
+when describing the composition of the lambda functions, as we invoke
+lambdas as if they were functions.  This is not strictly permitted by
+the grammar we use for the core language, but it avoids a significant
 amount of tedious bookkeeping in the rules.
-
-We do not describe explicitly rules for all compositions of SOACs,
-even those that are in principle fusible.  Since any \kw{map} can be
-transformed into a \kw{scanomap} or \kw{redomap} by the equivalence on
-Figure~\ref{fig:map-to-scanomap-or-redomap}, and any \kw{redomap} can
-be transformed into a \StreamPar by the equivalence on
-Figure~\ref{fig:redomap-to-streamred}, we elide those cases that can
-be handled by first transforming the SOAC into a more general form.
-This does mean that e.g. \kw{map}-\kw{map} fusion produces a
-\kw{redomap}, not a \kw{map}, but a \kw{map} can be recovered by
-exploiting the equivalence in the opposite direction.  This is
-necessary because the moderate flattening algorithm of
-\cref{chap:kernel-extraction} depends on being able to recognise
-\kw{map} nestings.  Recovering a \kw{redomap} from a \StreamPar is
-more difficult, and is not attempted by the Futhark compiler.  In
-general, \StreamPar{}s only occur if the original source program
-contained a \StreamRed{}.  All SOACs can be transformed into
-\StreamSeq; the advantage of which we will discuss in
-\cref{sec:streamseq-fusion}.
 
 \begin{figure}[bt]
   Given a SOAC
@@ -535,7 +544,8 @@ and
   \kw{let}~\seq{ys}~=~\kw{redomap}~\kw{nil}~f~()~\seq{xs}
 \]
 where \kw{nil} is the anonymous function that accepts zero arguments
-and returns zero values.
+and returns zero values (which would otherwise be written
+\lstinline{(\->)}).
   \caption{Transforming a \kw{map} to a \kw{scanomap} or \kw{redomap}.}
   \label{fig:map-to-scanomap-or-redomap}
 \end{figure}
@@ -555,60 +565,62 @@ where \begin{align*}
             & \quad \kw{in}~(\seq{y'}, \seq{ys'})
   \end{align*}
   \caption{Transforming a \kw{redomap} to a \StreamPar.  Note that the
-    function of the produced \StreamPar itself contains a
+    function of the produced \StreamPar{} itself contains a
     \kw{redomap}---an implementation must take care not to apply this
     transformation when unnecessary for fusion, or risk
     nontermination.  This transformation relies on the guarantee that
-    the map-result of \kw{redomap} cannot depend on the accumulator.}
+    the mapped result of \kw{redomap} cannot depend on the accumulator.}
   \label{fig:redomap-to-streamred}
 \end{figure}
 
+We do not describe explicitly rules for all compositions of SOACs,
+even those that are in principle fusible.  Since any \kw{map} can be
+transformed into a \kw{scanomap} or \kw{redomap} by the equivalence on
+Figure~\ref{fig:map-to-scanomap-or-redomap}, and any \kw{redomap} can
+be transformed into a \StreamPar{} by the equivalence on
+Figure~\ref{fig:redomap-to-streamred}, we elide those cases that can
+be handled by first transforming the SOAC into a more general form.
+This does for example mean that by the rules, \kw{map}-\kw{map} fusion
+produces a \kw{redomap}, not a \kw{map}, but a \kw{map} can be
+recovered by exploiting the equivalence in the opposite direction.
+Reverting back to less general constructs is necessary because the
+moderate flattening algorithm of \cref{chap:kernel-extraction} depends
+crucially on being able to recognise \kw{map} nestings, and can also
+benefit from recognising simple cases of \kw{reduce} and \kw{scan}.
+
+Recovering a \kw{redomap} from a \StreamPar{} is more difficult, and is
+not attempted by the Futhark compiler.  In general, \StreamPar{}s only
+occur if the original source program contained a \StreamRed{}.  All
+SOACs can be transformed into \StreamSeq; the advantage of which we
+will discuss in \cref{sec:streamseq-fusion}.
 
 \begin{description}
-\item[\kw{map}-\kw{scatter}]\hfill\\
-
-  SOAC $A$:
-  \[
-    \kw{let}~\seq{ys}~=~\kw{map}~f~\seq{xs_{A}}
-  \]
-  SOAC $B$:
-  \[
-    \kw{let}~\seq{zs}~=~\kw{scatter}~g~(\seq{vs})~\seq{ys}~\seq{xs_{B}}
-  \]
-  Fuses to SOAC $C$:
-  \[
-    \kw{let}~\seq{zs}~=~\kw{scatter}~h~(\seq{vs})~\seq{xs_{A}}~\seq{xs_{B}}
-  \]
-  where
+\item[\kw{map}-\kw{scatter}]
   \begin{align*}
-    h =~& \fn \seq{x}~\seq{y} \rightarrow \\
+    &\mbox{SOAC}~A: &\hfill & \kw{let}~\seq{ys}~=~\kw{map}~f~\seq{xs_{A}}\\
+    &\mbox{SOAC}~B: &\hfill & \kw{let}~\seq{zs}~=~\kw{scatter}~g~(\seq{vs})~\seq{ys}~\seq{xs_{B}} \\
+    &\mbox{Fuses to SOAC}~C: &\hfill& \kw{let}~\seq{zs}~=~\kw{scatter}~h~(\seq{vs})~\seq{xs_{A}}~\seq{xs_{B}} \\
+  \end{align*}
+  \begin{align*}
+    \text{where}~h =~& \fn \seq{x}~\seq{y} \rightarrow \\
       & \quad \kw{let}~\seq{y}~ = f~\seq{x} \\
       & \quad \kw{let}~\seq{z} = g~\seq{y} \\
       & \quad \kw{in}~\seq{z}
   \end{align*}
 
-  In contrast to other fusion rules, all outputs of SOAC $A$ must be
-  used by SOAC $B$.  In the future, it is likely that \kw{scatter}
-  will gain map-out results, like \kw{redomap}, to enable greater
-  fusibility.
+  Note that in contrast to other fusion rules, all outputs of SOAC $A$
+  must be used by SOAC $B$.  In the future, it is likely that
+  \kw{scatter} will gain mapped results, like \kw{redomap}, to enable
+  greater fusibility.
 
-\item[\kw{redomap}-\kw{redomap}]\hfill\\
-
-  SOAC $A$:
-  \[
-    \kw{let}~\seq{y_{r}}~\seq{ys_{m}}~\seq{ys_{s}}~=~\kw{redomap}~\oplus~f~(\seq{v_{A}})~\seq{xs_{A}}
-  \]
-  SOAC $B$:
-  \[
-    \kw{let}~\seq{z_{r}}~\seq{zs_{s}}~=~\kw{redomap}~\otimes~g~(\seq{v_{B}})~\seq{ys_{m}}~\seq{xs_{B}}
-  \]
-  Fuses to SOAC $C$:
-  \[
-    \kw{let}~\seq{z_{r}}~\seq{y_{r}}~\seq{zs_{s}}~\seq{ys_{m}}~\seq{ys_{s}}~=~\kw{redomap}~\odot~h~(\seq{v_{A}},\seq{v_{B}})~\seq{xs_{A}}~\seq{xs_{B}}
-  \]
-where
+\item[\kw{redomap}-\kw{redomap}]
   \begin{align*}
-    h =~& \fn \seq{a_{A}} \seq{a_{B}} \seq{x}~\seq{y} \rightarrow \\
+    &\mbox{SOAC $A$:} &\hfill& \kw{let}~\seq{y_{r}}~\seq{ys_{m}}~\seq{ys_{s}}&=~&\kw{redomap}~\oplus~f~(\seq{v_{A}})~\seq{xs_{A}} \\
+    &\mbox{SOAC $B$:} &\hfill& \kw{let}~\seq{z_{r}}~\seq{zs_{s}}&=~&\kw{redomap}~\otimes~g~(\seq{v_{B}})~\seq{ys_{m}}~\seq{xs_{B}} \\
+    &\mbox{Fuses to SOAC $C$:} &\hfill& \kw{let}~\seq{z_{r}}~\seq{y_{r}}~\seq{zs_{s}}~\seq{ys_{m}}~\seq{ys_{s}}&=~&\kw{redomap}~\odot~h~(\seq{v_{A}},\seq{v_{B}})~\seq{xs_{A}}~\seq{xs_{B}}
+  \end{align*}
+  \begin{align*}
+    \mbox{where}~h =~& \fn \seq{a_{A}}~\seq{a_{B}}~\seq{x}~\seq{y} \rightarrow \\
       & \quad \kw{let}~\seq{c_{A}}~\seq{y_{m}}~\seq{y_{s}}~ = f~\seq{a_{A}}~\seq{x} \\
       & \quad \kw{let}~\seq{c_{B}}~\seq{z} = g~\seq{a_{B}}~\seq{y_{m}} \\
         & \quad \kw{in}~(\seq{c_{A}},\seq{c_{B}},\seq{z},\seq{y_{m}},\seq{y_{s}}) \\
@@ -618,27 +630,45 @@ where
         & \quad \kw{in}~(\seq{c_{A}}, \seq{c_{B}})
   \end{align*}
 
+  The outputs of SOAC $A$ are divided into three parts: $y_{r}$ are
+  the reduction results.  These are not used by SOAC $B$ at all, or
+  the fusion algorithm would not have attempted fusion in the first
+  place (where would be an incontractable edge in the graph).  The map
+  results are divided into $ys_{m}$, which are input to SOAC $B$, and
+  $ys_{s}$, which are not.  SOAC $C$ must still produce both of these,
+  even though it is likely that $ys_{m}$ will not be used afterwards.
+
+  Note also how we combine the reduction operators $\oplus$ and
+  $\otimes$ to produce $\odot$.  We do this through no particular
+  cleverness; as we simply apply $\oplus$ and $\otimes$ to those
+  parameters that correspond to the original values from SOAC $A$ and
+  $B$.  This operation carries a risk, as it conceptually increases
+  the size of the values involved in the the reduction.  The
+  implementation of reductions shown in
+  \cref{sec:calculus-implementation} uses GPU local memory to
+  communicate between threads during the reduction, and for
+  sufficiently large values we may eventually run of local memory.  In
+  such cases we either have to communicate between threads in (slow)
+  global memory, or split apart the reduction into multiple
+  independent passes.  The Futhark compiler currently does not handle
+  this problem.  Since fusion is performed statically (as opposed to
+  dynamically; see \cref{sec:related-work-fusion} for alternatives),
+  this risk is not dataset-dependent, but only proportional to the
+  number of independent reductions present in the program being
+  compiled.  We have not yet observed this problem in practise.
+
 \item[\kw{scanomap}-\kw{scanomap}]\hfill\\
 
   Similar to \kw{redomap}-\kw{scanomap}.
 
-\item[\kw{stream\_par}-\kw{stream\_par}]\hfill\\
-
-  SOAC $A$:
-  \[
-    \kw{let}~\seq{y_{r}}~\seq{ys_{m}}~\seq{ys_{s}}~=~\kw{stream\_par}~\oplus~f~\seq{xs_{A}}
-  \]
-  SOAC $B$:
-  \[
-    \kw{let}~\seq{z_{r}}~\seq{zs}~=~\kw{stream\_par}~\otimes~g~\seq{ys_{m}}~\seq{xs_{B}}
-  \]
-  Fuses to SOAC $C$:
-  \[
-    \kw{let}~\seq{z_{r}}~\seq{y_{r}}~\seq{zs}~\seq{ys_{m}}~\seq{ys_{s}}~=~\kw{stream\_par}~\odot~h~\seq{xs_{A}}~\seq{xs_{B}}
-  \]
-where
+\item[\kw{stream\_par}-\kw{stream\_par}]
   \begin{align*}
-    h =~& \fn~c~\seq{xs'_{A}}~\seq{xs'_{B}} \rightarrow \\
+    &\mbox{SOAC $A$:} &\hfill& \kw{let}~\seq{y_{r}}~\seq{ys_{m}}~\seq{ys_{s}}&~=~&\kw{stream\_par}~\oplus~f~\seq{xs_{A}} \\
+    &\mbox{SOAC $B$:} &\hfill& \kw{let}~\seq{z_{r}}~\seq{zs}&~=~&\kw{stream\_par}~\otimes~g~\seq{ys_{m}}~\seq{xs_{B}} \\
+    &\mbox{Fuses to SOAC $C$:} &\hfill& \kw{let}~\seq{z_{r}}~\seq{y_{r}}~\seq{zs}~\seq{ys_{m}}~\seq{ys_{s}}&~=~&\kw{stream\_par}~\odot~h~\seq{xs_{A}}~\seq{xs_{B}}
+  \end{align*}
+  \begin{align*}
+    \mbox{where}~h =~& \fn~c~\seq{xs'_{A}}~\seq{xs'_{B}} \rightarrow \\
         & \quad \kw{let}~\seq{y_{A}}~\seq{ys'_{m}}~\seq{ys'_{s}}~ = f~c~\seq{xs'_{A}} \\
         & \quad \kw{let}~\seq{z_{B}}~\seq{zs'} = g~c~\seq{ys'_{m}}~\seq{xs'_{B}} \\
         & \quad \kw{in}~(\seq{z_{B}},\seq{y_{A}},\seq{zs'},\seq{ys'_{m}},\seq{ys'_{s}}) \\
@@ -648,23 +678,18 @@ where
         & \quad \kw{in}~(\seq{c_{A}}, \seq{c_{B}})
   \end{align*}
 
-\item[\kw{stream\_seq}-\kw{stream\_seq}]\hfill\\
+  Fusion of \StreamPar{} is very similar to \kw{redomap} fusion, and
+  carries the same potential problem regarding the combined reduction
+  operator.
 
-  SOAC $A$:
-  \[
-    \kw{let}~\seq{y_{r}}~\seq{ys_{m}}~\seq{ys_{s}} = \kw{stream\_seq}~f~(\seq{v}_{A})~\seq{xs_{A}}
-  \]
-  SOAC $B$:
-  \[
-    \kw{let}~\seq{z_{r}}~\seq{zs} = \kw{stream\_seq}~g~\seq{ys_{m}}~(\seq{v}_{B})~\seq{xs_{B}}
-  \]
-  Fuses to SOAC $B$:
-  \[
-    \kw{let}~\seq{y_{r}}~\seq{z_{r}}~\seq{zs}~\seq{ys_{m}}~\seq{ys_{s}} = \kw{stream\_seq}~h~\seq{ys_{m}}~(\seq{v}_{B})~\seq{xs_{B}}
-  \]
-where
+\item[\kw{stream\_seq}-\kw{stream\_seq}]
   \begin{align*}
-    h =~& \fn~c~\seq{a_{A}}~\seq{a_{B}}~\seq{xs'_{A}}~\seq{xs'_{B}} \rightarrow \\
+    &\mbox{SOAC $A$:} &\hfill& \kw{let}~\seq{y_{r}}~\seq{ys_{m}}~\seq{ys_{s}} &~=~& \kw{stream\_seq}~f~(\seq{v}_{A})~\seq{xs_{A}} \\
+    & \mbox{SOAC $B$:} &\hfill& \kw{let}~\seq{z_{r}}~\seq{zs} &~=~& \kw{stream\_seq}~g~\seq{ys_{m}}~(\seq{v}_{B})~\seq{xs_{B}} \\
+    & \mbox{Fuses to SOAC $B$:} &\hfill& \kw{let}~\seq{y_{r}}~\seq{z_{r}}~\seq{zs}~\seq{ys_{m}}~\seq{ys_{s}} &~=~& \kw{stream\_seq}~h~\seq{ys_{m}}~(\seq{v}_{B})~\seq{xs_{B}}
+  \end{align*}
+  \begin{align*}
+    \mbox{where}~h =~& \fn~c~\seq{a_{A}}~\seq{a_{B}}~\seq{xs'_{A}}~\seq{xs'_{B}} \rightarrow \\
         & \quad \kw{let}~\seq{y_{A}}~\seq{ys'_{m}}~\seq{ys'_{s}}~ = f~c~\seq{a_{A}}~\seq{xs'_{A}} \\
         & \quad \kw{let}~\seq{z_{B}}~\seq{zs'} = g~c~\seq{a_{B}}~\seq{ys'_{m}}~\seq{xs'_{B}} \\
         & \quad \kw{in}~(\seq{z_{B}},\seq{y_{A}},\seq{zs'},\seq{ys'_{m}},\seq{ys'_{s}}) \\
@@ -676,29 +701,35 @@ where
 \label{sec:streamseq-fusion}
 
 There are some producer-consumer relationships that cannot be fused by
-the above rules.  For example, a \kw{scanomap} whose output is used
-as inputs to a \kw{map}.  This is because there is no SOAC that is
-able to describe the resulting composition without.  We could fuse and
-produce a sequential \kw{do}-loop as a result, but this would lose
-parallelism, which is not acceptable in general.  However, if the
-\kw{scanomap}-\kw{map} composition occurs at a place that will eventually
-be turned into sequential code by the moderate flattening algorithm
-described in Chapter~\ref{chap:kernel-extraction}, then such fusion
-would be desirable.  But since fusion occurs at a stage where it is
-not yet known which parts of the program will be executed in parallel,
-and which will be sequential, we have a conundrum.
+the above rules.  For example, a \kw{scanomap} whose output is used as
+inputs to a \kw{map}.  This is because there is no SOAC that is able
+to describe the resulting composition without duplicating computation.
+We could fuse and produce a sequential \kw{do}-loop as a result, but
+this would lose parallelism, which is not acceptable in general.
+However, if the \kw{scanomap}-\kw{map} composition occurs at a place
+that will eventually be turned into sequential code by the moderate
+flattening algorithm described in
+Chapter~\ref{chap:kernel-extraction}, then such fusion would be
+desirable.  But since fusion occurs at a stage where it is not yet
+known which parts of the program will be executed in parallel, and
+which will be sequential, we have a conundrum.
 
 The solution is to fuse to a SOAC that permits the \textit{recovery}
 of all original parallelism, yet can also be turned into efficient
-sequential code.  We use \kw{stream\_seq} for this purpose.  Any SOAC
-can be transformed into a \kw{stream\_seq}.  An example, showing how
-\kw{scanomap} is turned into \kw{stream\_seq}, is shown on
-\Cref{fig:scanomap-to-streamseq}.  The idea is for each chunk to
-perform a \kw{scanomap}, then add to the result the carry produced by
-processing the previous chunk.  The carry for a chunk corresponds to
-the last element of a scanned chunk.  This works only because we are
-guaranteed that the scan operator $\oplus$ is associative.  The
-initial value of the carry is the neutral element for $\oplus$.
+sequential code.  We use \StreamSeq{} for this purpose.  Any SOAC can
+be transformed into a \StreamSeq{}, so by transforming two SOACs that
+cannot otherwise be fused by the fusion algebra intoto \StreamSeq{}s,
+then using the rule for \StreamSeq{} fusion, we can in effect fuse any
+two SOACs.
+
+For example, the transformation from a \kw{scanomap} into \StreamSeq{}
+is shown on \Cref{fig:scanomap-to-streamseq}.  The idea is for each
+chunk to perform a \kw{scanomap}, then add to the result the carry
+produced by processing the previous chunk.  The carry for a chunk
+corresponds to the last element of a scanned chunk.  This works only
+because we are guaranteed that the scan operator $\oplus$ is
+associative.  The initial value of the carry is the neutral element
+for $\oplus$.
 
 \begin{figure}[bt]
 Given a SOAC
@@ -707,7 +738,7 @@ Given a SOAC
 \]
 the following SOAC is equivalent:
 \[
-  \kw{let}~\seq{d}~\seq{ys}~=~\kw{stream\_seq}~\oplus~g~(\seq{v})~xs
+  \kw{let}~\seq{d}~\seq{ys}~=~\StreamSeq{}~\oplus~g~(\seq{v})~xs
 \]
 where $\seq{d}$ are the unused final carry values and
   \begin{align*}
@@ -721,13 +752,13 @@ where $\seq{d}$ are the unused final carry values and
         & \quad \kw{let}~a'_{n}~=~ys'_{n}[c-1] \\
         & \quad \kw{in}~(\seq{a'},\seq{ys'}) \\
   \end{align*}
-  \caption{Transforming a \kw{scanomap} to a \kw{stream\_seq}.  We
-    assume here that chunks may never be empty.  Other SOACs can be
-    transformed using similar techniques.}
+  \caption{Transforming a \kw{scanomap} to a \StreamSeq{}.  We assume
+    here that chunks may never be empty.  Other SOACs can be
+    transformed using a similar technique.}
   \label{fig:scanomap-to-streamseq}
 \end{figure}
 
-The utility of \StreamSeq is that we can recover the parallelism of
+The utility of \StreamSeq{} is that we can recover the parallelism of
 the original formulation simply by setting the chunk size to the full
 size of the input array, resulting in just one chunk.  While the
 transformation on \Cref{fig:scanomap-to-streamseq} has introduced
@@ -736,37 +767,41 @@ available.  Furthermore, since the carry will be set to the neutral
 element, frequently a constant, basic simplification may be able to
 remove the \kw{map}s entirely.
 
-As an example, consider the following expression fragment:
+As an example, consider the following expression fragment, whew we
+suppose the size of \lstinline{xs} is given by \lstinline{n}:
 
 \begin{lstlisting}
-let ys = scanomap (+) (+) (0) xs
-let zs = map (+2) ys
+let (ys: [n]i32) = scanomap (+) (+) (0) xs
+let (zs: [n]i32) = map (+2) ys
 \end{lstlisting}
 
 The above can be transformed to the following \StreamSeq{}s:
 
 \begin{lstlisting}
-let ys =
-  stream_seq (\c a xs' ->
+let (unused: i32) (ys: [n]i32) =
+  stream_seq (\(c: i32) (a: i32) (xs': [c]i32)
+               : (i32, [c]i32) ->
                 let xs'' = scanomap (+) (+) 0 xs'
                 let ys' = map (+) a xs''
                 let a' = ys[c-1]
                 in (a', ys'))
              (0)
              xs
-let zs =
-  stream_seq (\c ys' ->
+let (zs: [n]i32) =
+  stream_seq (\(c: i32) (ys': [c]i32): [c]i32 ->
                 let zs' = map (+2) ys'
-                in (zs'))
+                in zs')
              ()
              ys
 \end{lstlisting}
 
-And these two \StreamSeq{}s can then be fused:
+Note that we use mapped results to return the chunks making up the
+\texttt{ys} array, and discard the final accumulator.  The two
+\StreamSeq{}s can be fused as follows:
 
 \begin{lstlisting}
-let ys zs =
-  stream_seq (\c a xs' ->
+let (ys: [n]i32) (zs: [n]i32) =
+  stream_seq (\(c: i32) (a: i32) (xs': [c]i32): i32 ->
                 let xs'' = scanomap (+) (+) 0 xs'
                 let ys' = map (+) a xs''
                 let a' = ys[c-1]
@@ -776,37 +811,38 @@ let ys zs =
              xs
 \end{lstlisting}
 
-Suppose that the size of \lstinline{xs} is given by \lstinline{n}.  We
-can recover the original parallelism simply by inlining the body of
-the function, preceded by explicit bindings of \lstinline{c},
-\lstinline{a}, and \lstinline{xs'} to values corresponding to a single
-chunk covering all of \lstinline{xs}, and followed by a binding of
-\lstinline{ys} to the result:
+We can recover the original parallelism simply by inlining the body of
+the anonymous function, preceded by explicit bindings of
+\lstinline{c}, \lstinline{a}, and \lstinline{xs'} to values
+corresponding to a single chunk of size \texttt{n} covering all of
+\lstinline{xs}, and followed by a binding of \lstinline{ys} to the
+result:
 
 \begin{lstlisting}
 let c = n
 let a = 0
-let xs' = xs
-let xs'' = scanomap (+) (+) 0 xs
+let (xs': [c]i32) = reshape (c) xs
+let (xs'': [c]i32) = scanomap (+) (+) (0) xs'
 let ys' = map (+) a xs''
 let a' = ys[c-1]
 let zs' = map (+2) ys'
-let ys = ys'
-let zs = zs'
+let (ys: [n]i32) = reshape (n) ys'
+let (zs: [n]i32) = reshape (n) zs'
 \end{lstlisting}
 
-An application of copy propagation, constant folding, and other
-straightforward simplifications then recovers the original expression
-fragment.
+Note the need for \kw{reshape}s to make the size-dependent typing work
+out.  An application of copy propagation, constant folding, and other
+straightforward simplifications, in particular removing identity
+reshapes, then recovers the original expression fragment.
 
-On the other hand, we can also transform the above \StreamSeq into aa
-sequential loop by forcing the chunk size to unit, and placing a
-sequential \kw{do}-loop around it:
+On the other hand, we can also transform the above \StreamSeq{} into a
+sequential loop by forcing the chunk size to unit, and inserting an
+enclosing sequential \kw{do}-loop:
 
 \begin{lstlisting}
-let ys_blank = ... -- an array of the same size as ys
-let zs_blank = ... -- an array of the same size as zs
-let ys zs =
+let ys_blank = replicate n 0
+let zs_blank = replicate n 0
+let (ys, zs) =
   loop (a ys_out zs_out) =
        (0, ys_blank, zs_blank) for i < n do
     let c = 1
@@ -823,17 +859,19 @@ let ys zs =
 (We cheat a bit notation-wise with the construction of such arrays as
 \lstinline{xs'} and \lstinline{ys_out'}---according to the grammar
 used thus far, indexes can only produce single elements, but here we
-perform an entire slice.  These can be turned into \kw{do}-loops if
+perform an entire slice, and likewise perform an in-place update on an
+entire range of an array.  These can be turned into \kw{do}-loops if
 desirable.)
 
-Assuming straightforward simplification rules that can remove SOACs on
-single-element inputarrays, we obtain the following:
+Assuming straightforward simplification rules, including removing
+SOACs on single-element input arrays, as well as unused \kw{loop}
+results, we obtain the following:
 
 \begin{lstlisting}
 let ys_blank = ...
 let zs_blank = ...
-let ys zs =
-  loop (a ys_out) = (0, ys_blank) for i < n do
+let zs =
+  loop (a, ys_out) = (0, ys_blank) for i < n do
     let x = xs[i]
     let y = a + x
     let z = 1 + y
@@ -855,40 +893,43 @@ respect to the unconsumed names.  For example, for the
 SOACs can be horizontally fused if their inputs have the same outer
 size, there is no data dependencies between them, and there are no
 uniqueness issues that would prevent the result of fusion from being
-safe.
+safe.  This is integrated easily with the fusion algorithm simply by
+adding edges in the graphs between SOACs that have the same outer
+size, and are not separated by being in different \kw{loop} or \kw{if}
+expressions.
 
 \section{Related Work}
+\label{sec:related-work-fusion}
 
 Loop fusion is an old technique, dating back at least to the
-seventies~\cite{cheatham1977programming}, with the treatment of loop
-fusion in a parallel setting being covered
-in~\cite{midki1990issues}. In imperative languages, the word
-``fusion'' typically does not refer to producer-consumer fusion, but
-to a complimentary technique, in which two sequential loops that do
-not depend on each other can fused into a single loop.  Single
-Assignment C~\cite{grelck2006sac} incorporated this in a functional
-language.
+seventies~\cite{cheatham1977programming}, with loop fusion in a
+parallel setting being covered in~\cite{midki1990issues}. In
+imperative languages, the term ``fusion'' typically refers to
+horizontal, not vertical fusion.  Most functional languages primarily
+make use of vertical fusion, because the rewrite rules are more local.
+Single Assignment C~\cite{grelck2006sac} (SaC) is, however, a
+prominent example of a functional language that incorporates
+horizontal fusion.
 
-Data-Parallel Haskell (DPH)~\cite{Chak06DPH} makes use of
-aggressive inlining and rewrite rules to perform fusion, including
-expressing array operations in terms of
-streams~\cite{coutts2007rewriting}, which have previously been shown
-to be easily fusable.  While DPH obtains good results, rewrite rules
-are quite limited -- they are an inherently local view of the
-computation, and would be unable to cope with limitations in the
-presence of in-place array updates, and whether the result of an array
-operation is used multiple times.  The Glasgow Haskell Compiler itself
-also bases its list fusion on rewrite rules and cross-module
-inlining~\cite{jones2001playing}.
+Data-Parallel Haskell (DPH)~\cite{Chak06DPH} makes use of aggressive
+inlining and rewrite rules to perform fusion, including expressing
+array operations in terms of streams~\cite{coutts2007rewriting}, which
+have previously been shown to be easily fusable.  While DPH obtains
+good results, this form of rewrite rules are quite limited -- they are
+an inherently local view of the computation, and would be unable to
+cope with limitations in the presence of in-place array updates, or
+checking whether the result of an array operation is used multiple
+times.  The Glasgow Haskell Compiler itself also bases its list fusion
+on rewrite rules and cross-module inlining~\cite{jones2001playing}.
 
 The Repa~\cite{keller2010regular} approach to fusion is based on a
-delayed representation of arrays, which models an array as a function
-from index to value.  With this representation, fusion happens
-automatically through function composition, although this can cause
-duplication of work in many cases.  To counteract this, Repa lets the
-user {\em force} an array, by which it is converted from the
-delayed representation to a traditional sequence of values.  The pull
-arrays of Obsidian~\cite{claessen2012expressive} use a similar
+delayed representation of arrays at run-time, which models an array as
+a function from index to value.  With this representation, fusion
+happens automatically through function composition, although this can
+cause duplication of work in many cases.  To counteract this, Repa
+lets the user \textit{force} an array, by which it is converted from
+the delayed representation to a traditional sequence of values.  The
+pull arrays of Obsidian~\cite{claessen2012expressive} use a similar
 mechanism.
 
 Accelerate~\cite{mcdonell2013optimising} uses an elaboration of the
@@ -896,15 +937,15 @@ delayed arrays representation from Repa, and in particular manages to
 avoid duplicating work.  All array operations have a uniform
 representation as constructors for delayed arrays, on which fusion is
 performed by tree contraction.  Accelerate supports multiple arrays as
-input to the same array operation (using a \texttt{zipWith} construct).
-Although arrays are usually used at least twice (once for getting the
-size, once for the data), it does not seem that they can handle the difficult
-case where the output of an array operation is used as input to two
-other array operations.
+input to the same array operation (using a \texttt{zipWith}
+construct).  Although arrays are usually used at least twice (once for
+getting the size, once for the data), it does not seem that Accelerate
+handles the difficult case where the output of an array operation is
+used as input to two other array operations.
 
 NESL has been extended with a GPU backend~\cite{bergstrom2012nested},
 for which the authors note that fusion is critical to the performance
-of the flattened program.  Their approach is to use a form of
+of the flattened program.  The NESL approach is to use a form of
 copy-propagation on the intermediary code, and lift the resulting
 functions to work on entire arrays.  Their approach only works for
 what we would term \kw{map}-\kw{map} fusion, however.
@@ -916,7 +957,6 @@ producer-consumer and horizontal fusion is combined in a general
 framework of \textit{with-loop fusion}.  The \textit{with}-loops can
 not, however, fulfill the role taken by \StreamSeq{} or \StreamPar{}
 in permitting efficient sequentialisation.
-
 
 %%% Local Variables:
 %%% mode: latex
