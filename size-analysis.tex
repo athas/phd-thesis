@@ -494,11 +494,11 @@ let f (m: i32) (k: i32) (vss: [m][k]f64): d.[d]f64 =
   \mbox{$S$ is bijective from $\nseq{x}{n}$ to $\nseq{y}{n}$} \\
   \mbox{None of $y$ used free in $\rho$.}
 }{
-  \exists\nseq{y}{n}.S(\rho') \subtype \exists\nseq{x}{n}.\rho
+  \exists\nseq{y}{n}.S(\rho) \subtype \exists\nseq{x}{n}.\rho
 }
 
 \fracc{
-  \mbox{$y$ used free in $\rho'$}
+  \mbox{$y$ used free in $\rho$}
 }{
   \exists~y~\nseq{x}{n}.\rho \subtype \exists~\nseq{x}{n}.\rho
 }
@@ -538,7 +538,7 @@ let f (m: i32) (k: i32) (vss: [m][k]f64): d.[d]f64 =
 \fracc{
   \Gamma \vda a_i : \etau^p_i \sp i \in \Set{1, \ldots, n}\\
   \textrm{TySch}(\emph{op}) = \nseq{(p_i: \etau_i)}{n} \rightarrow \exists\nseq{d}{l}.\nseq{\tau'}{m} \\
-  S = \langle \nseq{p_i \mapsto x_i}{n}~|~\textrm{where $x_{i}=a_{i}$} \rangle \quad \forall i \in \Set{1,\ldots,n}.\etau^p_i = S(\etau_i)}{
+  S = \langle \nseq{p_i \mapsto x_i}{m}~|~\textrm{where $x_{i}=a_{i}$} \rangle \quad \forall i \in \Set{1,\ldots,n}.\etau^p_i = S(\etau_i)}{
   \Gamma \vd \emph{op}~\nseq{a}{n} : \exists\nseq{d}{l}.S(\nseq{\tau'}{m})
 }
 
@@ -550,7 +550,7 @@ let f (m: i32) (k: i32) (vss: [m][k]f64): d.[d]f64 =
 }
 
 \fracc{
-  \vdp p : \exists\nseq{d}{n}.\rho \sp \Gamma \vd \exists\nseq{d}{n}.e_1 : \rho \sp \Gamma \vd \exists\nseq{d}{n}.e_3 : \rho \\
+  \vdp p : \exists\nseq{d}{n}.\rho \sp \Gamma \vd e_1 : \exists\nseq{d}{n}.\rho \sp \Gamma \vd e_3 : \exists\nseq{d}{n}.\rho \\
   \Gamma \vd e_2 : \texttt{i32}
 }{
   \Gamma \vd \Loop{\nseq{(d_i: \texttt{i32})}{n}~p}{e_1}{x}{e_2}{e_3} : \exists\nseq{d}{n}.\rho
@@ -569,7 +569,7 @@ relation on existential types.  The judgment and its associated rules
 is shown on \cref{fig:ext-type-operations}.  Apart from the usual
 rules for reflexivity and transitivity, we define alpha substitution
 (it is valid to change the names bound by the existential context),
-and \textit{weakening}.  In our contxt, weakening corresponds to
+and \textit{weakening}.  In our context, weakening corresponds to
 making the size of an array type less concrete.  For example, we can
 weaken the type $[x]\texttt{i32}$ to $\exists x.[x]\texttt{i32}$ (we
 would usually also rename $x$ to avoid confusion).  The need for
@@ -580,7 +580,12 @@ We extend the type judgment for expressions such that it now returns
 an a type with an existentially quantified part (which may be empty).
 The most interesting rules are shown on \cref{fig:sizeTypeRules} and
 discussed below.  We ignore uniqueness attributes here, as they have
-no influence on size-dependent typing.
+no influence on size-dependent typing.  The rule for array operators
+performs some abuse of notation to construct the substitution $S$; the
+intent is to construct a substitution from names used in the type
+scheme (even the $\forall$-quantified context) to the operator
+arguments supplying the concrete value.  This is used in for example
+the size-dependent typing of \kw{iota}.
 
 The rule for \kw{let} requires that the names bound may not be present
 in the type of the returned value.  As an example, consider an
@@ -612,8 +617,14 @@ but
 \[
 \Let{(\texttt{m}: \texttt{i32}, \texttt{v}: [\texttt{m}][\texttt{a}]\tau)}{\texttt{f}~\texttt{a}~\texttt{b}}{e}
 \]
-cannot be typed using the given rules (note the swapped dimensions in
-the type of \texttt{v}).
+is a type error (note the swapped dimensions in the type of
+\texttt{v}).  However, we can always further weaken the type and make
+all sizes existential, as in
+\[
+\Let{(\texttt{m}: \texttt{i32}, \texttt{k}: \texttt{i32}, \texttt{v}: [\texttt{m}][\texttt{k}]\tau)}{\texttt{f}~\texttt{a}~\texttt{b}}{e}
+\]
+and in fact this is how size information is initially inserted by the
+size inference procedure described in \cref{sec:size-inference}.
 
 Using weakening, a pattern can also contain existential parts that are
 not immediately existential in the type.  This is useful for
@@ -833,8 +844,8 @@ sizes are passed explicitly.
 
 \[
 \begin{array}{l}
-  \transformBnd{\Sigma}{\Let{\nseq{v_{i}: \tau_{i}}{n}}{e_{1}}{e_{2}}} = \\
-  \quad \Let{\nseq{\textrm{sizes}(\tau_{i})}{n}}{\transformBnd{\Sigma}{e_{1}}}{\transformBnd{\Sigma'}{e_{2}}} \\
+  \transformBnd{\Sigma}(\Let{\nseq{v_{i}: \tau_{i}}{n}}{e_{1}}{e_{2}}) = \\
+  \quad \Let{\nseq{\textrm{sizes}(\tau_{i})}{n}~\nseq{v_{i}: \mathcal{T}(\tau_{i},\textrm{sizes}(\tau_{i}))}{n}}{\transformBnd{\Sigma}(e_{1})}{\transformBnd{\Sigma'}(e_{2})} \\
   ~~ \textrm{where}
   \begin{array}[t]{ll}
     \textrm{sizes}(\tau_j) &= \nseq{d^{j}_{i}}{\textrm{d}(\tau_{j})} \\

@@ -95,8 +95,7 @@ Futhark code compares to the performance of the original reference
 implementations.  In some cases, we also discuss the programming
 techniques used to obtain efficient Futhark implementations.  For most
 benchmarks, we use only a single dataset, as the relative performance
-for most of these benchmarks is not dataset-sensitive (except for
-pathological cases).
+for these is not dataset-sensitive (except for pathological cases).
 
 While some of the benchmarks are small, others are decidedly
 nontrivial.  For example, Stencil from Parboil is implemented as $13$
@@ -122,11 +121,15 @@ of system memory may bottleneck the GPU\footnote{Unusually, the GPU
   actually has \textit{more} memory than the CPU; a reversal of the
   usual situation.}.  This may explain some of the unusual behaviour
 we will see on the AMD GPU, particularly for reference
-implementations.  Ideally, the NVIDIA and AMD GPUs would be installed
-in systems that are otherwise similar, but such were not available for
-the writing of this thesis.
+implementations.  In particular, three reference implementations from
+Rodinia---Backprop, Hotspot, and Pathfinder---exhibit extreme and
+inexplicable slowdown on the AMD GPU.  We consider these results
+anomalous, and will discard from from further discussion (although
+they are included in the graphs and tables).  Ideally, the NVIDIA and
+AMD GPUs would be installed in systems that are otherwise similar, but
+such were not available for the writing of this thesis.
 
-CUDA, as a proprietary API by NVIDIA, can be executed only on the
+CUDA, as an API proprietary to NVIDIA, can be executed only on the
 NVIDIA K40 GPU.  Thus, when selecting reference implementations, we
 have picked those written in OpenCL, to allow us to run the same code
 on both platforms.  Reference implementations in OpenCL were not

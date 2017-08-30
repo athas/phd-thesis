@@ -163,8 +163,10 @@ Two patterns are recognised by the inspection:
 \begin{description}[style=nextline]
 \item[Complete Index]
 
-  The indices $\nseq{y}{n}$ are a permutation $\nseq{c}{m}$ of the
-  thread indices.  We then copy the array with permutation
+  The indices $\nseq{y}{n}$ contain at least some of the the global
+  thread indices, and the innermost global thread index can be moved
+  to the last position in the indices via the permutation
+  $\nseq{c}{m}$.  We then copy the array with permutation
   $\nseq{c}{m}$.  An example is a kernel
 \begin{lstlisting}[numbers=none]
 kernel (n,m) (\i j _ _ -> xss[j][i] + 2)
@@ -258,7 +260,43 @@ slowdown.  In the future, we intend to investigate how to
 the array is originally created, and store it in the desired
 representation in the first place.
 
-\subsection{Example: Brownian Bridge}
+\subsection{Indirect Accesses}
+
+The coalescing transformation applies even in cases where indirect
+accesses are involved, as it depends only on variance information.
+For example, consider this variation on the earlier example, where an
+array \texttt{is} of indices is used to index \texttt{xss}.
+
+\begin{lstlisting}[numbers=none]
+let (js: [n]i32) = ...
+let (xss: [m][k]i32) = ...
+in kernel (m) (\i _ ->
+  loop acc = 0 for p < n do
+    let j = js[p]
+    let x = xss[i][j]
+    in acc + x)
+\end{lstlisting}
+
+To the coalescing optimisation, this kernel contains two array
+indices: \texttt{js[p]} and \texttt{xss[i,j]}.  The former is not
+touched, since it does not involve any thread indices, and so does not
+many either of the rules.  However, the indexing expression
+\texttt{xss[i,j]} \textit{does} match the rule for complete indexes,
+since the global thread index \texttt{i} can be moved to the innermost
+position via the permutation \texttt{(1,0)}.  Thus, the kernel is
+transformed to the following, where all accesses are coalesced.
+
+\begin{lstlisting}[numbers=none]
+let (js: [n]i32) = ...
+let (xss: [m][k]i32) = ...
+let (xss': [m][k]i32) = manifest (1,0) xss
+in kernel (m) (\i _ ->
+  loop acc = 0 for p < n do
+    let j = js[p]
+    let x = xss'[i][j]
+    in acc + x)
+\end{lstlisting}
+
 
 \section{Automatic Loop Tiling}
 \label{sec:automatic-tiling}
@@ -413,7 +451,7 @@ in kernel (n,l) (\i j li lj ->
 
 Operationally, the \lstinline{local} expressions creates a
 two-dimensional array in local memory, which is then immediately
-indexed with the local thread ID along dimension $1$ (or $2$),
+indexed with the local thread index along dimension $1$ (or $2$),
 resulting in a one-dimensional array.  The core IR used in this thesis
 does not support fixing any but the first dimension; instead we
 transpose before indexing.
