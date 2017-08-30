@@ -37,8 +37,8 @@ function.
 \Cref{sec:sized-ir} introduces the syntax of the IR, which is a slight
 extension of the one presented in the previous chapter.  In
 \cref{sec:size-analysis-intuition} we give an intuition for how size
-inference functions, via an example of how a program progresses from
-having no inferred sizes, to being highly existential, to finally
+inference is accomplished, via an example of how a program progresses
+from having no inferred sizes, to being highly existential, to finally
 having most sizes resolved statically.  \Cref{sec:size-type-rules}
 presents a subset of the type rules for the sized IR, and
 \cref{sec:size-inference} shows some of the transformations used to
@@ -172,9 +172,9 @@ let concat (xs: []f64) (ys: []f64): []f64 =
   let b = size 0 ys
   let c = a+b
   let (is: []i32) = iota c
-  let (zs: []f64) = map (\i -> if i < a then xs[i] else ys[i+b])
+  let (os: []f64) = map (\i -> if i < a then xs[i] else ys[i+b])
                         is
-  in zs
+  in os
 
 let f (vss: [][]f64): []f64 =
   let (ys: []f64) (zs: []f64) =
@@ -211,9 +211,9 @@ let concat @(n: i32) (m: i32)@ (xs: [@n@]f64) (ys: [@m@]f64)
   let b = @m@
   let c = a+b
   let (is: [@c@]i32) = iota c
-  let (zs: [@c@]f64) =
+  let (os: [@c@]f64) =
    map (\i -> if i < n then xs[i] else ys[i+a]) is
-  in zs
+  in os
 
 let f @(m: i32) (k: i32)@ (vss: [@m@][@k@]f64): @d@.[@d@]f64 =
   let (ys: [@m@]f64) (zs: [@m@]f64) =
@@ -274,7 +274,13 @@ This is achieved by:
   \kw{map} function to \lstinline{vsss[0]}, which produces both a size
   and an array, from which we use just the size.  This corresponds to
   \textit{slicing} the \kw{map} function.  If \lstinline{vsss} is
-  empty (that is, if \lstinline{n} is zero), the guess is zero.
+  empty (that is, if \lstinline{n} is zero), the guess is zero.  There
+  is a risk here: if the \kw{map} function consumes any of its
+  parameters via in-place updates, the slice will likewise, and since
+  \lstinline{vsss[0]} aliases \lstinline{vsss}, we would end up
+  consuming \lstinline{vsss} twice.  As a result, we must copy any
+  inputs that are consumed in the sliced function, although for this
+  example, there are none.
 
   Since \lstinline{f} returns an existential result, and the lambda
   \textit{must} return an array of exactly type \lstinline{[l]f64}, we
@@ -284,7 +290,7 @@ This is achieved by:
 
 \item Since all arrays in scope also have variables in scope for
   describing their size, replace all uses of \lstinline{size} with
-  references to those varuables.
+  references to those variables.
 \end{itemize}
 
 It is important to note that this transformation preserves
@@ -320,10 +326,10 @@ let main (n: i32) (m: i32) (k: i32)
                   in (ys, zs))
                 vss
           let (is: [c]i32) = iota c
-          let (zs: [c]f64) =
+          let (os: [c]f64) =
             map (\i -> if i < n then xs[i] else ys[i+a])
                 is
-          let rs = reshape l zs
+          let rs = reshape l os
           in rs)
         vsss
   in rss
@@ -426,9 +432,9 @@ Previously, we experienced with a technique based on \textit{slicing},
 where a function \lstinline{g} is divided into two functions
 \lstinline{g_shape} and \lstinline{g_value}, the first of which
 computes the sizes of all (top-level) arrays in the latter, including
-the result.  An example is shown on \Cref{fig:FShapeSlice},
-which contains a portion of the running example.  The
-\lstinline{concat} function has been split into
+the result~\cite{henriksen2014size}.  An example is shown on
+\Cref{fig:FShapeSlice}, which contains a portion of the running
+example.  The \lstinline{concat} function has been split into
 \lstinline{concat_shape} and \lstinline{concat_value}. The call to
 \lstinline{concat} has been likewise split.
 
@@ -576,9 +582,9 @@ would usually also rename $x$ to avoid confusion).  The need for
 weakening arises in particular due to the typing rules for \kw{let}
 and \kw{if}, as we shall see.
 
-We extend the type judgment for expressions such that it now returns
-an a type with an existentially quantified part (which may be empty).
-The most interesting rules are shown on \cref{fig:sizeTypeRules} and
+We extend the type judgment for expressions such that it now returns a
+type with an existentially quantified part (which may be empty).  The
+most interesting rules are shown on \cref{fig:sizeTypeRules} and
 discussed below.  We ignore uniqueness attributes here, as they have
 no influence on size-dependent typing.  The rule for array operators
 performs some abuse of notation to construct the substitution $S$; the
@@ -905,9 +911,22 @@ there are two possible avenues of attack.
   result.  Then, we modify $\lambda$ to explicitly \kw{reshape} its
   result to the same shape as that computed for the first element - we
   call this modified version \(\lambda_{\textrm{checking}}\).  This is
-  the approach we used on \cref{fig:RunEgTgt}, and is illustrated on
-  \cref{fig:sizeTransformMap}.  For brevity we have omitted the
-  \kw{if}-branch guarding the case when the input array is empty.
+  the approach we used on \cref{fig:RunEgTgt}, and describe on
+  \cref{fig:sizeTransformMap}.  First, the shape slice of $\lambda$ is
+  applied to the first element of the input, which results in one
+  result for every dimension of every array-typed return value of
+  $\lambda$.  For brevity we have elided the branch guarding against
+  the case where the input arrays are empty.  This results in a
+  prediction for the result size of $\lambda$, which is incorporated
+  into constructing $\lambda_{\text{checking}}$, which explicitly
+  \kw{reshape}s its result to match the prediction.
+
+  Then we apply $\lambda_{\text{checking}}$ to the original input,
+  although with every input array reshaped such that the outer
+  dimension matches the outer dimension of the first input array, and
+  the other dimensions unchanged.  This is to respect the type rule
+  that all input arrays to \kw{map} (and the other SOACs) must have
+  the same outer size.
 \end{description}
 
 The former approach is only efficient if \(\lambda_{\text{\shape}}\)
@@ -938,7 +957,8 @@ will remove the assertions, if possible.
 \end{array}
 \]
 
-\caption{Transformation for \kw{map} using the intra-assertion strategy.  For brevity we have elided the branch guarding against the case where the input arrays are empty.}
+\caption[LoF entry]{Transformation for \kw{map} using the
+  intra-assertion strategy.}
 \label{fig:sizeTransformMap}
 \end{figure}
 

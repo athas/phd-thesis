@@ -1230,6 +1230,45 @@ v \in \mathcal{P} \qquad \mathcal{P} \vdash \langle \mathcal{C}, \mathcal{O} \ra
   \label{fig:map-in-place-update}
 \end{figure}
 
+\section{Related Work on Uniqueness Types}
+
+Futhark's uniqueness type system is similar to, but simpler, than the
+system found in
+Clean~\cite{clean-uniqueness-types,barendsen1996uniqueness}, where the
+primary motivation is modeling IO.  Our use is more reminiscent of the
+ownership types of Rust~\cite{rust}.  The fact that Futhark is
+restricted in its support for user-defined data types, in particular
+not supporting pointer structures and instead emphasises the use of
+arrays, makes alias analysis tractable, and even possible to expose as
+a user-languate feature.
+
+While more powerful uniqueness type
+systems~\cite{clean-uniqueness-types}, and affine and linear
+types~\cite{Tov:2011:PAT:1926385.1926436,Fahndrich:2002:AFP:543552.512532}
+are known, ours is the first application that directly addresses
+\kw{map}-style parallel constructs, and shows how in-place updates can
+be supported without making evaluation order observable.  Our system
+is also somewhat more ``friendly'', as the former approaches deal with
+more complicated systems and rely on significantly more complex
+analysis, where for example aliasing of affine variables is banned,
+while in our case unique arrays maybe be used multiple times before
+being consumed, with aliasing information used to flag the
+use-after-consumption cases.  Indeed, the uniqueness type system shown
+here only affects function definitions and function calls, with
+exclusively aliasing analysis used for the intraprocedural case.
+
+Some prior work does exist for destructively updating memory in the
+presence of bulk parallel operators. For example,
+\cite{Leshchinskiy2009} discusses fusing away intermediate copies when
+composing bulk updates in Haskell.  In contrast, our uniqueness types
+are (i) intended for sequential parts of the code, and (ii) able to
+guarantee the absense of any copying whatsoever.  For example in the
+cited work \texttt{xs//vs1/vs2}, which first updates \texttt{xs} with
+\texttt{vs1}, then updates the result with \texttt{vs2}, is fused to
+perform just a single copy of \texttt{xs} instead of two, but the copy
+of \texttt{xs} cannot be avoided, because there is no way in Haskell
+to enforce that some array variable may no longer be used.
+
 %%% Local Variables:
 %%% mode: latex
 %%% TeX-master: "thesis"

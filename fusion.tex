@@ -305,18 +305,18 @@ only one incoming edge, hence it can be fused.  This is achieved by:
 This is the procedure for fusing two \kw{map} SOACs.
 \Cref{sec:fusionalgebra} gives the rules used for other cases.
 
-The top-right part of \cref{fig:fusion-on-graph} shows the
-(simplified) result of the first fusion, where the copy statements
-have been eliminated by copy propagation.  In the new graph, the
-leftmost child of the root, i.e., the one computing \texttt{(z1,z2)},
-has only one incoming edge and can be fused.  The resulting graph,
-shown in the bottom-left figure can be fused again resulting in the
-bottom-right graph of \cref{fig:fusion-on-graph}.  At this point no
-further $T_2$ reduction is possible, because the SOAC computing
-\texttt{x1} has two incoming edges.  This example demonstrates a key
-benefit of removing \kw{zip}/\kw{unzip} and using our tupleless SOACs
-representation: there are no intermediate nodes in the data-dependency
-graph between fusable producer and consumer.
+The top-right part of \cref{fig:fusion-on-graph} shows the result of
+the first fusion, after slight simplification of the lambda bodies via
+copy propagation.  In the new graph, the leftmost child of the root,
+i.e., the one computing \texttt{(z1,z2)}, has only one incoming edge
+and can be fused.  The resulting graph, shown in the bottom-left
+figure can be fused again resulting in the bottom-right graph of
+\cref{fig:fusion-on-graph}.  At this point no further $T_2$ reduction
+is possible, because the SOAC computing \texttt{x1} has two incoming
+edges.  This example demonstrates a key benefit of removing
+\kw{zip}/\kw{unzip} and using our tupleless SOACs representation:
+there are no intermediate nodes in the data-dependency graph between
+fusable producer and consumer.
 
 \subsection{Optimality of Fusion}
 
