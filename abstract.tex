@@ -7,20 +7,21 @@ generates efficient OpenCL code for GPUs.  The overall philosophy is
 based on seeking a middle ground between functional and imperative
 approaches.  The specific contributions are as follows:
 
-First, we present a flattening transformation aimed at enhancing the
-degree of parallelism that builds on loop interchange and distribution
-but exploits properties directly derived from higher-order language
-constructs rather than array-dependence analysis, while still
-permitting further locality-of-reference optimisations.  We
-demonstrate this capability by showing instances of automatic loop
-tiling, as well as optimising memory access patterns.
+First, we present a moderate flattening transformation aimed at
+enhancing the degree of parallelism, which is capable of exploiting
+easily accessible parallelism.  Excess parallelism is efficiently
+sequentialised, while keeping access patterns intact, which then
+permits further locality-of-reference optimisations.  We demonstrate
+this capability by showing instances of automatic loop tiling, as well
+as optimising memory access patterns.
 
-Second, we present a lightweight system of size-dependent types that
-enables the compiler to reason symbolically about the size of arrays
-in the program, and that reuses general-purpose compiler optimisations
-to infer relationships between sizes.
+Second, to support the flattening transformation, we present a
+lightweight system of size-dependent types that enables the compiler
+to reason symbolically about the size of arrays in the program, and
+that reuses general-purpose compiler optimisations to infer
+relationships between sizes.
 
-Third, we furnish Futhark with novel parallel operators capable of
+Third, we furnish Futhark with novel parallel combinators capable of
 expressing efficient sequentialisation of excess parallelism, as well
 as their fusion rules.
 
@@ -47,9 +48,51 @@ for parallel programming in practise.
 
 \begin{abstract}
 
-  Hej Torben,
+  Denne afhandling beskriver designet og implementeringen af Futhark,
+  et enkelt data-parallelt, sideeffekt-fri, og funktionsorienteret
+  geledsprog, der frembyder en maskinneutral programmeringsmodel.  Vi
+  beskriver ligeledes en optimerende Futhark-oversætter der producerer
+  effektiv OpenCL-kode målrettet afvikling på GPUer.  Den overordnede
+  designfilosofi er at søge en balance mellem functionsorienterede og
+  imperative fremgangsmåder.  Vores konkrete bidrag er som følger:
 
-  Jeg tror du er det eneste medlem af min bedømmelseskomitté der kan dansk.
+  For det første præsenterer vi en moderat fladningstransformering,
+  der er i stand til at udnytte blot den nødvendige grad af
+  parallelisme, og omdanne den overskydende parallelisme til effektiv
+  sekventiel kode.  Denne sekventielle kode bibeholder den oprindelige
+  lageradgangsmønsterinformation, hvilket tillader yderligere
+  lagertilgangsforbedringer.  Vi demonstrerer denne styrke ved at give
+  eksempler på automatisk blokafvikling af løkker, samt forbedring af
+  lageradgangsmønstre.
+
+  For det andet beskriver vi, med henblik på understøttelse af
+  fladningstransformeringen, et enkelt typesystem med
+  størrelses-afhængige typer, der tillader oversætteren at ræsonnere
+  symbolsk om størrelsen på geledder i programmet under oversættelse.
+  Vores fremgangsmåde tillader genbrug af det almene repertoire af
+  oversætteroptimeringer i spørgsmål om ligheder mellem størrelser.
+
+  For det tredje udstyrer vi Futhark med en række nyskabedne
+  parallelle kombinatorer der tillader effektiv sekventialisering af
+  unødig parallelisme, samt disses fusionsregler.
+
+  For det fjerde indfører vi, med henblik på at understøtte effektiv
+  sekventiel kode indlejret i de parallelle sprogkonstruktioner,
+  understøttelse for direkte ændringer i geledværdier, med et
+  typesystem der sikrer at effekten ikke kan observeres, og at
+  lighedsbaseret ræsonnering stadigvæk er muligt.
+
+  For det femte foretager vi en ydelsessammenlining indeholdende 21
+  programmer, med henblik på at demonstrere sprogets design og
+  oversætteroptimeringernes indvirkning, som viser at Futhark's
+  overordnede ydelse i mange tilfælde er konkurrencedygtig med
+  håndskreven GPU-kode.
+
+  For det sjette gør vi Futhark-oversætteren frit tilgængelig,
+  indeholdende al kildetekst og omfattende dokumentation, således at
+  den kan tjene både som et udgangspunkt for yderligere forskning i
+  funktionsorienteret geledprogrammering, samt som et nyttigt værktøj
+  til anvendt parallelprogrammering.
 
 \end{abstract}
 
