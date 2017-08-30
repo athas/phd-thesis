@@ -22,7 +22,7 @@ parallelism, while asymptotically preserving the depth and work of the
 original nested-parallel program.  In our setting, this corresponds to
 interchanging all sequential loops outwards, and forming
 \kw{map}-nests that contain only simple scalar code.  While
-asymptotically inefficient, the approach is arguably inefficient in
+asymptotically efficient, the approach is arguably inefficient in
 practise~\cite{bergstrom2012nested}, for example because it does not
 account for locality of reference, and pays a potentially large cost
 in memory usage to extract parallelism that may not be necessary.  For
@@ -57,10 +57,10 @@ incapable of extracting sufficient parallelism.
 \label{sec:kernel-extraction}
 
 \begin{figure}
-\begin{subfigure}{0.48\columnwidth}
-\begin{lstlisting}[basicstyle=\scriptsize\ttfamily,numbers=none]
+\begin{subfigure}[b]{0.48\columnwidth}
+\begin{lstlisting}[basicstyle=\scriptsize\ttfamily,numbers=none,xleftmargin=0pt,moredelim={[is][\color{blue}\bfseries]{@}{@}}]
 let (asss, bss) =
- map
+ @map@
   (\ps: ([m][m]i32,[m]i32) ->
    let ass =
     map
@@ -86,30 +86,32 @@ let (asss, bss) =
 \caption{Program before distribution.}
 \label{fig:before-distrib}
 \end{subfigure}
-\begin{subfigure}{0.49\columnwidth}
-\begin{lstlisting}[basicstyle=\scriptsize\ttfamily,numbers=none]
+\begin{subfigure}[b]{0.49\columnwidth}
+\begin{lstlisting}[basicstyle=\scriptsize\ttfamily,numbers=none,xleftmargin=0pt,moredelim={[is][\color{blue}\bfseries]{@}{@}}]
 let rss =
- map
+ @map@
   (\ps: [m]i32 ->
-    map
+    @map@
      (\p: i32 ->
       let cs = scan (+) 0 (iota p)
       let r = reduce (+) 0 cs
       in r) ps) pss
 let asss =
- map (\ps rs: [m]i32 ->
-      map (\r -> map (+r) ps) rs)
+ @map@ (\ps rs: [m]i32 ->
+      @map@ (\r ->
+             @map@ (+r) ps)
+             rs)
      pss rss
 let bss =
  loop (wss=pss) for i < n do
     let dss =
-      map (\ass: [m]i32 ->
-           map (\as: i32 ->
-                reduce (+) 0 as)
+      @map@ (\ass: [m]i32 ->
+           @map@ (\as: i32 ->
+                @reduce@ (+) 0 as)
                ass)
           asss
-    in map (\ws, ds: [m]i32 ->
-          map (\w d: i32 ->
+    in @map@ (\ws, ds: [m]i32 ->
+          @map@ (\w d: i32 ->
                let e = d + w in
                let w' = 2 * e in w')
               ws ds) wss dss
@@ -118,7 +120,8 @@ let bss =
 \label{fig:after-result}
 \end{subfigure}
 \caption{Extracting kernels from a complicated nesting.  We assume
-  $pss : [m][m]\texttt{i32}$.}
+  $pss : [m][m]\texttt{i32}$.  Exploitable (outermost or perfectly
+  nested) levels of parallelism are highlighted in blue.}
 \end{figure}
 
 Figures~\ref{fig:before-distrib}~and~\ref{fig:after-result}
@@ -359,7 +362,7 @@ not known at compile-time, we cannot generate code that is optimal for
 all cases.
 
 A more general solution would be to generate all three possible code
-versions, and to discriminate between them at runtime based on dynami
+versions, and to discriminate between them at runtime based on dynamic
 predicates that test whether the exploited parallelism is enough to
 fully utilize hardware.  This idea is discussed further below.
 

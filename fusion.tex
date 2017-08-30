@@ -369,7 +369,7 @@ There are three mutually incompatible ways to fuse in this expression.
   \label{fig:three-fusion-opportunities}
 \end{figure}
 
-The crossed-out edge indicates in incontractable edge, because while
+The crossed-out edge indicates an incontractable edge, because while
 there is a data dependency between the \kw{reduce} and the final
 \kw{map}, it is not of a form that permits fusion.
 
@@ -405,11 +405,12 @@ modification, we could fuse to the following program.
 let c = a with [i] <- x
 in map (g $\circ$ f) a
 \end{lstlisting}
-However, this results in a violation of Uniqueness Rule 1, and the
-resulting program is thus invalid.  In general, we must track the
-possible execution paths from the producer-SOAC to the consumer-SOAC,
-and only fuse if none of the inputs of the producer have been consumed
-(in the uniqueness type sense of the word) by a \lstinline{let-with} or
+However, this results in a violation of Uniqueness Rule 1, because now
+\texttt{a} is used after it has been consumed, and the resulting
+program is thus invalid.  In general, we must track the possible
+execution paths from the producer-SOAC to the consumer-SOAC, and only
+fuse if none of the inputs of the producer have been consumed (in the
+uniqueness type sense of the word) by a \lstinline{let-with} or
 function call on any possible execution paths.  This is easier than it
 may appear at first glance, as the fusion algorithm will only fuse
 when the consumer is within the lexical scope of the producer anyway.
@@ -460,18 +461,19 @@ harmful to overall performance in the following cases.
 
 In the program
 \begin{lstlisting}
-let x = map f a
-let y = map g x
-let z = map z x
-in (y,z)
+let xs = map f as
+let ys = map g xs
+let zs = map h xs
+in (ys,zs)
 \end{lstlisting}
-fusing the \texttt{x}-producer into the two consumers will double the
-number of calls to the function \texttt{f}, which might be expensive.
-The implementation in the Futhark compiler will currently only fuse if
-absolutely no computation is duplicated, although this is likely too
-conservative.  Duplicating cheap work, for example functions that use
-only primitive operations on scalars, is probably not harmful to
-overall performance, although we have not investigated this fully.
+\noindent fusing the \texttt{x}-producer into the two consumers will
+double the number of calls to the function \texttt{f}, which might be
+expensive.  The implementation in the Futhark compiler will currently
+only fuse if absolutely no computation is duplicated, although this is
+likely too conservative.  Duplicating cheap work, for example
+functions that use only primitive operations on scalars, is probably
+not harmful to overall performance, although we have not investigated
+this fully.
 
 In general, in the context of GPU, the tradeoff between duplicating
 computation and increasing communication is not an easy problem to
@@ -483,10 +485,15 @@ The fusion algorithm used by the Futhark compiler is careful never to
 duplicate computation.  However, some simpification rules may perform
 duplicate small amounts of scalar computation.
 
+Note that the expression above is only a problem when considering just
+vertical fusion; using horizontal fusion we can fuse this into a
+single \kw{map} (see \cref{sec:horizontal-fusion} where we use just
+this example).
+
 \item[Can reduce memory locality.]
   Consider a simple case of fusing
   \[
-    \map~f~\circ \map~g
+    \map~f~\circ~\map~g
   \]
   When $g$ is executed for an element of the input array, neighboring
   elements may be put into the cache, making them faster to access.
@@ -594,6 +601,13 @@ occur if the original source program contained a \StreamRed{}.  All
 SOACs can be transformed into \StreamSeq; the advantage of which we
 will discuss in \cref{sec:streamseq-fusion}.
 
+Not all pairs of SOACs are covered by the following fusion rules, even
+when permitting transformation into \StreamPar{}.  These cases are
+handled by transforming the SOACs involved into \StreamSeq{}, as
+discussed in \cref{sec:streamseq-fusion}.
+
+\subsection{List of Fusion Rules}
+
 \begin{description}
 \item[\kw{map}-\kw{scatter}]
   \begin{align*}
@@ -617,7 +631,7 @@ will discuss in \cref{sec:streamseq-fusion}.
   \begin{align*}
     &\mbox{SOAC $A$:} &\hfill& \kw{let}~\seq{y_{r}}~\seq{ys_{m}}~\seq{ys_{s}}&=~&\kw{redomap}~\oplus~f~(\seq{v_{A}})~\seq{xs_{A}} \\
     &\mbox{SOAC $B$:} &\hfill& \kw{let}~\seq{z_{r}}~\seq{zs_{s}}&=~&\kw{redomap}~\otimes~g~(\seq{v_{B}})~\seq{ys_{m}}~\seq{xs_{B}} \\
-    &\mbox{Fuses to SOAC $C$:} &\hfill& \kw{let}~\seq{z_{r}}~\seq{y_{r}}~\seq{zs_{s}}~\seq{ys_{m}}~\seq{ys_{s}}&=~&\kw{redomap}~\odot~h~(\seq{v_{A}},\seq{v_{B}})~\seq{xs_{A}}~\seq{xs_{B}}
+    &\mbox{Fuses to SOAC $C$:} &\hfill& \kw{let}~\seq{y_{r}}~\seq{z_{r}}~\seq{zs_{s}}~\seq{ys_{m}}~\seq{ys_{s}}&=~&\kw{redomap}~\odot~h~(\seq{v_{A}},\seq{v_{B}})~\seq{xs_{A}}~\seq{xs_{B}}
   \end{align*}
   \begin{align*}
     \mbox{where}~h =~& \fn \seq{a_{A}}~\seq{a_{B}}~\seq{x}~\seq{y} \rightarrow \\
@@ -697,7 +711,7 @@ will discuss in \cref{sec:streamseq-fusion}.
 
 \end{description}
 
-\subsection{Infusible Cases}
+\subsection{Sequential Fusion via \StreamSeq{}}
 \label{sec:streamseq-fusion}
 
 There are some producer-consumer relationships that cannot be fused by
@@ -731,7 +745,7 @@ because we are guaranteed that the scan operator $\oplus$ is
 associative.  The initial value of the carry is the neutral element
 for $\oplus$.
 
-\begin{figure}[bt]
+\begin{figure}
 Given a SOAC
 \[
   \kw{let}~\seq{ys}~=~\kw{scanomap}~\oplus~f~(\seq{v})~xs
@@ -744,13 +758,13 @@ where $\seq{d}$ are the unused final carry values and
   \begin{align*}
     g =~& \fn~c~\seq{a}~\seq{xs'} \rightarrow \\
         & \quad \kw{let}~\seq{xs''}~=~\kw{scanomap}~\oplus~f~(\seq{v})~xs' \\
-        & \quad \kw{let}~ys'_{1}~=~\kw{map}~\oplus~a_{1}~xs''_{1} \\
+        & \quad \kw{let}~ys'_{1}~=~\kw{map}~(\oplus~a_{1})~xs''_{1} \\
         & \quad \vdots \\
-        & \quad \kw{let}~ys'_{n}~=~\kw{map}~\oplus~a_{n}~xs''_{n} \\
+        & \quad \kw{let}~ys'_{n}~=~\kw{map}~(\oplus~a_{n})~xs''_{n} \\
         & \quad \kw{let}~a'_{1}~=~ys'_{1}[c-1] \\
         & \quad \vdots \\
         & \quad \kw{let}~a'_{n}~=~ys'_{n}[c-1] \\
-        & \quad \kw{in}~(\seq{a'},\seq{ys'}) \\
+        & \quad \kw{in}~(\seq{a'},\seq{ys'})
   \end{align*}
   \caption{Transforming a \kw{scanomap} to a \StreamSeq{}.  We assume
     here that chunks may never be empty.  Other SOACs can be
@@ -884,6 +898,7 @@ This loop corresponds to a sequential fusion of the original
 \kw{scanomap}-\kw{map} composition, with no intermediate arrays.
 
 \subsection{Horizontal Fusion}
+\label{sec:horizontal-fusion}
 
 Horizontal fusion can be treated as a special case of vertical fusion,
 with the same fusion rules.  We simply consider the set of names in
@@ -897,6 +912,34 @@ safe.  This is integrated easily with the fusion algorithm simply by
 adding edges in the graphs between SOACs that have the same outer
 size, and are not separated by being in different \kw{loop} or \kw{if}
 expressions.
+
+While horizontal fusion provides a minor optimisation in reducing
+array traversals, its major purpose is as an enabler of vertical
+fusion.  For example, consider the previous example of an expression
+that cannot be fused without duplicating computation, using just
+vertical fusion:
+
+\begin{lstlisting}
+let xs = map f as
+let ys = map g xs
+let zs = map h xs
+in (ys,zs)
+\end{lstlisting}
+\noindent Using horizontal fusion, we can fuse the expressions
+producing \texttt{ys} and \texttt{zs} as follows:
+\begin{lstlisting}
+let xs = map f as
+let (ys, zs) = map (\x -> (g x, h x)) xs
+in (y,z)
+\end{lstlisting}
+\noindent Which then permits vertical fusion of the expression
+producing \texttt{xs}:
+\begin{lstlisting}
+let (ys, zs) = map (\a -> let x = f a
+                          in (g x, h x))
+                    as
+in (y,z)
+\end{lstlisting}
 
 \section{Related Work}
 \label{sec:related-work-fusion}
@@ -915,12 +958,12 @@ Data-Parallel Haskell (DPH)~\cite{Chak06DPH} makes use of aggressive
 inlining and rewrite rules to perform fusion, including expressing
 array operations in terms of streams~\cite{coutts2007rewriting}, which
 have previously been shown to be easily fusable.  While DPH obtains
-good results, this form of rewrite rules are quite limited -- they are
+good results, this form of rewrite rules are quite limited---they are
 an inherently local view of the computation, and would be unable to
 cope with limitations in the presence of in-place array updates, or
-checking whether the result of an array operation is used multiple
-times.  The Glasgow Haskell Compiler itself also bases its list fusion
-on rewrite rules and cross-module inlining~\cite{jones2001playing}.
+fuse if an array operation is used multiple times.  The Glasgow
+Haskell Compiler itself also bases its list fusion on rewrite rules
+and cross-module inlining~\cite{jones2001playing}.
 
 The Repa~\cite{keller2010regular} approach to fusion is based on a
 delayed representation of arrays at run-time, which models an array as
