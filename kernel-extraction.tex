@@ -521,10 +521,9 @@ GPU kernel are:
   on the exact implementation strategy, which is outside the scope of
   this thesis.  The implementation strategy for segmented reductions
   used by the Futhark compiler is presented in
-  \cite{Futhark:segredomap}, which is to appear in early September of
-  2017.
+  \cite{Futhark:segredomap}.
 \item \kw{scatter} can be transformed directly into a single GPU
-  kernel.
+  kernel similar to \kw{map}.
 \end{itemize}
 
 The bodies of the kernels produced by kernel extraction remains

@@ -309,8 +309,8 @@ overestimated) and verified before the kernel is run.
 \begin{lstlisting}[xleftmargin=0pt]
 let main (n: i32) (m: i32) (k: i32)
          (vsss: [n][m][k]f64): d1 d2.[d][d1][d2]f64 =
-  let l = if n != 0 then m+m else 0
   let c = m+m
+  let l = if n != 0 then c else 0
   let (rss: [n][d]f64) =
     map (\(vss: [m][k]f64): [l]f64 ->
           let (ys: [m]f64) (zs: [m]f64) =
@@ -330,20 +330,22 @@ let main (n: i32) (m: i32) (k: i32)
 \end{lstlisting}
 
   \caption{After inlining all functions and performing simple
-    inlining, dead-code elimination, and simplification---no
+    inlining, CSE, dead-code elimination, and simplification---no
     existential quantification left.}
 \label{fig:SimplifyFShape}
 \end{figure}
 
-However, there is still a problem with the current form of the code.
-The issue is that the compiler cannot statically see that
-\lstinline{l==m}, and thus has to maintain the \lstinline{reshape} and
-perform a dynamic safety check at run-time.  This is because the
-computation of \lstinline{l} is hidden behind a branch.  The branch
-was conservatively inserted because we could not be sure that the
-value of \lstinline{vsss[0]} would not be used for computing the size
-(size analysis is intraprocedural, and so we have no insight in the
-definition of \lstinline{f}), but now it is a hindrance to further
+However, there is still a problem with the code shown on
+\cref{fig:SimplifyFShape}.  The issue is that the compiler cannot
+statically see that \lstinline{l==c}, and thus has to maintain the
+\lstinline{reshape} and perform a dynamic safety check at run-time.
+This is because the computation of \lstinline{l} is hidden behind a
+branch.  The branch was conservatively inserted because we could not
+be sure that the value of \lstinline{vsss[0]} (on \cref{fig:RunEgTgt})
+would not be used for computing the size (size analysis is
+intraprocedural, and so by the time we first computed the slize, we
+had no insight in the definition of \lstinline{f}).  The branch was
+inserted for safety reasons, but is now a hindrance to further
 simplification.  There are at least two possible solutions, both of
 which are used by the present Futhark compiler:
 

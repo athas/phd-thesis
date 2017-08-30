@@ -270,9 +270,9 @@ input, where each chunk is collectively copied to local memory before
 it is traversed.  The result is that the number of accesses to global
 memory are reduced.
 
-The algorithm is driven by recognizing arrays that are used as input
-to \lstinline{stream_seq} constructs \textit{and} are invariant to one
-or two of the kernel's innermost dimensions.  The tiling algorithm
+The algorithm is driven by recognizing arrays that are inputs to
+\lstinline{stream_seq} constructs \textit{and} are invariant to one or
+two of the kernel's innermost dimensions.  The tiling algorithm
 proceeds by traversing the body of a \kw{kernel} and looking for an
 appropriate \StreamSeq{} instance, which is then transformed using
 either \textit{one-dimensional} or \textit{two-dimensional} tiling, as
@@ -306,11 +306,12 @@ kernel (n) (\i li -> stream_seq (f i) (v) ps)
 \end{lstlisting}
 \noindent can have its \StreamSeq{} stripmined to obtain the following
 \begin{lstlisting}
-kernel (n) (\i li -> stream_seq
-                       (\q a (ps': [q]int) ->
-                         stream_seq (f i) (a) ps')
-                       (v)
-                       ps)
+kernel (n)
+  (\i li -> stream_seq
+              (\q a (ps': [q]int) ->
+                stream_seq (f i) (a) ps')
+              (v)
+              ps)
 \end{lstlisting}
 
 This kernel exhibits an optimization opportunity for the streamed
@@ -319,13 +320,14 @@ dimension.  Concretely, the threads within a workgroup can
 collectively copy the chunk \texttt{ps'} into local memory, which we
 write as
 \begin{lstlisting}
-kernel (n) (\i li -> stream_seq
-                       (\q a (ps': [q]int) ->
-                         let x = ps'[li]
-                         let ps'' = local q x
-                         in stream_seq (f i) (a) ps'')
-                       (v)
-                       ps)
+kernel (n)
+  (\i li -> stream_seq
+              (\q a (ps': [q]int) ->
+                let x = ps'[li]
+                let ps'' = local q x
+                in stream_seq (f i) (a) ps'')
+              (v)
+              ps)
 \end{lstlisting}
 \noindent where \lstinline{ps''} is a local memory array created by
 collective copying (\kw{local}), and used instead of \lstinline{ps'}
@@ -360,7 +362,7 @@ multiplication that exhibits the pattern appears as follows:
 
 \begin{lstlisting}
 let yss' = rearrange (1,0) yss
-in kernel (n,l) (\i j ->
+in kernel (n,l) (\i j li lj ->
      let xs = xss[i]
      let ys = yss'[j]
      in stream_seq f (0) xs ys)
@@ -385,10 +387,10 @@ least one dimension of the kernel, so they can be tiled as follows:
 
 \begin{lstlisting}
 let yss' = rearrange (1,0) yss
-in kernel (n,l) (\i j ->
+in kernel (n,l) (\i j li lj ->
      let xs = xss[i]
      let ys = yss'[j]
-     in stream_seq g (0) xs ys
+     in stream_seq (g li lj) (0) xs ys
 \end{lstlisting}
 \begin{minipage}[t]{0.1\linewidth}
   \begin{flushright}
@@ -396,18 +398,25 @@ in kernel (n,l) (\i j ->
   \end{flushright}
 \end{minipage}
 \begin{minipage}[t]{0.8\linewidth}
-\lstinline{g = \q acc xs' ys' ->}\\
-\lstinline{      let xs'' = local 2 xs'}\\
-\lstinline{      let ys'' = local 1 ys'}\\
+\lstinline{g = \li lj q acc xs' ys' ->}\\
+\lstinline{      let x = xs'[lj]} \\
+\lstinline{      let y = ys'[li]} \\
+\lstinline{      let xss' = local q q x}\\
+\lstinline{      let xs'' = xss'[li]}\\
+\lstinline{      let yss' = local q q y}\\
+\lstinline{      let yss_tr = rearrange (1,0) yss'}\\
+\lstinline{      let ys''   = yss_tr[lj]}\\
 \lstinline{      in stream_seq f acc xs'' ys''}\\
 \lstinline{f = }\textit{as before}
 \end{minipage}
 \vspace{1em}
 
-Operationally, the \lstinline{local 2} (or \lstinline{local 1})
-expression creates a two-dimensional array in local memory, which is
-then immediately indexed with the local thread ID along dimension $1$
-(or $2$), resulting in a one-dimensional array.\fixme{very unclear; expand.  Maybe make this explicit.}
+Operationally, the \lstinline{local} expressions creates a
+two-dimensional array in local memory, which is then immediately
+indexed with the local thread ID along dimension $1$ (or $2$),
+resulting in a one-dimensional array.  The core IR used in this thesis
+does not support fixing any but the first dimension; instead we
+transpose before indexing.
 
 \subsection{A Complicated Instance of Tiling}
 \label{sec:lavamd-tiling}
@@ -415,10 +424,10 @@ then immediately indexed with the local thread ID along dimension $1$
 The LavaMD benchmark from \cref{sec:rodinia} exhibits an interesting
 tiling pattern, in which the to-be-tiled array is the result of an
 indirect index computed by a function \texttt{f}, all nested inside of
-a sequential loop.  A simplified reproduction:
+a sequential loop.  A simplified reproduction follows.
 
 \begin{lstlisting}
-kernel (n,l) (\i j ->
+kernel (n,m) (\i j li lj ->
   loop (outer_acc) = (...) for l < k do
     let j' = f l j
     let xs = xss[j']
@@ -437,14 +446,15 @@ kernel (n,l) (\i j ->
 \vspace{1em}
 
 Since the computation of the array \texttt{xss} is invariant to the
-first dimension of the kernel, it can be tiled as follows:
+first dimension of the kernel (of size \texttt{n}), it can be tiled as
+follows:
 
 \begin{lstlisting}
-kernel (n,l) (\i j ->
+kernel (n,m) (\i j li lj ->
   loop (outer_acc) = (...) for l < k do
     let j' = f l j
     let xs = xss[j']
-    in stream_seq g (0) outer_acc xs)
+    in stream_seq (g lj) (0) outer_acc xs)
 \end{lstlisting}
 \begin{minipage}[t]{0.1\linewidth}
   \begin{flushright}
@@ -454,9 +464,11 @@ kernel (n,l) (\i j ->
 \begin{minipage}[t]{0.8\linewidth}
 \lstinline{f l j = let p = if 0 < l then ps[l,j] else j}\\
 \lstinline{        in js[p]}\\
-\lstinline{g = \q acc xs' ->}\\
-\lstinline{     let xs'' = local 2 xs'}\\
-\lstinline{     in stream_seq (h i) acc xs''}\\
+\lstinline{g = \lj q acc xs' ->}\\
+\lstinline{        let x = xs'[lj]}\\
+\lstinline{        let xss' = local 1 q x}\\
+\lstinline{        let xs'' = xss'[0]}\\
+\lstinline{        in stream_seq (h i) acc xs''}\\
 \lstinline{h i = }\textit{some function}
 \end{minipage}
 \vspace{1em}
@@ -467,14 +479,12 @@ is the ability to compute which kernel dimensions \lstinline{j'} is
 invariant to, which is reasonably simple in a pure language such as
 Futhark.
 
-\fixme{fix here}you should say safety requires that the block size for
-dimension "i"
-is precisely? (or a multiple of) "q"
-Also note, that while this tiling works with many 2-dim block sizes
-(for dimensions i and j), it is best to keep the block size on the variant
-dimension j equal to 1, so as to maximize the ratio of local-to-global
-memory accesses for array xs.
-Am I correct in saying that?
+Again we assume that the second dimension (of size \texttt{m}) can be
+divided by a reasonable group size (say, 255).  This assumption can be
+removed by the addition of various tedious bounds checks and branches.
+The use of \lstinline{local 1 q} forces that the two-dimensional group
+size is always 1 along the outermost dimension, which maximises the
+ratio of local-to-global memory accesses for array \lstinline{xs}.
 
 \section{Related Work}
 
