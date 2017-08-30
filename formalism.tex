@@ -72,9 +72,9 @@ enclosed in parentheses.
 
 Array values are classified by array types.  We write $[n]\tau$ to
 denote the type of arrays with $n$ elements of type $\tau$.  This
-effectively bans irregular arrays, as there is no way to provide an
-$n$ such that the value $[[1,2],[3]]$ is classified by a type
-$[n]\texttt{i32}$.
+effectively bans irregular arrays, as there is no way to provide $n,m$
+such that the value $[[1,2],[3]]$ is classified by a type
+$[n][m]\texttt{i32}$.
 
 The tuple of a tuple is written as the types of its components
 separated by commas and enclosed in parentheses.  Primitive
@@ -85,9 +85,9 @@ as interchangeable.  This isomorphic treatment is justified because
 both streaming and indexed access to either type can be efficiently
 implemented without explicitly applying the isomorphism and
 materializing (storing) the result first.  This is different from the
-Futhark source language, where e.g. $[1][n]\tau$ and $[n][1]\tau$ are
-distinct types.  Likewise, a singleton array $[1]\tau$ is distinct
-from a scalar of type $\tau$.
+Futhark source language, where for example $[1][n]\tau$ and
+$[n][1]\tau$ are distinct types.  Likewise, a singleton array
+$[1]\tau$ is distinct from a scalar of type $\tau$.
 
 Higher-order types $\hat{\tau}$ for classifying functions are a
 superset of value types.  Specifically, we do not permit first class
@@ -259,7 +259,7 @@ $\credomap$, such that they partition vectors into \emph{chunks}
 before applying the operation on the chunks individually and
 eventually combining them:
 \[ \begin{array}{l}
-\csFold : (\alpha \to \alpha) \to (\Pi m. ([m]\beta \to \alpha)) \to \Pi n. [n]\beta \to \alpha \\
+\csFold : (\alpha \to \alpha \to \alpha) \to (\Pi m. ([m]\beta \to \alpha)) \to \Pi n. [n]\beta \to \alpha \\
 \csFold~(\oplus)~f~(v_1 \# \ldots \# v_k) = (f~\epsilon) \oplus (f~v_1) \oplus \ldots \oplus (f~v_k) \\
 \end{array} \]
 %

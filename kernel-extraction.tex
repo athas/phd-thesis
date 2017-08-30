@@ -13,8 +13,8 @@ program to express patterns of parallelism that have a known efficient
 implementation to GPUs.  The simplest such pattern is a perfect nest
 of \kw{map}s, where the innermost function contains arbitrary
 sequential code.  This pattern maps directly to a single GPU kernel,
-but there are other interesting patterns that correspond to
-e.g. segmented scans and reductions.
+but there are other interesting patterns that correspond to for
+example segmented scans and reductions.
 
 In a purely functional setting, Blelloch's
 transformation~\cite{blelloch1990vector} flattens all available
@@ -130,9 +130,9 @@ benchmark programs.  The original program consists of an outer
 implemented as a sequence of \lstinline{map}s, \lstinline{reduce}s,
 and \lstinline{scan}s and (ii) a loop containing a \lstinline{map}
 whose implementation is given by a \lstinline{reduce} and some scalar
-computation.  As written, only one level of parallelism (e.g., the
-outermost) can be statically mapped on GPGPU hardware. Our algorithm
-distributes the outer \lstinline{map} across the enclosed
+computation.  As written, only one level of parallelism (for example,
+the outermost) can be statically mapped on GPGPU hardware. Our
+algorithm distributes the outer \lstinline{map} across the enclosed
 \lstinline{map} and \lstinline{loop} bindings, performs a
 \lstinline{map}-\lstinline{loop} interchange, and continues
 distribution.  The result consists of four perfect nests: a
@@ -332,7 +332,7 @@ all variations of variant and invariant variables in the
 $z \subseteq q$ are free variables and thus invariant to $\Sigma$.
 The rule is applied only if the body of the loop contains inner
 parallelism, such as maps, otherwise its application is not beneficial
-(e.g., it would change the Mandelbrot benchmark from
+(as an example, it would change the Mandelbrot benchmark from
 \cref{sec:accelerate} to have a memory- rather than a compute-bound
 behavior).
 %

@@ -49,30 +49,40 @@ yet again, with a few more operations.  Their types are shown on
   \kw{manifest} creates an actual array in memory, while
   \kw{rearrange} is merely a symbolic index space transformation.
 \item[\kw{kernel} ($\nseq{d}{n}$)
-  $(\Fn{\nseq{\tau}{m}}{\nseq{v}{n}}{e})$] models a simple
-  $n$-dimensional GPU kernel, loosely corresponding to a flattened
-  form of $n$ \kw{map}-nets, where nest number $i$ (counted from
-  outside-in) has size $d_{i}$.  Semantically, the kernel function is
-  executed for every thread, and passed $n$ \textit{thread indices},
-  one for every dimension.  If the kernel function returns $m$ values,
-  then the \kw{kernel} construct as a whole returns $m$ arrays, each
-  of of shape $[d_{1}]\cdots[d_{n}]$.  This corresponds to each thread
-  returning a single value.
-\item[\kw{local} $c$ $x$] semantically returns a copy of $x$.
-  Operationally, the intent is to copy the array $x$ to local memory
-  via collective copying by those threads that differ in their thread
-  index in dimension $c$ (1-indexed).  The subtleties of this
-  construct is detailed further below.
+  $(\Fn{\nseq{\tau}{m}}{\nseq{v}{2n}}{e})$] models an $n$-dimensional
+  GPU kernel, loosely corresponding to a flattened form of $n$
+  \kw{map}-nets, where nest number $i$ (counted from outside-in) has
+  size $d_{i}$.  Semantically, the kernel function is executed for
+  every thread, and passed $n$ \textit{global thread indices}, one for
+  every dimension, and $n$ \textit{local thread indices}, again one
+  for every dimension (see \cref{sec:kernel-thread-space}).  In many
+  cases we will not be making use of the local thread indices, in
+  which case we will simply put an underscore for the parameter names.
+  The group size is not explicitly stated, but may be implicitly
+  bounded through the use of \kw{local} (see below).
+
+  If the kernel function returns $m$ values, then the \kw{kernel}
+  construct as a whole returns $m$ arrays, each of of shape
+  $[d_{1}]\cdots[d_{n}]$.  This corresponds to each thread returning a
+  single value.
+\item[\kw{local} $\nseq{c}{n}$ $x$] may only occur within
+  \kw{kernel}s, and produces an array of shape $[c_{1}]\cdots[c_{n}]$
+  where every thread contributes a value $x$.  Operationally,
+  $\nseq{c}{n}$ corresponds to the group size of the kernel (and any
+  kernel containing a \kw{local} is thus implicitly forced to have
+  that group size), and the resulting array is located in local
+  memory.  The subtleties of this construct is detailed further in
+  \cref{sec:automatic-tiling}.
 \end{description}
 
 \begin{figure}[hbt]
   \begin{tabular}{lcl}
     \emph{op} & & \textrm{TySch}(\emph{op}) \\ \hline
     \kw{manifest} ($c_{1}, \ldots, c_{n}$) & : & $\forall\nseq{d}{n}\alpha.[d_{1}]\cdots[d_{n}]\alpha\rightarrow[d_1]\cdots[d_n]\alpha$ \\
-    \kw{kernel} & : & $\forall \nseq{\alpha}{m}.(\nseq{(d_{i}:\texttt{i32})}{n})$ \\
-              & & $\rightarrow (\nseq{\texttt{i32}}{n} \rightarrow (\nseq{\alpha}{m}))$ \\
+    \kw{kernel} & : & $\forall \nseq{\alpha}{m}.\nseq{(d_{i}:\texttt{i32})}{n}$ \\
+              & & $\rightarrow (\nseq{\texttt{i32}}{2n} \rightarrow (\nseq{\alpha}{m}))$ \\
               & & $\rightarrow (\nseq{[d_{1}]\cdots[d_{n}]\alpha}{m})$ \\
-    \kw{local}~$c$ & : & $\forall d\alpha.\rightarrow [d]\alpha \rightarrow [d]\alpha$ \\
+    \kw{local}~$c$ & : & $\forall \alpha. \nseq{(d_{i}: \texttt{i32})}{n} \rightarrow \alpha \rightarrow [d_{1}]\cdots[d_{n}]\alpha$ \\
 \end{tabular}
 \caption{The types of the language constructs used to express
   kernel-level locality of reference optimisations.}
@@ -110,16 +120,17 @@ resolve coalescing if the sequential-dimension indices are invariant
 to the parallel array dimensions. For example, consider the following
 expression:
 \begin{lstlisting}[numbers=none]
-kernel (n) (\i -> stream_seq f (0) xss[i])
+kernel (n) (\i _ -> stream_seq f (0) xss[i])
 \end{lstlisting}
-Assuming that \lstinline{f} performs a sequential in-order traversal
-of its input, the expression is optimized by changing the
-representation of \texttt{xss} to be column major (the default is row
-major), via transposition in memory, as follows:
+Assuming that
+\lstinline{f} performs a sequential in-order traversal of its input,
+the expression is optimized by changing the representation of
+\texttt{xss} to be column major (the default is row major), via
+transposition in memory, as follows:
 
 \begin{lstlisting}[numbers=none]
 let xss' = manifest (1,0) xss
-in kernel (n) (\i -> stream_seq f (0) xss'[i])
+in kernel (n) (\i _ -> stream_seq f (0) xss'[i])
 \end{lstlisting}
 
 The type of \texttt{xss'} is the same as that of \texttt{xss}.  The
@@ -156,18 +167,18 @@ Two patterns are recognised by the inspection:
   thread indices.  We then copy the array with permutation
   $\nseq{c}{m}$.  An example is a kernel
 \begin{lstlisting}[numbers=none]
-kernel (n,m) (\i j -> xss[j][i] + 2)
+kernel (n,m) (\i j _ _ -> xss[j][i] + 2)
 \end{lstlisting}
 which is transformed into
 \begin{lstlisting}[numbers=none]
 let xss' = manifest (1,0) xs
-in kernel (n,m) (\i j -> xss'[j][i] + 2)
+in kernel (n,m) (\i j _ _ -> xss'[j][i] + 2)
 \end{lstlisting}
 
 For this example, we could also have transposed the kernel dimensions
 themselves, followed by transposing the result:
 \begin{lstlisting}[numbers=none]
-let r = kernel (m,n) (\j i -> xss'[j][i] + 2)
+let r = kernel (m,n) (\j i _ _ -> xss'[j][i] + 2)
 in rearrange (1,0) r
 \end{lstlisting}
 This saves on memory traffic, since \kw{rearrange} is a non-manifest
@@ -210,7 +221,16 @@ the default for Futhark expressions.
 Note that the transformation is on index expressions, not on arrays.
 The same array \lstinline{xss} may be indexed in different ways within
 the same kernel, and each distinct index expression may give rise to a
-unique new \kw{manifest} array.\fixme{Not necessarily ideal/optimal.}
+unique new \kw{manifest} array.  However, if the same array is
+iterated in the same way in multiple places within the kernel, this
+will still give rise only to a single array.
+
+Our approach is not necessarily optimal---there are cases where
+several distinct manifestations (as given by the rules above) all
+solve the specific cases of uncoalesced access, but so might a
+combined \textit{single} manifestation, with an appropriately selected
+permutation.  This would require the algorithm to take a more
+``global'' view, and has not yet been done.
 
 \subsection{Viability of the Optimisation}
 
@@ -275,37 +295,55 @@ arrays have sizes that are not divisible with the optimal tile size.
 \label{sec:one-dimensional-tiling}
 
 One-dimensional tiling is performed when the input arrays of a
-\StreamSeq{} are invariant to the same dimension.\fixme{show or remark
-  on the streamSeq rewrite rule that allows one to re-write a
-  streamSeq construct into a nest of two streamSeq constructs.}
+\StreamSeq{} are invariant to the same dimension.  We exploit a
+\textit{stripmining property} of \StreamSeq{}, by which any
+\StreamSeq{} can be transformed into two nested
+\StreamSeq{}s.
 
 For example, the kernel
 \begin{lstlisting}
-kernel (n) (\i -> stream_seq (f i) (ne) ps)
+kernel (n) (\i li -> stream_seq (f i) (v) ps)
 \end{lstlisting}
-
-\noindent exhibits such an optimization opportunity for the streamed
-array \lstinline{ps}, as it is invariant to the first (and only)
-dimension, and is transformed into:
-
+\noindent can have its \StreamSeq{} stripmined to obtain the following
 \begin{lstlisting}
-kernel (n) (\i -> stream_seq
-                    (\q a (ps': [q]int) ->
-                      let ps'' = local 1 ps'
-                      in stream_seq (f i) (a) ps'')
-                    (ne)
-                    ps)
+kernel (n) (\i li -> stream_seq
+                       (\q a (ps': [q]int) ->
+                         stream_seq (f i) (a) ps')
+                       (v)
+                       ps)
 \end{lstlisting}
 
+This kernel exhibits an optimization opportunity for the streamed
+array \lstinline{ps}, as it is invariant to the first (and only)
+dimension.  Concretely, the threads within a workgroup can
+collectively copy the chunk \texttt{ps'} into local memory, which we
+write as
+\begin{lstlisting}
+kernel (n) (\i li -> stream_seq
+                       (\q a (ps': [q]int) ->
+                         let x = ps'[li]
+                         let ps'' = local q x
+                         in stream_seq (f i) (a) ps'')
+                       (v)
+                       ps)
+\end{lstlisting}
 \noindent where \lstinline{ps''} is a local memory array created by
 collective copying (\kw{local}), and used instead of \lstinline{ps'}
-in \lstinline{f}.  The size \lstinline{q} is determined (at runtime)
-to be the group size used for this kernel, such that the array
-\lstinline{ps''} will fit in local memory.  When tiling along a
-dimension $i$ ($1$ in the above example), it must be ensured that each
-consecutive \lstinline{q} threads along that dimension belong to the
-same GPU group.  This is done by setting the group size to unit along
-all non-tiled dimensions.
+in \lstinline{f}. The size \lstinline{q} is then bounded (at runtime)
+by the group size used for this kernel, such that the array
+\lstinline{ps''} will fit in local memory.  For simplicity, we assume
+that the size of array \texttt{ps} is divisible by some reasonable
+group size.  The trick is that every thread within a workgroup reads a
+distinct element from \texttt{ps'}, by using the local thread index.
+The array \texttt{ps''} is visible by all threads within the
+workgroup, so \kw{local} in effect constitutes intra-group
+communication.
+
+When tiling along a dimension $i$ ($1$ in the above example), it must
+be ensured that each consecutive \lstinline{q} threads along that
+dimension belong to the same GPU group.  In general, this is done by
+forcing the group size to unit along all non-tiled dimensions,
+although this is not necessary in the case of a unidimensional kernel.
 
 One-dimensional tiling is used for the $n$-body benchmark discussed in
 \cref{sec:rodinia}.  Note that the dimensionality of the kernel need

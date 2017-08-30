@@ -4,27 +4,38 @@
 There exists a large diversity of parallel machines.  Far too many to
 list exhaustively, and far too different in capability and performance
 characteristics for one set of program transformations and
-optimisations to apply universally.  In this theses, we will focus our
+optimisations to apply universally.  In this thesis, we focus our
 discussion on one type of architecture: the modern \textit{Graphics
   Processing Unit} (GPU), which can be used for non-graphics
 computation under the term \textit{General-Purpose GPU computing}
-(GPGPU).  Specifically, we will focus on the
-\textit{Single-Instruction Multiple-Thread} (SIMT) model used by
-NVIDIA, and also seen in recent AMD and Intel chips.  This chapter
-presents an simplified abstract GPU machine model that we will use to
-justify the design of the Futhark compiler.  In particular, a machine
-model is needed to argue for the optimising transformations that we
-perform.  The model defined here serves this purpose.
+(GPGPU).  Specifically, we focus on the \textit{Single-Instruction
+  Multiple-Thread} (SIMT) model used by NVIDIA, and also seen in
+recent chips from AMD and Intel.
 
-When we use the term ``GPU'', we will refer to this model.  Our chosen
-terminology is primarily taken from OpenCL, an open standard for
-programming \textit{accelerator devices}, of which GPUs are one
-example.  Unfortunately, NVIDIAs API for GPGPU computing, CUDA, uses
-the same terms in some cases, but with different definitions.
-Section~\ref{sec:gpu-model-real-world} describes how our GPU model
-maps to CUDA terms, and how our simplifications map to real hardware.
+This chapter presents a simplified abstract GPU machine model that we
+will use to justify the design of the Futhark compiler.  In
+particular, a machine model is needed to argue for the optimising
+transformations that we perform.  The model defined here serves this
+purpose.  As an example, \cref{sec:gpu-transposition} describes how
+matrix transposition is implemented efficiently on GPUs.  This is
+crucial, since Futhark uses transpositions to optimise for spatial
+locality (\cref{sec:automatic-coalescing}).
+\Cref{sec:calculus-implementation} shows how selected important
+primitive constructs from the array calculus (\cref{chap:calculus})
+can be mapped to GPU code.  This is of of particular interest since
+\cref{chap:kernel-extraction} shows how nested parallelism is
+transformed into a form very similar to these primitives.
 
+When we use the term ``GPU'', we will refer to the model defined
+herein.  Our chosen terminology is primarily taken from OpenCL, an
+open standard for programming \textit{accelerator devices}, of which
+GPUs are one example.  Unfortunately, NVIDIAs API for GPGPU computing,
+CUDA, uses the same terms in some cases, but with different
+definitions.  Section~\ref{sec:gpu-model-real-world} describes how our
+GPU model maps to CUDA terms, and how our simplifications map to real
+hardware.
 \section{Kernels and the Thread Space}
+\label{sec:kernel-thread-space}
 
 A GPU is an accelerator device attached to a conventional CPU-based
 computer, which is called the \textit{host} system.  A GPU program is
@@ -77,7 +88,7 @@ thread(in, out):
   out[gtid] <- y
 \end{lstlisting}
   \caption{Each thread reads an integer, adds two, and writes the
-    result back to some other location memory}
+    result back to some other memory location}
   \label{fig:gpu-map}
 \end{figure}
 
@@ -503,7 +514,7 @@ the order of evaluation to be irrelevant.
 
 \subsection{Excluded Facilities}
 
-Real GPU hardware possesses some capabiities that are not represented
+Real GPU hardware possesses some capabilities that are not represented
 in our model.  Some of these are unimportant, but others do offer
 performance opportunities that are for this work lost to us.
 
@@ -562,17 +573,19 @@ GPU model:
 \item[Constant memory] is a size-limited read-only on-chip cache.
   When we declare an array input to a kernel function, we can mark it
   as \textit{constant}, which will cause it to be copied to the cache
-  just before the kernel begins execution.
+  just before the kernel begins execution.  Constant memory is useful
+  when many threads are reader the same memory in the same clock
+  cycle, as accessing the constant cache is significantly faster terms
+  of latency) than accessing global memory.
 
-  Accessing memory in the constant cache is significantly faster than
-  accessing global memory.  Unfortunately, this facility is difficult
-  to exploit for a compiler.  The reason is that the constant size is
-  quite small---usually not more than $64KiB$---and kernel launch will
-  fail if the arrays we pass for constant parameters do not fit.  In
-  general, the specific sizes of arrays is not known until runtime.
-  The choice of whether to use constant memory is thus a compile-time
-  decision, while the validity of the choice can only be known at
-  run-time.
+  Unfortunately, this facility is difficult to exploit for a compiler.
+  The reason is that the size of the constant cache is quite
+  small---usually not more than $64KiB$---and the kernel launch will
+  fail if the arrays passed for constant parameters do not fit in the
+  cache.  In general, the specific sizes of arrays is not known until
+  runtime.  Thus, the choice of whether to use constant memory is thus
+  a compile-time decision, while the validity of the choice can only
+  be known at run-time.
 
 \item[Texture memory] is physically global memory, but marked as
   read-only, and \textit{spatially cached}, and, in contrast to other
@@ -653,7 +666,7 @@ ramifications--should more efficient intra-group communication
 primitives become available, it would have no great overall impact on
 our compilation strategy.
 
-\section{GPU Implementation of Array Calculus}
+\section{GPU Implementation of Selected Parts of the Array Calculus}
 \label{sec:calculus-implementation}
 
 The combinators presented in \cref{chap:calculus} permit an efficient

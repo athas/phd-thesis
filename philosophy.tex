@@ -429,8 +429,8 @@ based on \textit{task parallelism}, where different threads perform
 different operations on different pieces of data (or a shared piece of
 data, if one enjoys debugging race conditions).  Task parallelism does
 necessarily imply low-level and racy code with manual synchronisation
-and message passing, but can be given safe structure through
-e.g. futures or fork/join patterns.
+and message passing, but can be given safe structure through for
+examples futures or fork/join patterns.
 
 One important property of functional data parallelism is that the
 semantics are sequential.  The program can be understood entirely as a
@@ -572,7 +572,7 @@ functions have the required properties - the compiler will not check.
 Indeed, checking such semantic (as opposed to syntactic) properties in
 general is undecidable, as shown by Rice's
 Theorem~\cite{10.2307/1990888}.  If an invalid function is provided
-(e.g. subtraction, which is not associative), the program may produce
+(such as subtraction, which is not associative), the program may produce
 nondeterministic results.
 
 In some parallel languages or libraries, reductions and scans are
@@ -1779,8 +1779,8 @@ defined by the \textit{direction vector} \texttt{dir\_v}.  The
 independent formula works by essentially performing a
 \kw{map}-\kw{reduce} computation for every Sobol number, with the
 number of iterations being the size of the direction vector.
-Typically, this number is fairly small (e.g., $31$) as it is limited
-to the number of bits in an integer.
+Typically, this number is fairly small (perhaps
+$31$) as it is limited to the number of bits in an integer.
 
 An implementation of the recurrent formula is shown in
 \cref{fig:streamed-sobol}.  Notice that for each chunk, we first apply
@@ -1855,10 +1855,10 @@ commands to the devices, which may involve uploading code (kernels) or
 data, initiating execution of uploaded code, or retrieving data stored
 on the device in response to executions.  The code uploaded to the
 device must be specified in OpenCL C, a severely restricted variant of
-the C kernel language, that lacks support for e.g. function pointers,
-recursion, or allocation.  The key property that we exploit for
-interoperability purposes is that the code running on the host is
-required only for managing the device, and thus need not be
+the C kernel language, that lacks support for features such as
+function pointers, recursion, or allocation.  The key property that we
+exploit for interoperability purposes is that the code running on the
+host is required only for managing the device, and thus need not be
 particularly efficient, as the vast majority of the computation takes
 place inside OpenCL kernels.  This allows us to specify the host-level
 code in ways that maximise interoperability, without worrying overmuch
@@ -2164,8 +2164,8 @@ section.
 
 Another challenge for automatic parallelisation are the so called
 ``conditional-induction variables'' (CIV) that represent scalars that
-do not form a uniform recurrence, e.g., their increment is not
-constant across the iteration space of the analysed loop.
+do not form a uniform recurrence.  For example, their increment may
+not be constant across the iteration space of the analysed loop.
 
 \begin{lstlisting}[xleftmargin=0pt,language=fortran,mathescape=true,escapechar=|]
     civ@1 = 0

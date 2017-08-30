@@ -409,6 +409,13 @@ the strict syntax for lambdas, and write for example \lstinline{(+)}
 for \lstinline{(\x y->x+y)}, or \lstinline{(+2)} instead of
 \lstinline{(\x->x+2)}.
 
+On occasion, we will need bind variables whose names we do not care
+about.  In these cases we will use an underscore to indicate that the
+name is irrelevant.  For example:
+\begin{lstlisting}
+map (\_ y _ -> x + 2) xs ys zs
+\end{lstlisting}
+
 \begin{figure}
 \centering
 
@@ -501,14 +508,14 @@ that $S(\etau) = \etau'$.
 Type schemes for operators, including a representative subset of the
 SOAC operators, are given in \cref{fig:soacType}, and an informal
 description is given in \cref{fig:arrayDesc,fig:soacDesc}.  The SOACs
-of the intermediate language (e.g., \lstinline{map}) are a
+of the intermediate language (such as \lstinline{map}) are a
 tuple-of-array versions of the user language SOACs. The SOACs of the
 intermediate language receive an arbitrary number of array arguments
 and produce a tuple of arrays as their result.  The semantics of a
 SOAC operator can be intuitively understood as a composition between
-\lstinline{unzip}, the user-language SOAC (e.g., \lstinline{map}), and
-\lstinline{zip}, where the unnamed function is suitably modified to
-work with the flat sequence of array arguments.
+\lstinline{unzip}, the user-language SOAC (such as \lstinline{map}),
+and \lstinline{zip}, where the unnamed function is suitably modified
+to work with the flat sequence of array arguments.
 
 \subsection{Typing Rules}
 
@@ -518,11 +525,11 @@ $\tau/\tty/p$, where uniqueness attributes have simply been removed.
 This simplifies the type rules, which can then be stated separate from
 the rules for checking uniqueness properties.
 
-Type environments ($\Gamma$) are finite
-maps from program variables to types or function types. When $\Gamma$
-is a type environment and $p$ is a pattern
-$\tau_1~x_1,\cdots,\tau_n~x_n$, we write $\Gamma,p$ to denote the
-typing environment $\Gamma,x_1:\tau_1,\cdots,x_n:\tau_n$.
+Type environments ($\Gamma$) are finite maps from program variables to
+types or function types.  Looking up the type of $x$ in $\Gamma$ is
+written $\Gamma(x)$.  When $\Gamma$ is a type environment and $p$ is a
+pattern $\tau_1~x_1,\cdots,\tau_n~x_n$, we write $\Gamma,p$ to denote
+the typing environment $\Gamma,x_1:\tau_1,\cdots,x_n:\tau_n$.
 
 Typing rules for the source language are given in
 Figures~\ref{fig:srcTypeRules} and \ref{fig:srcTypeRulesExps}.  The
