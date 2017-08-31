@@ -86,6 +86,7 @@ let (asss, bss) =
 \caption{Program before distribution.}
 \label{fig:before-distrib}
 \end{subfigure}
+\hfill
 \begin{subfigure}[b]{0.49\columnwidth}
 \begin{lstlisting}[basicstyle=\scriptsize\ttfamily,numbers=none,xleftmargin=0pt,moredelim={[is][\color{blue}\bfseries]{@}{@}}]
 let rss =
@@ -98,23 +99,25 @@ let rss =
       in r) ps) pss
 let asss =
  @map@ (\ps rs: [m]i32 ->
-      @map@ (\r ->
+       @map@ (\r ->
              @map@ (+r) ps)
-             rs)
+          rs)
      pss rss
 let bss =
  loop (wss=pss) for i < n do
-    let dss =
-      @map@ (\ass: [m]i32 ->
-           @map@ (\as: i32 ->
-                @reduce@ (+) 0 as)
-               ass)
-          asss
-    in @map@ (\ws, ds: [m]i32 ->
-          @map@ (\w d: i32 ->
-               let e = d + w in
-               let w' = 2 * e in w')
-              ws ds) wss dss
+  let dss =
+   @map@ (\ass: [m]i32 ->
+         @map@ (\as: i32 ->
+               @reduce@ (+) 0 as)
+             ass)
+        asss
+  in @map@ (\ws, ds: [m]i32 ->
+           @map@ (\w d: i32 ->
+                 let e = d + w
+                 let w' = 2 * e
+                 in w')
+               ws ds)
+         wss dss
 \end{lstlisting}
 \caption{Program after distribution.}
 \label{fig:after-result}

@@ -91,10 +91,10 @@ The pipeline proceeds with the following passes in order as follows:
 \item[Internalisation and Desugaring] The source Futhark language is
   translated into the core language (\cref{sec:futhark-core-ast}).  In
   particular, modules and polymorphic functions are removed through
-  specialisation (outside the scope of the thesis), all tuples are
+  specialisation (outside the scope of this thesis), all tuples are
   flattened, and arrays of tuples are transformed into tuples of
-  arrays, as shown on \ref{fig:calc-tuple-transform}.  This is also
-  the pass where where size inference is performed
+  arrays, using the technique shown on \ref{fig:calc-tuple-transform}.
+  This is also the pass where where size inference is performed
   (\cref{chap:size-analysis}).
 
 \item[Inlining and Dead Function Removal] All functions are

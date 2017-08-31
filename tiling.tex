@@ -280,7 +280,7 @@ in kernel (m) (\i _ ->
 To the coalescing optimisation, this kernel contains two array
 indices: \texttt{js[p]} and \texttt{xss[i,j]}.  The former is not
 touched, since it does not involve any thread indices, and so does not
-many either of the rules.  However, the indexing expression
+meet either of the rules.  However, the indexing expression
 \texttt{xss[i,j]} \textit{does} match the rule for complete indexes,
 since the global thread index \texttt{i} can be moved to the innermost
 position via the permutation \texttt{(1,0)}.  Thus, the kernel is
@@ -297,6 +297,9 @@ in kernel (m) (\i _ ->
     in acc + x)
 \end{lstlisting}
 
+Note that the \texttt{p} index in \texttt{ps[p]} is invariant to the
+kernel, and as such leads to effective caching (each thread in a warp
+accesses the same \texttt{is[p]} in the same SIMD instruction).
 
 \section{Automatic Loop Tiling}
 \label{sec:automatic-tiling}
@@ -367,10 +370,11 @@ kernel (n)
               (v)
               ps)
 \end{lstlisting}
-\noindent where \lstinline{ps''} is a local memory array created by
-collective copying (\kw{local}), and used instead of \lstinline{ps'}
-in \lstinline{f}. The size \lstinline{q} is then bounded (at runtime)
-by the group size used for this kernel, such that the array
+\noindent Recall that \texttt{li} is the local thread index.  Then,
+\lstinline{ps''} is a local memory array created by collective copying
+(\kw{local}), and used instead of \lstinline{ps'} in
+\lstinline{f}. The size \lstinline{q} is then bounded (at runtime) by
+the group size used for this kernel, such that the array
 \lstinline{ps''} will fit in local memory.  For simplicity, we assume
 that the size of array \texttt{ps} is divisible by some reasonable
 group size.  The trick is that every thread within a workgroup reads a
@@ -467,9 +471,9 @@ a sequential loop.  A simplified reproduction follows.
 \begin{lstlisting}
 kernel (n,m) (\i j li lj ->
   loop (outer_acc) = (...) for l < k do
-    let j' = f l j
-    let xs = xss[j']
-    in stream_seq (h i) outer_acc xs)
+    let i' = f l i
+    let xs = xss[i']
+    in stream_seq (h j) outer_acc xs)
 \end{lstlisting}
 \begin{minipage}[t]{0.1\linewidth}
   \begin{flushright}
@@ -477,9 +481,9 @@ kernel (n,m) (\i j li lj ->
   \end{flushright}
 \end{minipage}
 \begin{minipage}[t]{0.8\linewidth}
-\lstinline{f l j = let p = if 0 < l then ps[l,j] else j}\\
+\lstinline{f l i = let p = if 0 < l then ps[l,i] else j}\\
 \lstinline{        in js[p]}\\
-\lstinline{h i = }\textit{some function}
+\lstinline{h j = }\textit{some function}
 \end{minipage}
 \vspace{1em}
 
@@ -490,9 +494,9 @@ follows:
 \begin{lstlisting}
 kernel (n,m) (\i j li lj ->
   loop (outer_acc) = (...) for l < k do
-    let j' = f l j
-    let xs = xss[j']
-    in stream_seq (g lj) (0) outer_acc xs)
+    let i' = f l i
+    let xs = xss[i']
+    in stream_seq (g j lj) (0) outer_acc xs)
 \end{lstlisting}
 \begin{minipage}[t]{0.1\linewidth}
   \begin{flushright}
@@ -500,14 +504,14 @@ kernel (n,m) (\i j li lj ->
   \end{flushright}
 \end{minipage}
 \begin{minipage}[t]{0.8\linewidth}
-\lstinline{f l j = let p = if 0 < l then ps[l,j] else j}\\
+\lstinline{f l i = let p = if 0 < l then ps[l,i] else i}\\
 \lstinline{        in js[p]}\\
-\lstinline{g = \lj q acc xs' ->}\\
+\lstinline{g = \j lj q acc xs' ->}\\
 \lstinline{        let x = xs'[lj]}\\
 \lstinline{        let xss' = local 1 q x}\\
 \lstinline{        let xs'' = xss'[0]}\\
-\lstinline{        in stream_seq (h i) acc xs''}\\
-\lstinline{h i = }\textit{some function}
+\lstinline{        in stream_seq (h j) acc xs''}\\
+\lstinline{h j = }\textit{some function}
 \end{minipage}
 \vspace{1em}
 
@@ -518,7 +522,7 @@ invariant to, which is reasonably simple in a pure language such as
 Futhark.
 
 Again we assume that the second dimension (of size \texttt{m}) can be
-divided by a reasonable group size (say, 255).  This assumption can be
+divided by a reasonable group size (say, 256).  This assumption can be
 removed by the addition of various tedious bounds checks and branches.
 The use of \lstinline{local 1 q} forces that the two-dimensional group
 size is always 1 along the outermost dimension, which maximises the

@@ -2,18 +2,52 @@
 \label{chap:conclusions}
 
 We have presented a fully automatic optimizing compiler for Futhark, a
-pure functional array language.  In particular, we have demonstrated
-(i) how to support in-place updates in Futhark's type system, (ii) how
-second-order array combinators can express symbolically both all
-available parallelism and efficient sequentialization alternatives,
-and (iii) how to fuse the program aggressively and then how to
-decompose it yet again into kernels in a manner that can improve the
-amount of efficient (common-case) parallelism.
+pure functional array language.  Futhark is a simple language that
+supports just a few core concepts, yet is more expressive than prior
+parallel languages of similar performance, in particular by supporting
+nested parallelism.  While more flexible parallel languages exist
+(notably NESL), these have not yet been shown to obtain good GPU
+performance in practise.
 
-We have validated our approach on $21$ benchmark programs, which are
-compiled to GPU code via OpenCL. Compared to reference
-implementations, the performance ranges from $\times0.21$ slowdown to
-$\times13$ speedup, and is competitive on average.
+We have demonstrated a combination of imperative and functional
+concepts by supporting in-place updates with safety guaranteed by
+uniqueness types rather than complicated index-based analysis.  We
+support not just efficient top-level imperative code with in-place
+updates, but also sequential code nested inside parallel constructs,
+all without violating the functional properties on which we depend for
+safe parallel execution.
+
+We have also shown how size-dependent array types can be inferred from
+a size-agnostic source program, via a combination of type-driven rules
+and function slicing.  Our slicing technique results in neglible
+overhead in practise.
+
+By introducing novel parallel streaming constructs, we provide better
+support for efficient sequential execution of excess parallelism than
+is possible with the classical parallel combinators.  We have also
+shown how these constructs permit highly general fusion rules, in
+particular permitting sequential fusion without losing the potential
+for parallel execution.
+
+All of these build up to our primary result, the moderate flattening
+algorithm, which allows the efficient exploitation of easily
+accessible ``common case'' parallelism.  The moderate flattening
+algorithm sequentialises excess parallelism while keeping intact the
+high-level invariants provided by the original parallel and purely
+functional formulation, which permits further locality-of-reference
+optimisations.  We have demonstrated this capability by showing how to
+automatically repair some cases of non-coalesced memory accesses, as
+well as performing simple block tiling of loops.  We argue that the
+moderate flattening algorithm can be developed further into a
+\textit{gradual flattening algorithm}, which uses multi-versioned code
+to exploit a varying amount of parallelism of the program, dependent
+on the characteristics of the input data encountered at runtime.
+
+To support our claims, we have validated our approach on $21$
+benchmark programs, which are compiled to GPU code via
+OpenCL. Compared to reference implementations, the performance ranges
+from $\times0.21$ slowdown to $\times13$ speedup, and is competitive
+on average.
 %
 Our results show that while the ease of high-level structural
 transformation permitted by a functional language is powerful,
@@ -24,6 +58,56 @@ We have made the developed compiler and all benchmark programs freely
 available for reproduction, study, or further development.
 
 \section{Limitations and Future Work}
+
+The primary limitation of Futhark as a language is the lack of support
+for irregular arrays.  Some problems, such as graph algorithms, are
+naturally irregular, and transforming them to a regular formulation is
+tedious and error-prone.  Worse, such transformation is essentially
+manual flattening, which tends to result in code that is hard for the
+compiler to analyse and optimise.  It remains to be seen how we can
+either modify the algorithms in question to exhibit less irregularity,
+or extend Futhark with lightweight support for some cases of irregular
+parallelism, without sacrificing the ability of the compiler to
+generate efficient code.  After all, Futhark's entire \textit{raison
+  d'être} is performance---there are already many functional languages
+that are far more expressive, so improving flexibility at great cost
+in runtime performance is not a goal.
+
+However, even with the current language, irregularity still rears its
+ugly head for the compiler.  It is not hard to write a program that,
+although it uses only regular arrays, implicitly expresses irregular
+\textit{parallelism}, which cannot in general be handled by our
+current approach.  The reason is that we expect to be able to
+pre-allocate memory before entering GPU kernels, but it is not hard to
+write a program in which the size of intermediate arrays is
+thread-variant.  For example, consider the following expression.
+\begin{lstlisting}
+map (\i -> reduce (+) 0 (iota i)) is
+\end{lstlisting}
+\noindent The size of the array produced by \lstinline{iota i} may
+differ for each element of the array \texttt{is}, which means the
+total memory requirement of the \kw{map} cannot be immediately known.
+The problem has multiple solutions.  In the most general case, we can
+apply full flattening---this removes all forms of irregularity, but
+the overhead can be significant.  In other cases, a slicing approach
+can be used.  For example, we can precompute the total memory
+required, allocate one large slab of memory, and use a \kw{scan} to
+compute an offset for each iteration of the \kw{map}:
+\begin{lstlisting}
+let os = scan (+) 0 is
+in map (\(i,o) ->
+          -- iota i located at offset 'o'
+          -- in some memory block.
+          reduce (+) 0 (iota i))
+       (zip is os)
+\end{lstlisting}
+
+This is not a language issue---our sequential compiler pipeline is
+able to compile any valid Futhark program to sequential code---but a
+limitation in our compilation strategy for parallel code.  Our
+strategy was to focus on development a technique for exploiting
+``common case'' parallelism efficiently, and only later extend it to
+support more exotic cases.
 
 %%% Local Variables:
 %%% mode: latex
