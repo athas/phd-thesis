@@ -593,6 +593,12 @@ scheme (even the $\forall$-quantified context) to the operator
 arguments supplying the concrete value.  This is used in for example
 the size-dependent typing of \kw{iota}.
 
+The first rule states that if we can derive expression $e$ to have
+some existential type $\exists\seq{d}.\rho$, then $w$ also has any
+existential type that is a subtype of what we derived.  This rule is
+what allows us to weaken the typing for an expression, which is
+necessary in many cases.
+
 The rule for \kw{let} requires that the names bound may not be present
 in the type of the returned value.  As an example, consider an
 expression \lstinline{replicate x v}.  Supposing $\texttt{v}: \tau$,
