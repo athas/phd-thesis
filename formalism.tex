@@ -296,14 +296,20 @@ functorial property of arrays; it is used for fusion from right to
 left and eventually, as a fission rule, from left to right as part of
 flattening nested parallelism (see \cref{chap:kernel-extraction}).
 %
-The flattening rule
-$ \cmap (\cmap f) \cong \cmap \,f$
-eliminates nested parallel maps by mapping the argument function over
-the product index space (an isomorphism modulo the
-curry/uncurry isomorphism).
-Finally, sequential (de)composition of the discussed SOACs
-can be similarly reasoned in terms of more general iterative operators
-(known as foldl and sfoldl).
+The flattening rule $ \cmap (\cmap f) \cong \cmap \,f$ eliminates
+nested parallel maps by mapping the argument function over the product
+index space (an isomorphism modulo the curry/uncurry isomorphism).
+Finally, sequential (de)composition of the discussed SOACs can be
+similarly reasoned in terms of the general iterative operator
+$\csFold$; for example:
+
+\[
+\begin{array}{lcl}
+\cmap f & = & \csFold~(\concat)~\epsilon~(\cmap~f) \\
+\creduce \oplus 0_{\oplus} & = & \csFold~\oplus~0_{\oplus}~(\creduce \oplus 0_{\oplus}) \\
+\end{array}
+\]
+
 
 %%% Local Variables:
 %%% mode: latex

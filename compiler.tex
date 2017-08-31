@@ -635,8 +635,6 @@ $\Gamma$, the program $P$ has tuple type $\rho$.''
 
 \end{figure}
 
-\fixme{Some rules are missing.}
-
 \FloatBarrier
 \section{Checking Uniqueness Types}
 \label{sec:uniqueness-formalism}
@@ -764,12 +762,11 @@ to their aliasing sets.
 \tagsc{Alias-Update}
 \end{equation*}
 
-\caption{Aliasing rules for simple expressions.}
+\caption{Aliasing rules for simple expressions.  For simplicity, we
+  treat only the single-parameter case for loops and function calls.}
 \label{fig:aliasing-rules-1}
 \end{figure}
 
-\fixme{only 1 parameter in loop case}
-\fixme{only 1 return in apply case}
 \begin{figure}
 \sempart{Expression aliases (continued)}{\expAliases{\Sigma}{e}{\langle \sigma_{1}, \ldots, \sigma_{n} \rangle}}
 

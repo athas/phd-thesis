@@ -36,7 +36,7 @@ application-level performance that is in many cases competitive with
 hand-written GPU code.
 
 Sixth, we make the Futhark compiler freely available with full source
-code and extensive documentation, to serve both as a basis for further
+code and documentation, to serve both as a basis for further
 research into functional array programming, and as a useful tool
 for parallel programming in practise.
 
@@ -48,22 +48,24 @@ for parallel programming in practise.
 
 \begin{abstract}
 
-  Denne afhandling beskriver designet og implementeringen af Futhark,
-  et enkelt data-parallelt, sideeffekt-fri, og funktionsorienteret
-  geledsprog, der frembyder en maskinneutral programmeringsmodel.  Vi
-  beskriver ligeledes en optimerende Futhark-oversætter der producerer
-  effektiv OpenCL-kode målrettet afvikling på GPUer.  Den overordnede
-  designfilosofi er at søge en balance mellem functionsorienterede og
-  imperative fremgangsmåder.  Vores konkrete bidrag er som følger:
+  Denne afhandling beskriver udformningen og implementeringen af
+  Futhark, et enkelt data-parallelt, sideeffekt-frit, og
+  funktionsorienteret geledsprog, der frembyder en maskinneutral
+  programmeringsmodel.  Vi beskriver ligeledes den tilhørende
+  optimerende Futhark-oversætter, som producerer effektiv OpenCL-kode
+  målrettet afvikling på GPUer.  Den overordnede designfilosofi er at
+  ydnytte både functionsorienterede og imperative fremgangsmåder.
+  Vores konkrete bidrag er som følger:
 
   For det første præsenterer vi en moderat fladningstransformering,
-  der er i stand til at udnytte blot den nødvendige grad af
-  parallelisme, og omdanne den overskydende parallelisme til effektiv
-  sekventiel kode.  Denne sekventielle kode bibeholder den oprindelige
-  lageradgangsmønsterinformation, hvilket tillader yderligere
-  lagertilgangsforbedringer.  Vi demonstrerer denne styrke ved at give
-  eksempler på automatisk blokafvikling af løkker, samt forbedring af
-  lageradgangsmønstre.
+  der er i stand til at udnytte blot den grad af parallelisme som er
+  nødvendig eller lettilgængelig, og omdanne overskydende parallelisme
+  til effektiv sekventiel kode.  Denne sekventielle kode bibeholder
+  oprindelig lageradgangsmønsterinformation, hvilket tillader
+  yderligere lagertilgangsforbedringer.  Vi demonstrerer nytten af
+  denne egenskab ved at give eksempler på automatisk blokafvikling af
+  løkker, samt ændring af lageradgangsmønstre således at GPUens
+  lagersystem udnyttes bedst muligt.
 
   For det andet beskriver vi, med henblik på understøttelse af
   fladningstransformeringen, et enkelt typesystem med
@@ -78,21 +80,22 @@ for parallel programming in practise.
 
   For det fjerde indfører vi, med henblik på at understøtte effektiv
   sekventiel kode indlejret i de parallelle sprogkonstruktioner,
-  understøttelse for direkte ændringer i geledværdier, med et
-  typesystem der sikrer at effekten ikke kan observeres, og at
-  lighedsbaseret ræsonnering stadigvæk er muligt.
+  understøttelse for direkte ændringer i geledværdier.  Denne
+  understøttelse sikres af et typesystem der garanterer at effekten
+  ikke kan observeres, og at lighedsbaseret ræsonnering stadigvæk er
+  muligt.
 
   For det femte foretager vi en ydelsessammenlining indeholdende 21
-  programmer, med henblik på at demonstrere sprogets design og
-  oversætteroptimeringernes indvirkning, som viser at Futhark's
-  overordnede ydelse i mange tilfælde er konkurrencedygtig med
-  håndskreven GPU-kode.
+  programmer, med henblik på at demonstrere sprogets praktiske
+  anvendelighed og oversætteroptimeringernes indvirkning.  Vores
+  resultater viser at Futhark's overordnede ydelse i mange tilfælde er
+  konkurrencedygtig med håndskreven GPU-kode.
 
   For det sjette gør vi Futhark-oversætteren frit tilgængelig,
-  indeholdende al kildetekst og omfattende dokumentation, således at
-  den kan tjene både som et udgangspunkt for yderligere forskning i
-  funktionsorienteret geledprogrammering, samt som et nyttigt værktøj
-  til anvendt parallelprogrammering.
+  inklusive al kildetekst og omfattende dokumentation, således at den
+  kan tjene både som et udgangspunkt for yderligere forskning i
+  funktionsorienteret geledprogrammering, samt som et praktisk
+  andvendeligt værktøj til parallelprogrammering.
 
 \end{abstract}
 

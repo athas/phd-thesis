@@ -559,12 +559,13 @@ two more exotic SOACs, \lstinline{stream_red} and
 Requiring associativity and neutral elements for the functional
 arguments in \lstinline{reduce} and \lstinline{scan} is what enables a
 parallel implementation.  For reductions, performance can be improved
-further if the operator is also commutative\fixme{add reference}.  For
-simple functions, the Futhark compiler can detect commutativity, but
-otherwise the programmer can use a special \lstinline{reduce_comm}
-SOAC that behaves exactly like \lstinline{reduce}, but carries the
-promise that the function is commutative.  There is no such variant
-for \lstinline{scan}, because scans do not benefit from commutative
+further if the operator is also commutative (see
+\cref{sec:calculus-implementation}).  For simple functions, the
+Futhark compiler can detect commutativity, but otherwise the
+programmer can use a special \lstinline{reduce_comm} SOAC that behaves
+exactly like \lstinline{reduce}, but carries the promise that the
+function is commutative.  There is no such variant for
+\lstinline{scan}, because scans do not benefit from commutative
 operators.
 
 In all cases, it is the programmers responsibility to ensure that the
@@ -2318,6 +2319,21 @@ parallelism by vertical fusion, and untilizing unused registers by
 software prefetching and loop unrolling, while multicore
 optimizations~\cite{Gordon:2006:ECT:1168857.1168877} are aimed at
 finding the right mix of task, data and pipeline parallelism.
+
+Recent work has been done on ameliorating the downsides of full
+flattening.  These include data-only
+flattening~\cite{Bergstrom:2013:DFN:2442516.2442525}, and
+\textit{streaming}~\cite{madsen2016streaming}.  The streaming approach
+uses the type system to classify sequences into arrays and
+\textit{streams}, where the latter do not support random access, but
+only structured operations such as \texttt{map}, \texttt{reduce}, and
+\texttt{scan}.  This allows an incremental dataflow-oriented execution
+model that avoids the explosion in memory usage that often accompanies
+full flattening.  Despite the similarity in naming, Futhark's
+\StreamMap{} and \StreamRed{} operators do not directly support this
+notion of streaming, as they do not ban random access into arbitrary
+arrays (including the array being ``streamed'') from within the chunk
+function.
 
 %%% Local Variables:
 %%% mode: latex

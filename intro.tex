@@ -1,17 +1,18 @@
 \chapter{Introduction}
 
 This thesis describes the design and implementation of
-\textit{Futhark}, a data parallel functional array language.
-Futhark is a small programming language that is superficially similar
-to established functional languages such as OCaml and Haskell, but
-with restrictions and extensions meant to permit compilation into
-efficient parallel code.  While this thesis contains techniques that
-could be applied in other settings, Futhark has been the overarching
-context for our work.  We demonstrate the applicability and efficiency
-of the techniques by their application in the Futhark compiler, and
-the performance of the resulting code.  Apart from serving as a
-vehicle for compiler research, Futhark is also a programming language
-that is useful in practice for high-performance parallel programming.
+\textit{Futhark}, a data parallel functional array language.  Futhark,
+named after the first six letters of the Runic alphabet, is a small
+programming language that is superficially similar to established
+functional languages such as OCaml and Haskell, but with restrictions
+and extensions meant to permit compilation into efficient parallel
+code.  While this thesis contains techniques that could be applied in
+other settings, Futhark has been the overarching context for our work.
+We demonstrate the applicability and efficiency of the techniques by
+their application in the Futhark compiler, and the performance of the
+resulting code.  Apart from serving as a vehicle for compiler
+research, Futhark is also a programming language that is useful in
+practice for high-performance parallel programming.
 
 It is the task of the compiler to map the high-level portable
 parallelism to low-level parallel code that can be executed by some
