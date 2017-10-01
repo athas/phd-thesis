@@ -678,22 +678,33 @@ is needed to saturate the machine, but no more.
 
 \begin{figure*}
   \centering
-  Here goes a graph.
-  \caption{Summation as a tree reduction.}
+  \includegraphics[scale=2]{img/tree_reduction.pdf}
+  \caption{Summation of sixteen elements as a tree reduction.}
   \label{fig:tree-summation}
 \end{figure*}
 
 \begin{figure*}
   \centering
-  Here goes a graph.
-  \caption{Summation as a chunked tree reduction.}
+  \includegraphics[scale=2]{img/chunked_reduction.pdf}
+  \caption{Summation of sixteen elements by four threads each
+    processing four elements sequentially, then perfoming a tree
+    reduction to combine the four per-thread results.}
   \label{fig:chunked-summation}
 \end{figure*}
 
 \begin{figure*}
   \centering
 
-  \caption{The runtime of a summation implemented as either a tree reduction or a chunked tree reduction.}
+  \input{img/reductions.tex}
+
+  \caption{The runtime of a summation implemented as either a tree
+    reduction or a chunked reduction, and executed on an NVIDIA K40
+    GPU.  The runtime of chunked reduction follows that of tree
+    reduction in the degenerate case where we have insufficient input
+    to saturate the machine, after which chunked reduction performs
+    much better.  Indeed, until we reach approximately ten million
+    input elements, the addition of extra work has no effect on
+    runtime, as it is covered by latency hiding.}
   \label{fig:tree-vs-chunked}
 \end{figure*}
 
@@ -706,12 +717,12 @@ elements, producing one intermediate result per thread.  We then
 launch a second reduction over all these intermediate results.  This
 second reduction can also be done in parallel, or can be sequential if
 $k$ is sufficiently small.  This approach is shown on
-\Cref{fig:chunked-summation}.  A rough performance comparison
-between sample implementations of the two approaches to reduction is
-shown on \Cref{fig:tree-vs-chunked}?.  On a sequential machine,
-we can simply set $k=1$, and not exploit any parallelism at all.
-Efficient sequentialisation is particularly important (and also more
-difficult) when it comes to handling nested parallelism, as it enables
+\Cref{fig:chunked-summation}.  A rough performance comparison between
+sample implementations of the two approaches to reduction is shown on
+\Cref{fig:tree-vs-chunked}.  On a sequential machine, we can simply
+set $k=1$, and not exploit any parallelism at all.  Efficient
+sequentialisation is particularly important (and also more difficult)
+when it comes to handling nested parallelism, as it enables
 locality-of-reference optimisations as we shall see in
 Section~\ref{sec:nested-parallelism}.
 
