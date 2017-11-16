@@ -7,13 +7,13 @@ type mass = f32
 type position = vec2.vec
 type acceleration = vec2.vec
 type velocity = vec2.vec
-type body = (position, mass, velocity, acceleration, argb.colour)
+type body = (position, mass, velocity, argb.colour)
 
 let mass_from_colour (c: argb.colour): f32 =
   let (r,g,b,_) = argb.to_rgba c
   in f32.max 0.3f32 (3f32 - (r + g + b))
 
-let accel (epsilon: f32) ((pi, _, _, _ , _):body) ((pj, mj, _, _ , _): body)
+let accel (epsilon: f32) ((pi, _, _, _):body) ((pj, mj, _, _): body)
         : velocity =
   let r = pj vec2.- pi
   let rsqr = vec2.dot r r + epsilon * epsilon
@@ -22,38 +22,42 @@ let accel (epsilon: f32) ((pi, _, _, _ , _):body) ((pj, mj, _, _ , _): body)
   let s = mj * invr3
   in vec2.scale s r
 
-let calc_accels [n] (epsilon: f32) (bodies: []body) (attractors: [n][]body): []acceleration =
-  let move (body: body) (attractors': []body) =
-        let accels = map (accel epsilon body) attractors'
+let calc_accels [n] (epsilon: f32) (bodies: [n]body) (attractors: []body): [n]acceleration =
+  let move (body: body) =
+        let accels = map (accel epsilon body) attractors
         in reduce_comm (vec2.+) (0f32, 0f32) accels
-  in map move bodies attractors
+  in map move bodies
 
-let advance_body (time_step: f32) ((pos, mass, vel, _, c):body) (acc:acceleration): body =
+let advance_body (time_step: f32) ((pos, mass, vel, c):body) (acc:acceleration): body =
   let acc' = vec2.scale mass acc
   let pos' = pos vec2.+ vec2.scale time_step vel
   let vel' = vel vec2.+ vec2.scale time_step acc'
-  in (pos', mass, vel', acc', c)
+  in (pos', mass, vel', c)
 
-let advance_bodies [n] (epsilon: f32) (time_step: f32) (bodies: [n]body) (attractors: [n][]body): [n]body =
+let advance_bodies [n] (epsilon: f32) (time_step: f32) (bodies: [n]body) (attractors: []body): [n]body =
   let accels = calc_accels epsilon bodies attractors
   in map (advance_body time_step) bodies accels
 
 let calc_revert_accels [n] (epsilon: f32) (bodies: []body) (orig_bodies: [n]body): []acceleration =
+  let weighten ((pos, mass, vel, c): body) =
+        (pos, 3000f32, vel, c)
   let move (body: body) (orig_body: body) =
-        accel epsilon orig_body body
+        (accel epsilon body (weighten orig_body))
   in map move bodies orig_bodies
 
 let revert_bodies [n] (epsilon: f32) (time_step: f32) (bodies: [n]body) (orig_bodies: [n]body): [n]body =
   let accels = calc_revert_accels epsilon bodies orig_bodies
-  in map (advance_body time_step) bodies accels
+  let friction ((pos, mass, vel, c): body) (orig_body: body) =
+        (pos, mass, vec2.scale 0.9f32 vel, c)
+  in map (advance_body time_step) (map friction bodies orig_bodies) accels
 
 let only_nonwhites (bodies: []body) =
-  let not_white ((_, _, _, _, col): body) = col != argb.white
+  let not_white ((_, _, _, col): body) = col != argb.white
   in filter not_white bodies
 
 let bodies_from_pixels [h][w] (image: [h][w]i32): []body =
   let body_from_pixel (x: i32, y: i32) (pix: argb.colour) =
-        ((f32.i32 x, f32.i32 y), mass_from_colour pix, (0f32, 0f32), (0f32, 0f32), pix)
+        ((f32.i32 x, f32.i32 y), mass_from_colour pix, (0f32, 0f32), pix)
   in reshape (h*w)
      (map (\(row, x) -> map (\(pix, y) -> body_from_pixel (x,y) pix) (zip row (iota w)))
             (zip image (iota h)))
@@ -61,7 +65,7 @@ let bodies_from_pixels [h][w] (image: [h][w]i32): []body =
 let bodies_from_image [h][w] (image: [h][w]i32): []body =
   only_nonwhites (bodies_from_pixels image)
 
-let render_body (_h: i32) (w: i32) (((x,y), _, _, _, c): body): (i32, i32) =
+let render_body (_h: i32) (w: i32) (((x,y), _, _, c): body): (i32, i32) =
   if c == argb.white then (-1, c) else (i32.f32 x * w + i32.f32 y, c)
 
 type state [h][w] = { image: [h][w]i32
@@ -94,7 +98,7 @@ entry start_nbody [h][w] (state: state [h][w]): state [h][w] =
 
 entry bodies_and_flags (state: state [][]): ([]i32, []bool) =
   let bodies = bodies_from_pixels state.image
-  in ([0..<length bodies], map (\b -> b.5 != argb.white) bodies)
+  in ([0..<length bodies], map (\b -> b.4 != argb.white) bodies)
 
 entry start_nbody_prefiltered [h][w] (state: state [h][w]) (is: []i32): state [h][w] =
   let all_bodies = bodies_from_pixels state.image
@@ -108,15 +112,15 @@ entry start_nbody_prefiltered [h][w] (state: state [h][w]) (is: []i32): state [h
 let num_attractors [n] (_bodies: [n]body) = (5000*5000) / n
 
 entry revert [h][w] ({image, bodies, offset, orig_bodies, reverting}: state [h][w]): state [h][w] =
-  { image, bodies, offset, orig_bodies, reverting = true }
+  { image, bodies, offset, orig_bodies, reverting = !reverting }
 
 entry advance [h][w] ({image, bodies, offset, orig_bodies, reverting}: state [h][w]): state [h][w] =
   let n = length bodies
   let chunk_size = i32.min (num_attractors bodies) (length bodies - offset)
   let attractors = bodies[offset:offset+chunk_size]
   let bodies' = if reverting
-                then revert_bodies 50f32 1f32 bodies orig_bodies
-                else advance_bodies 50f32 1f32 bodies (replicate n attractors)
+                then revert_bodies 100f32 2f32 bodies orig_bodies
+                else advance_bodies 50f32 1f32 bodies attractors
   in { image,
        orig_bodies,
        reverting,
