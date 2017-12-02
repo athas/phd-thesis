@@ -54,12 +54,12 @@ to reduce the overhead to be negligible in the common case.
 \label{sec:compiler-design}
 
 The Futhark compiler is implemented in Haskell, and is designed as a
-conventional syntax-directed translator.  The compiler is comprised as
-a number of \textit{passes}, which can be seen as functions that
-accept a program as input, and produce a program as output.  Some
-passes perform rewrites of a program in some representation, while
-other passes lower the program to a more specialised or lower-level
-representation.
+conventional syntax-directed translator.  The compiler is structured
+as a sequence of \textit{passes}, each of which can be seen as
+functions that accept a program as input, and produce a program as
+output.  Some passes perform rewrites of a program in some
+representation, while other passes lower the program to a more
+specialised or lower-level representation.
 
 The compiler contains two different compiler pipelines; one for
 generating a sequential program, and one for generating a program with
@@ -88,47 +88,47 @@ releases of the compiler.
 The pipeline proceeds with the following passes in order as follows:
 
 \begin{description}
-\item[Internalisation and Desugaring] The source Futhark language is
+\item[Internalisation and Desugaring:] The source Futhark language is
   translated into the core language (\cref{sec:futhark-core-ast}).  In
   particular, modules and polymorphic functions are removed through
   specialisation (outside the scope of this thesis), all tuples are
   flattened, and arrays of tuples are transformed into tuples of
-  arrays, using the technique shown on \ref{fig:calc-tuple-transform}.
+  arrays, using the technique shown on \cref{fig:calc-tuple-transform}.
   This is also the pass where where size inference is performed
   (\cref{chap:size-analysis}).
 
-\item[Inlining and Dead Function Removal] All functions are
+\item[Inlining and Dead Function Removal:] All functions are
 inlined.  As the Futhark language presently does not support recursive
 functions, this is always possible.  This may result in significant
 growth in code size, and so future work should investigate more
 conservative approaches.  Inlining is critical to making subsequent
 optimisations possible, however.  On GPUs, our main target platform,
 all functions inside kernels are automatically inlined in any case, so
-we do not lose much by inlining at the Futhark-level sas well.
+we do not lose much by inlining at the Futhark-level as well.
 
-\item[SOAC Fusion] SOACs in a producer-consumer relationship, or
+\item[SOAC Fusion:] SOACs in a producer-consumer relationship, or
 simply adjacent and looping over arrays of identical size, are fused
 (\cref{chap:fusion}).
 
-\item[Kernel Extraction] A moderate flattening algorithm is
+\item[Kernel Extraction:] A moderate flattening algorithm is
 applied to the program, which transforms nests of SOACS into
 flat-parallel kernels (\cref{chap:kernel-extraction}).  The kernels
 produced here are not yet low-level GPU kernels, but a higher-level
 representation that still abstracts many details, in particular issues
 of memory allocation.  Nested parallelism is gone after this pass.
 
-\item[Coalescing Fixes] The kernels generated in the previous
+\item[Coalescing Fixes:] The kernels generated in the previous
 pass are inspected, and non-coalesced array access patterns are
 resolved by semantically transposing the arrays in question
 (\cref{sec:automatic-coalescing}).
 
-\item[Loop Tilng] Loop tiling is performed inside the generated
+\item[Loop Tiling:] Loop tiling is performed inside the generated
 kernels (\cref{sec:automatic-tiling}).  This is the last pass we
 discuss in detail in this thesis---the remainder are concerned with
 various technical minutiae, which, while extremely time-consuming and
 challenging to implement, are of lesser scientific importance.
 
-\item[Memory Allocation] Explicit allocations are inserted in
+\item[Memory Allocation:] Explicit allocations are inserted in
 the program, in a scheme similar to region
 inference~\cite{mlkit_retrospective}.  Every array becomes associated
 with a ``memory block'', the allocation of which can be hoisted out of
@@ -141,7 +141,7 @@ manipulate memory allocations as program constructs is important.  We
 use this to arrange the program such that all memory is pre-allocated
 before entering GPU kernels, inside which allocation is not supported.
 
-\item[Double Buffering] We perform double buffering to enable
+\item[Double Buffering:] We perform double buffering to enable
 the hosting of memory allocations out of loops (in particular loops
 that are inside parallel kernels).  For technical reasons, we
 currently do not perform double buffering in the usual way, with
@@ -149,16 +149,16 @@ pointer swapping, but instead insert extra copies for every iteration
 of the loop.  In \cref{sec:rodinia} we shall see an example where this
 significantly impacts our performance.
 
-\item[Memory Expansion] It is not safe to naively hoist
+\item[Memory Expansion:] It is not safe to naively hoist
 allocations out of parallel kernels.  When hoisting such allocations,
 we first have to perform \textit{expansion}, such that one per-thread
 private allocation of $b$ bytes becomes one shared allocation of
 $n\times{}b$ bytes, where $n$ is the number of threads.  This requires
 all allocations to be at the top level of kernels, and for their size
 to be expressible in terms of (or at least bounded by) variables whose
-value is known before the kernel.
+value is known before the kernel invocation.
 
-\item[Imperative IR Code Generation] The flat-parallel Futhark
+\item[Imperative IR Code Generation:] The flat-parallel Futhark
 program with explicit allocations is transformed into a low-level
 imperative intermediate representation (IR).  This IR is similar to C,
 but significantly simpler, and much more explicit.  No optimisations
@@ -167,7 +167,7 @@ for representing GPU kernels, whose bodies are also expressed with the
 imperative IR.  This pass fails if any allocations remain inside
 parallel kernels.
 
-\item[Final Code Generation] The imperative IR is transformed
+\item[Final Code Generation:] The imperative IR is transformed
 into host-level (CPU) code and actual OpenCL kernels.  The host-level
 code is either C or Python, with calls to the OpenCL library, while
 OpenCL kernels are in OpenCL C (a restricted dialect of C).  We write
@@ -179,7 +179,7 @@ options, may invoke a C compiler to generate an executable.
 
 The preceding list of passes is incomplete.  Between almost every
 pass, we perform a range of simplifications and conventional
-optimisations.  There are too many in number, and too individually
+optimisations.  These are too numerous, and too individually
 uninteresting, to be discussed in detail, but a few deserve mention:
 
 \begin{description}
@@ -212,16 +212,17 @@ rewrite rules to every expression.  The process is repeated until a
 fixed point is reached.  This approach is fairly similar to the one
 used by the Glasgow Haskell Compiler (GHC)~\cite{jones2001playing}.
 The main difference is that in GHC the rules are expressed as
-user-provided equalities, but the simplification rules in Futhark are
-hardwired into the compiler in the form of monadic Haskell functions.
-This allows the Futhark rewrite rules to be significantly more
-powerful, as they can inspect the surrounding environment, but they
-are not user-extensible.  As an example, \cref{fig:removeDeadMapping}
-defines a rule that removes results of a \kw{map} that are not used
-subsequently.  This rule depends on information about what happens
-\textit{after} the expression, and is thus applied during a bottom-up
-traversal.  This is the sole exception to our general policy of not
-showing compiler implementation code in this thesis.
+user-provided equalities, while the simplification rules in Futhark
+are hardwired into the compiler in the form of arbitrary Haskell
+functions.  This allows the Futhark rewrite rules to be significantly
+more powerful, as they can inspect the surrounding environment, but
+they are not user-extensible.  As an example,
+\cref{fig:removeDeadMapping} defines a rule that removes results of a
+\kw{map} that are not used subsequently.  This rule depends on
+information about what happens \textit{after} the expression, and is
+thus applied during a bottom-up traversal.  This figure constitutes
+the sole exception to our general policy of not showing compiler
+implementation code in this thesis.
 
 \begin{figure}
 \begin{lstlisting}[basicstyle=\small\ttfamily,language=Haskell]
@@ -229,7 +230,7 @@ removeDeadMapping :: (MonadBinder m,
                       Op (Lore m) ~ SOAC (Lore m))
                      => BottomUpRule m
 removeDeadMapping (_, used)
-                  (Let pat _ (Op (Map cs width fun arrs))) =
+                  (Let pat _ (Op (Map width fun arrs))) =
   let ses = bodyResult $ lambdaBody fun
       isUsed (bindee, _, _) =
         (`UT.used` used) $ patElemName bindee
@@ -242,13 +243,14 @@ removeDeadMapping (_, used)
                  }
   in if pat /= Pattern [] pat'
      then letBind_ (Pattern [] pat') $
-            Op $ Map cs width fun' arrs
+            Op $ Map width fun' arrs
      else cannotSimplify
 removeDeadMapping _ _ = cannotSimplify
 \end{lstlisting}
   \caption{An example of a simplification rule from the Futhark
     compiler (slightly reformatted for presentation purposes).  This
-    rule removes \kw{map} results that are never used.}
+    rule removes the computation of those results of a \kw{map} that
+    are never subsequently used.}
   \label{fig:removeDeadMapping}
 \end{figure}
 
@@ -409,11 +411,11 @@ the strict syntax for lambdas, and write for example \lstinline{(+)}
 for \lstinline{(\x y->x+y)}, or \lstinline{(+2)} instead of
 \lstinline{(\x->x+2)}.
 
-On occasion, we will need bind variables whose names we do not care
+On occasion, we will need to bind variables whose names we do not care
 about.  In these cases we will use an underscore to indicate that the
 name is irrelevant.  For example:
 \begin{lstlisting}
-map (\_ y _ -> x + 2) xs ys zs
+map (\_ y _ -> y + 2) xs ys zs
 \end{lstlisting}
 
 \begin{figure}
@@ -421,7 +423,7 @@ map (\_ y _ -> x + 2) xs ys zs
 
 \begin{tabular}{lp{58mm}}
   $\emph{op}~a_{1}~\ldots~a_{n}$ & Description \\ \hline
-  \lstinline[mathescape]!size $c$ $x$! & Returns the size of dim $x$ of $x$, where $x$ must be a non-negative integer literal. \\
+  \lstinline[mathescape]!size $c$ $x$! & Returns the size of dim $c$ of $x$, where $c$ must be a non-negative integer literal. \\
   \lstinline[mathescape]!iota $x$! & Returns the vector $[0,\ldots, x-1]$. \\
   \lstinline[mathescape]!replicate $y$ $x$! & Returns an array of rank one higher than $x$'s rank, containing an $y$-times replication of $x$.\\
   \lstinline[mathescape]!reshape ($y_{1},\ldots,y_{n}$) $x$! & Return an array of shape $y_{1}\times\ldots\times y_{n}$ containing the row-major elements of $x$.  It is a dynamic error if $x$ does not contain exactly $y_{1}\times\ldots\times y_{n}$ elements. \\
@@ -436,7 +438,7 @@ map (\_ y _ -> x + 2) xs ys zs
 \begin{tabular}{lp{80mm}}
   $\emph{op}~\nseq{a}{l}$ & Description \\ \hline
   \lstinline[mathescape]!map $\lambda$ $\nseq{x}{n}$! & Apply the $n$-ary function $\lambda$ simultaneously to consecutive elements of $x_{1}\ldots{}x_{n}$, producing an array of the results.  If $\lambda$ returns $k$ values, $k$ arrays are returned. \\
-  \lstinline[mathescape]!scatter $x$ $y$ $z$! & For all $i$, write $z[i]$ to position $y[j]$ in $x$.  Consumes $x$ and semantically returns a new array.  The result is unspecified if different values are written to the same position.  Out-of-bound writes have no effect. \\
+  \lstinline[mathescape]!scatter $x$ $y$ $z$! & For all $i$, write $z[i]$ to $x[y[j]]$.  Consumes $x$ and semantically returns a new array.  The result is unspecified if different values are written to the same position.  Out-of-bound writes have no effect. \\
   \lstinline[mathescape]!reduce $\lambda$ ($\nseq{y}{n}$) $\nseq{x}{n}$! &
                                                                                                Perform a reduction of arrays $x_{1}, \ldots, x_{n}$ via the $2n$-ary function $\lambda$, producing $n$ values.  The values $y_{1}, \ldots, y_{n}$ constitute a neutral argument for $\lambda$.
   \\
@@ -460,14 +462,14 @@ map (\_ y _ -> x + 2) xs ys zs
   {\lstinline!replicate!} & : & $\forall\alpha.\texttt{i32} \rightarrow \alpha \rightarrow []\alpha$ \\
   \lstinline[mathescape]!reshape! & : & $\forall\alpha.(\texttt{i32}_{1}, \ldots, \texttt{i32}_{n})\rightarrow[]_{1}\cdots[]_{m}\alpha\rightarrow[]_{1}\cdots[]_{n}\alpha$ \\
   \lstinline[mathescape]!rearrange ($\nseq{c}{n}$)! & : & $\forall\alpha.[]_{1}\cdots[]_{n}\alpha\rightarrow[]_{1}\cdots[]_{n}\alpha$ \\
-  {\lstinline!map!} & : & $\forall\nseq{\alpha}{n}\nseq{\beta}{m}.(\nseq{\alpha}{n} \rightarrow (\nseq{\beta}{m})) \rightarrow \nseq{[]\alpha_i}{n} \rightarrow (\nseq{\beta}{m})$ \\
-  {\lstinline!scatter!} & : & $\forall \nseq{\alpha}{n}.(\nseq{[]\alpha_{i}}{n}) \rightarrow (\nseq{[]\texttt{i32}}{n}) \rightarrow (\nseq{[]\alpha_i}{n}) \rightarrow (\nseq{[]\beta_i}{n})$\\
-  {\lstinline!reduce!} & : & $\forall\nseq{\alpha}{n}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\nseq{\alpha}{n})) \rightarrow (\nseq{\alpha}{n}) \rightarrow \nseq{[]\alpha_i}{n} \rightarrow (\nseq{\alpha}{n})$ \\
-  {\lstinline!scan!} & : & $\forall\nseq{\alpha}{n}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\nseq{\alpha}{n})) \rightarrow (\nseq{\alpha}{n}) \rightarrow \nseq{[]\alpha_i}{n} \rightarrow (\nseq{[]\alpha_i}{n})$ \\
-  {\lstinline!filter!} & : & $\forall\nseq{\alpha}{n}.(\nseq{\alpha}{n} \rightarrow \texttt{bool}) \rightarrow \nseq{[]\alpha_i}{n} \rightarrow (\nseq{[]\alpha_i}{n})$ \\
-  \kw{stream\_map} & : & $\forall\nseq{\alpha}{n}~\nseq{\beta}{m}.(\nseq{[]\alpha_{i}}{n} \rightarrow (\nseq{[]\beta_{i}}{m})) \rightarrow \nseq{[]\alpha_i}{n} \rightarrow (\nseq{[]\beta}{m})$ \\
+  {\lstinline!map!} & : & $\forall\nseq{\alpha}{n}\nseq{\beta}{m}.(\nseq{\alpha}{n} \rightarrow (\nseq{\beta}{m})) \rightarrow \nseq{[]\alpha}{n} \rightarrow (\nseq{\beta}{m})$ \\
+  {\lstinline!scatter!} & : & $\forall \nseq{\alpha}{n}.(\nseq{[]\alpha_{i}}{n}) \rightarrow (\nseq{[]\texttt{i32}}{n}) \rightarrow (\nseq{[]\alpha}{n}) \rightarrow (\nseq{[]\beta}{n})$\\
+  {\lstinline!reduce!} & : & $\forall\nseq{\alpha}{n}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\nseq{\alpha}{n})) \rightarrow (\nseq{\alpha}{n}) \rightarrow \nseq{[]\alpha}{n} \rightarrow (\nseq{\alpha}{n})$ \\
+  {\lstinline!scan!} & : & $\forall\nseq{\alpha}{n}.(\nseq{\alpha}{n} \rightarrow \nseq{\alpha}{n} \rightarrow (\nseq{\alpha}{n})) \rightarrow (\nseq{\alpha}{n}) \rightarrow \nseq{[]\alpha}{n} \rightarrow (\nseq{[]\alpha}{n})$ \\
+  {\lstinline!filter!} & : & $\forall\nseq{\alpha}{n}.(\nseq{\alpha}{n} \rightarrow \texttt{bool}) \rightarrow \nseq{[]\alpha}{n} \rightarrow (\nseq{[]\alpha}{n})$ \\
+  \kw{stream\_map} & : & $\forall\nseq{\alpha}{n}~\nseq{\beta}{m}.(\nseq{[]\alpha_{i}}{n} \rightarrow (\nseq{[]\beta_{i}}{m})) \rightarrow \nseq{[]\alpha}{n} \rightarrow (\nseq{[]\beta}{m})$ \\
   \kw{stream\_red} & : & $\forall\nseq{\alpha}{n}~\nseq{\beta}{m}.(\nseq{\beta}{m} \rightarrow \nseq{\beta}{m} \rightarrow (\nseq{\beta}{m})) \rightarrow (\nseq{[]\alpha_{i}}{n} \rightarrow (\nseq{\beta_{i}}{m}))$ \\
-  & & $~~~\rightarrow \nseq{[]\alpha_i}{n} \rightarrow (\nseq{\beta}{m})$ \\
+  & & $~~~\rightarrow \nseq{[]\alpha}{n} \rightarrow (\nseq{\beta}{m})$ \\
 \end{tabular}
 \caption{Size-agnostic type schemes for operators, including various SOACs.}
 \label{fig:soacType}
@@ -487,7 +489,7 @@ types} that supports polymorphism in types and for which arguments to
 functions may themselves be functions:
 
 \begin{tabular}{lrl}
-$\etau$ & $::=$ & $\alpha~|~(\tau_{1}, \ldots, \tau_{n})~|~\etau_1 \rightarrow \etau_2~|~\etau \rightarrow \etau$ \\
+$\etau$ & $::=$ & $\alpha~|~(\tau_{1}, \ldots, \tau_{n})~|~\etau_1 \rightarrow \etau_2$ \\
 $\opty$ & $::=$ & $\forall\seq{\alpha}.\etau$
 \end{tabular}
 
@@ -543,7 +545,7 @@ rules allow inferences among sentences of the following forms:
 \item[$\Gamma \vda a : \tau / \ft$,] read ``under the assumptions
 $\Gamma$, the operator argument $a$ has type $\tau$ or function type
 $\ft$.''
-\item[$\Gamma \vd b : \rho$,] read ``under the assumptions $\Gamma$,
+\item[$\Gamma \vd e : \rho$,] read ``under the assumptions $\Gamma$,
   the expression $e$ has tuple type $\rho$.''
 \item[$\Gamma \vdP P : \rho$,] read ``under the assumptions
 $\Gamma$, the program $P$ has tuple type $\rho$.''
@@ -558,9 +560,9 @@ $\Gamma$, the program $P$ has tuple type $\rho$.''
 
 \fracc{}{\Gamma \vda x : \Gamma(x)}
 
-\fracc{\vdp p : \tty \sp \Gamma,p \vd b : \tty'}{\Gamma \vda \Fn{\tty'}{p}{b}: \tty \rightarrow \tty'}
+\fracc{\vdp p : \tty \sp \Gamma,p \vd e : \tty'}{\Gamma \vda (\Fn{\tty}{p}{e}): \tty \rightarrow \tty'}
 
-\fracc{}{\vdp (x_1, \ldots, x_n) : (\Gamma(x_1), \ldots, \Gamma(x_n))}
+\fracc{}{\Gamma \vda (x_1, \ldots, x_n) : (\Gamma(x_1), \ldots, \Gamma(x_n))}
 
 \sempart{Parameters}{\vdhp \hat{p} : \utty}
 
@@ -583,7 +585,7 @@ $\Gamma$, the program $P$ has tuple type $\rho$.''
 \sempart{Expressions}{\Gamma \vd e : \rho}
 
 \fracc{
-  \vdp \hat{p} : \rho \sp \Gamma \vd e_1 : \rho \\
+  \vdp p : \rho \sp \Gamma \vd e_1 : \rho \\
   \Gamma, p \vd e_2 : \rho'
 }{
   \Gamma \vd \Let{p}{e_1}{e_2} : \rho'
@@ -681,7 +683,7 @@ to their aliasing sets.
 \begin{equation*}
 \inference{
 }{
-  \expAliases{\Sigma}{(x_{1}, \ldots, x_{n})}{\langle \{ x_{1} \} \cup \Sigma(x_{1}), \ldots,  \{ x_{n} \} \cup \Sigma(x_{n}) \rangle}
+  \expAliases{\Sigma}{(x_{1}, \ldots, x_{n})}{\langle \Set{x_{1}} \cup \Sigma(x_{1}), \ldots,  \Set{x_{n}} \cup \Sigma(x_{n}) \rangle}
 }
 \tagsc{Alias-Tuple}
 \end{equation*}
@@ -693,7 +695,7 @@ to their aliasing sets.
   \expAliases{\Sigma, x_{i} \mapsto \sigma_{i}}{e_{2}}{\langle \nseq{\sigma'}{n} \rangle}
 }{
   \expAliases{\Sigma}{\Let{\nseq{(x:\tau)}{n}}{e_{1}}{e_{2}}}
-  {\langle \nseq{\sigma'}{n} \rangle \setminus \{\nseq{x}{n}\}}
+  {\langle \nseq{\sigma'_{i} \cup \Set{x_{i}}}{n} \rangle}
 }
 \tagsc{Alias-LetPat}
 \end{equation*}
@@ -709,7 +711,7 @@ to their aliasing sets.
 \begin{equation*}
 \inference{
 }{
-  \expAliases{\Sigma}{x}{\langle \{ x \} \cup \Sigma(x) \rangle}
+  \expAliases{\Sigma}{x}{\Sigma(x)}
 }
 \tagsc{Alias-Var}
 \end{equation*}
@@ -747,7 +749,7 @@ to their aliasing sets.
 \inference{
   \textrm{$x$ is of rank $>n$}
 }{
-  \expAliases{\Sigma}{\textsf{$x$[$\nseq{x}{n}$]}}{\langle \{ x \} \cup \Sigma(x) \rangle}
+  \expAliases{\Sigma}{\textsf{$x$[$\nseq{x}{n}$]}}{\langle \Set{x} \cup \Sigma(x) \rangle}
 }
 \tagsc{Alias-SliceArray}
 \end{equation*}
@@ -757,7 +759,7 @@ to their aliasing sets.
 }{
 \expAliases{\Sigma}{
   \text{\lstinline[mathescape]!$x_{a}$ with [$\nseq{e}{n}$] <-\ $e_{x}$!}
-}{\langle \Set{x_{a}} \cup \Sigma(x_{a}) \rangle}
+}{\langle \Sigma(x_{a}) \rangle}
 }
 \tagsc{Alias-Update}
 \end{equation*}
@@ -776,11 +778,11 @@ to their aliasing sets.
     \\
     \expAliases{\Sigma}{x_{1}}{\langle \sigma \rangle}
     \sp
-    \expAliases{\Sigma, x_{1} \mapsto \sigma}{e}{\langle \sigma' \rangle}
+    \expAliases{\Sigma, x_{1} \mapsto \sigma \cup \Set{x_{1}}}{e}{\langle \sigma' \rangle}
 }{
 \expAliases{\Sigma}
 {\text{\lstinline[mathescape]!loop ($x_{1}: \tau$) =\ $y_{2}$ for\ $z_{1}$ <\ $z_{2}$ do\ $e$!}}
-{\langle \sigma' \setminus \{x_{1}\} \rangle}
+{\langle \sigma' \setminus \Set{x_{1}} \rangle}
 }\tagsc{Alias-DoLoop-Nonunique}
 \end{equation*}
 
@@ -799,7 +801,7 @@ to their aliasing sets.
   \\
   \expAliases{\Sigma}{x_{i}}{\langle \sigma_{i} \rangle}
   \quad
-  \sigma = \bigcup_{\textrm{$\tau_{i}$ is not of form \texttt{*}$\tau'$}} \sigma_{i}
+  \sigma = \bigcup_{i} (\sigma_{i}\quad\textrm{if $\tau_{i}$ is not of form \texttt{*}$\tau'$})
 }{
   \expAliases{\Sigma}{\textsf{$f$ $x_{1}$ \ldots{} $x_{n}$}}
   {\langle \sigma \rangle}
@@ -902,18 +904,18 @@ to their aliasing sets.
 \end{figure}
 
 The aliasing rules are listed in Figures~\ref{fig:aliasing-rules-1}
-and \ref{fig:aliasing-rules-2}.  The \textsc{Alias-Var}-rule defines
-the aliases of a variable expression to be the alias set of the
-variable joined by the name of the variable itself - this is because
-$v \notin \Sigma(v)$, as can be seen by \textsc{Alias-LetPat}.  Alias
-sets for values produced by SOACs such as \kw{map} are empty.  We can
-imagine the arrays produced as \textit{fresh}, although the compiler
-is of course free to reuse memory if it can do so safely.  The
-\textsc{Alias-IndexArray} rule tells us that a scalar read from an
-array does not alias its origin array, but \textsc{Alias-SliceArray}
-dictates that an array slice does.  This fits the our intuition of how
-an implementation might implement these cases - scalars are read into
-registers, where array slicing is just offsetting a pointer.
+and \ref{fig:aliasing-rules-2}.  The \textsc{Alias-LetPat}-rule
+ensures that the aliases of a variable include the variable
+itself---that is, $v \in \Sigma(v)$.  This property is maintained by
+all binding constructs.  Alias sets for values produced by SOACs such
+as \kw{map} are empty.  We can imagine the arrays produced as
+\textit{fresh}, although the compiler is of course free to reuse
+memory if it can do so safely.  The \textsc{Alias-IndexArray} rule
+tells us that a scalar read from an array does not alias its origin
+array, but \textsc{Alias-SliceArray} dictates that an array slice
+does.  This fits the our intuition of how an implementation might
+implement these cases - scalars are read into registers, where array
+slicing is just offsetting a pointer.
 
 The most interesting aliasing rules are the ones for function calls
 (\textsc{Alias-Apply-Nonunique} and \textsc{Alias-Apply-Unique}).
@@ -983,8 +985,8 @@ input array.  This restriction also preserves the parallel semantics
 of \lstinline{map}, because different rows of a matrix can be safely
 updated in parallel.  An example can be seen on
 \Cref{fig:map-in-place-update}, which shows an in-place update nested
-inside an array.  To express this restriction, we define an auxiliary
-judgment:
+inside a \kw{map}.  To express this restriction, we define an
+auxiliary judgment:
 \[
 \consumedOK {\mathcal{P}}
 {\langle\mathcal{C}_{1},\mathcal{O}_{1}\rangle}
@@ -1092,7 +1094,7 @@ for a consumed parameter does not alias any other argument.
 }{
   \inPlaceSafe{
     \text{\lstinline[mathescape]!$v_{a}$ with [$\nseq{v}{n}$] <- $v_{v}$!}
-  }{\aliases{v_{a}}}{\aliases{v_{n}}}
+  }{\aliases{v_{a}}}{\aliases{v_{v}}}
 }\tagsc{Safe-Update}
 \end{equation*}
 
@@ -1118,9 +1120,9 @@ for a consumed parameter does not alias any other argument.
     \\
     \forall i.(\utau_{i}=\texttt{*}\tau) \Rightarrow (\forall j.j = i \vee v \notin \aliases{v_{j}})
     \\
-    \mathcal{C'} = \Set{\aliases{v_{i}}~|~v_{i}\in\nseq{v}{n}, x_{i} = v \wedge \tau_{i} = \texttt{*}\tau}
+    \mathcal{C'} = \bigcup_{i}\Set{\aliases{v_{i}}~|~v_{i}\in\nseq{v}{n}, x_{i} = v \wedge \tau_{i} = \texttt{*}\tau}
     \\
-    \mathcal{O'} = \Set{\aliases{v_{i}}~|~v_{i}\in\nseq{v}{n}} - \mathcal{C'}
+    \mathcal{O'} = \bigcup_{i}\Set{\aliases{v_{i}}~|~v_{i}\in\nseq{v}{n}} - \mathcal{C'}
   }{
     \inPlaceSafe{\textsf{$f$ $x_{1}$ \ldots{} $x_{n}$}}
     {\mathcal{C}'}{\mathcal{O}'}
@@ -1131,13 +1133,13 @@ for a consumed parameter does not alias any other argument.
 \inference{
   \inPlaceSafe{e}{\mathcal{C}}{\mathcal{O}}
   \\
-  \forall v\in\mathcal{C}.\exists i.x_{i} = v \wedge.\utau_{i} = \texttt{*}\tau
+  \forall v\in\mathcal{C}.\exists i.x_{i} = v \wedge \utau_{i} = \texttt{*}\tau
   \\
   \forall i.(\utau_{i}=\texttt{*}\tau) \Rightarrow (\forall j.j = i \vee v \notin \aliases{v_{j}})
   \\
   \mathcal{C'} = \Set{\aliases{v_{i}}~|~v_{i}\in\nseq{v}{n}, x_{i} = v \wedge \tau_{i} = \texttt{*}\tau}
   \\
-  \mathcal{O'} = \Set{\aliases{v_{i}}~|~v_{i}\in\nseq{v}{n}} - \mathcal{C'}
+  \mathcal{O'} = \Set{\aliases{v_{i}}~|~v_{i}\in\nseq{v}{n}} \setminus \mathcal{C'}
 }{
   \inPlaceSafe{
     \text{\lstinline[mathescape]!loop ($\nseq{x_{i}: \utau_{i}}{n}$) =\ $\nseq{v}{n}$ for\ $z_{1}$ <\ $z_{2}$ do\ $e$!}}
@@ -1195,7 +1197,7 @@ v \in \mathcal{P} \qquad \mathcal{P} \vdash \langle \emptyset, \mathcal{O} \rang
 
 \begin{equation*}
 \inference{
-\neg(v \in \mathcal{P}) \qquad \mathcal{P} \vdash \langle \emptyset, \mathcal{O} \rangle \triangle \langle \emptyset, \mathcal{O}' \rangle
+v \notin \mathcal{P} \qquad \mathcal{P} \vdash \langle \emptyset, \mathcal{O} \rangle \triangle \langle \emptyset, \mathcal{O}' \rangle
 }
 {
 \mathcal{P} \vdash \langle \emptyset, \{ v \} \cup \mathcal{O} \rangle \triangle \langle \emptyset, \{ v \} \cup \mathcal{O}' \rangle
@@ -1208,7 +1210,7 @@ v \in \mathcal{P} \qquad \mathcal{P} \vdash \langle \mathcal{C}, \mathcal{O} \ra
 }
 {
 \mathcal{P} \vdash \langle \{ v \} \cup \mathcal{C}, \mathcal{O} \rangle \triangle \langle \mathcal{P}[v] \cup \mathcal{C}', \mathcal{O}' \rangle
-}\tagsc{Observe-NonParam}
+}\tagsc{Consume-Param}
 \end{equation*}
   \caption{Checking parameter consumption.}
   \label{fig:parameter-consumption}
@@ -1248,7 +1250,7 @@ be supported without making evaluation order observable.  Our system
 is also somewhat more ``friendly'', as the former approaches deal with
 more complicated systems and rely on significantly more complex
 analysis, where for example aliasing of affine variables is banned,
-while in our case unique arrays maybe be used multiple times before
+while in our case unique arrays may be used multiple times before
 being consumed, with aliasing information used to flag the
 use-after-consumption cases.  Indeed, the uniqueness type system shown
 here only affects function definitions and function calls, with

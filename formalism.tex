@@ -36,7 +36,7 @@ The calculus presented here is simpler than the full Futhark
 programming language, yet also more flexible.  While the names of the
 combinators intentionally resemble those of Futhark (both the source
 language and the core language we will see later in the thesis), they
-are not exactly identical.
+are not fully identical.
 
 \section{Array Combinator Calculus}
 \label{sec:arraycombinators}
@@ -59,8 +59,8 @@ $$
 \end{figure}
 
 The array combinator calculus, a modified lambda calculus, describes
-terms that operate on array values.  The syntax is summarised on
-Figure~\ref{fig:arraycalculus_syntax}.  We make a distinction between
+terms that operate on array values.  The syntax is summarised in
+\cref{fig:arraycalculus_syntax}.  We make a distinction between
 \textit{ground values}
 $v$, which cannot contain functionals, and \textit{terms}
 $e$, which can.  An array value is written as a comma-separated
@@ -76,18 +76,18 @@ effectively bans irregular arrays, as there is no way to provide $n,m$
 such that the value $[[1,2],[3]]$ is classified by a type
 $[n][m]\texttt{i32}$.
 
-The tuple of a tuple is written as the types of its components
+The type of a tuple is written as the types of its components
 separated by commas and enclosed in parentheses.  Primitive
-(non-array) types are written as \texttt{t}.  Similarly to other
-published array formalisms MOA~\cite{moa}, we treat the
-curry/uncurry-isomorphic types $[m]([n]\tau) \cong [m \times n]\tau$
-as interchangeable.  This isomorphic treatment is justified because
-both streaming and indexed access to either type can be efficiently
-implemented without explicitly applying the isomorphism and
-materializing (storing) the result first.  This is different from the
-Futhark source language, where for example $[1][n]\tau$ and
-$[n][1]\tau$ are distinct types.  Likewise, a singleton array
-$[1]\tau$ is distinct from a scalar of type $\tau$.
+(non-array) types are written as \texttt{t}.  Similarly to the
+MOA~\cite{moa} array formalism, we treat the curry/uncurry-isomorphic
+types $[m]([n]\tau) \cong [m \times n]\tau$ as interchangeable.  This
+isomorphic treatment is justified because both streaming and indexed
+access to either type can be efficiently implemented without
+explicitly applying the isomorphism and materializing (storing) the
+result first.  This is different from the Futhark source language,
+where for example $[1][n]\tau$ and $[n][1]\tau$ are distinct types.
+Likewise, a singleton array $[1]\tau$ is distinct from a scalar of
+type $\tau$.
 
 Higher-order types $\hat{\tau}$ for classifying functions are a
 superset of value types.  Specifically, we do not permit first class
@@ -100,19 +100,20 @@ array of that same size, which could have the following type:
 \[
   \Pi n.[n]\tau\rightarrow[n]\tau
 \]
-This size of an array returned by a function must be expressible in
+The size of an array returned by a function must be expressible in
 terms of the size of its input.  This restriction could be lifted by
 supporting $\exists$-quantification in types, but we omit this for the
-array calculus.
+array calculus, although it is supported in the Futhark core language
+(\cref{chap:size-analysis}).
 
 \newcommand{\convV}{\mathcal{C}_{\mathcal{V}}}
 \newcommand{\convT}{\mathcal{C}_{\mathcal{T}}}
 
 We treat the \texttt{zip}/\texttt{unzip}-isomorphic types
-$[n](\tau_1, \ldots, \tau_k) \cong [n]\tau_1 , \ldots , [n]\tau_k$ as
+$[n](\tau_1, \ldots, \tau_k) \cong ([n]\tau_1 , \ldots , [n]\tau_k)$ as
 interchangeable in any context.  This is justified as any array of
 tuples can be converted into a corresponding tuple of arrays, as shown
-on Figure~\ref{fig:calc-tuple-transform}.  The function $\convV(v)$
+in \cref{fig:calc-tuple-transform}.  The function $\convV(v)$
 rewrites a value $v$ such that no arrays of tuples appear.  Likewise,
 the function $\convT(\tau)$ rewrites a type.  Intuitively, the
 rewriting considers an array of tuples as an augmented array with an
@@ -145,8 +146,8 @@ We first describe the basic SOACs and later introduce
 which constructs an array by applying its function argument to each
 element of the input array, (ii) $\creduce$, which applies a
 binary-associative operator $\oplus$ to all elements of the input, and
-(iii) $\cscan$, which computes all prefix sums of the input array
-elements.  Their types and semantics are shown below:
+(iii) $\cscan$, which computes the sums of all prefixes of the input
+array elements.  Their types and semantics are shown below:
 %
 \[ \begin{array}{l}
 \cmap ~ : ~ (\alpha \to \beta) ~ \to ~ \Pi n. [n]\alpha ~ \to [n]\beta \\
@@ -154,7 +155,7 @@ elements.  Their types and semantics are shown below:
 \creduce : (\alpha \to \alpha \to \alpha) ~ \to ~ \alpha ~ \to ~ \Pi n.[n]\alpha \to \alpha\\
 \creduce ~ \oplus ~ 0_{\oplus} ~ [a_1, \ldots, a_n] ~ = ~ 0_{\oplus} \oplus a_1 \oplus \ldots \oplus a_n\smallskip\\
 \cscan ~ : ~ (\alpha \to \alpha \to \alpha) ~ \to ~ \alpha ~ \to ~ \Pi n.[n]\alpha ~ \to ~ [n]\alpha\\
-\cscan ~ \oplus ~ 0_{\oplus} ~ [a_1, \ldots, a_n] ~ = ~ [a_1, \ldots, a_1 \oplus \ldots \oplus a_n]\\
+\cscan ~ \oplus ~ 0_{\oplus} ~ [a_1, \ldots, a_n] ~ = ~ [\creduce~\oplus~0_{\oplus}~[a_1], \ldots, \creduce~\oplus~0_{\oplus}~[a_1, \ldots, a_n] ]\\
 \end{array} \]
 
 \noindent We can view the $\Pi n$ notation as indicating where the
@@ -176,7 +177,7 @@ mapping an array by a function $f$ followed by mapping the result
 with a function $g$ gives the same result as mapping the original
 array with the composition of $f$ and $g$:
 \[ \begin{array}{l}
-(\cmap ~ f) ~ \circ (\cmap ~ g) ~ \equiv ~ \cmap ~ (f ~ \circ ~ g)
+(\cmap ~ g) ~ \circ (\cmap ~ f) ~ \equiv ~ \cmap ~ (g ~ \circ ~ f)
 \end{array} \]
 Applied from left-to-right and from right-to-left this
 rule corresponds to producer-consumer (\textit{vertical}) fusion and fission,
@@ -208,22 +209,22 @@ $\inj(a)$ is the single-element array containing $a$.
 A \emph{partitioning} of an array $v$ is a sequence of arrays $v_1, \ldots, v_k$ such
 that $v_1 \# \ldots \# v_k = v$.
 %
-Given binary operations $f$ and $g$, their \emph{product} $f * g$ is defined by
-component-wise application, i.e., $(f, g) (x) = (f~x, g~x)$.
+Given operations $f$ and $g$, their \emph{product} $f * g$ is defined
+by component-wise application, i.e., $(f * g) (x) = (f~x, g~x)$.
 %
 %
 
 \subsection{The Parallel Operator $\credomap$}
 \label{sec:formal-redomap}
 
-Many arrays operations are \emph{monoid homomorphisms}, which
+Many array operations are \emph{monoid homomorphisms}, which
 conceptually allows for splitting an array into two parts, applying
 the operation recursively, and combining the results using an
 associative operation $\oplus$.  For example, a $\cmap-\creduce$
 composition can be formally transformed, via the list homomorphism
 promotion lemma~\cite{BirdListTh}, to an equivalent form:
 \[
-  \creduce~\oplus~0_{\oplus} \circ \cmap~f \equiv \creduce~\oplus~e \circ \cmap~(\creduce~\oplus~0_{\oplus} \circ \cmap~f) \circ \textrm{split}_{p}
+  \creduce~\oplus~0_{\oplus} \circ \cmap~f \equiv \creduce~\oplus~0_{\oplus} \circ \cmap~(\creduce~\oplus~0_{\oplus} \circ \cmap~f) \circ \textrm{split}_{p}
 \]
 where the original array is partitioned into $p$ chunks.
 Operationally, we could imagine that $p$ processors will each perform
@@ -231,13 +232,20 @@ the $\cmap-\creduce$ composition sequentially, followed by a parallel
 combination of the per-processor results.  Hence, the \textit{inner}
 $\cmap-\creduce$ can be written as a left-fold
 \[
-  \creduce~\oplus~0_{\oplus} \circ \cmap~f \equiv \creduce~\oplus~e \circ \cmap~(\cfoldl~g~0_{\oplus}) \circ \textrm{split}_{p}
+  \creduce~\oplus~0_{\oplus} \circ \cmap~f \equiv \creduce~\oplus~0_{\oplus} \circ \cmap~(\cfoldl~g~0_{\oplus}) \circ \textrm{split}_{p}
 \]
-for an appropriately defined function $g$.
+for an appropriately defined function $g$, which must be semantically
+equivalent to
+\[
+  g = \lambda x y \rightarrow x \oplus (f~y)
+\]
+but may have a more efficient implementation, typically by combining
+$\oplus$ and $f$.
 
-Thus, every monoid homomorphism is uniquely determined by
-$(\oplus,0_{\oplus})$ and a function $g$.  The combinator $\credomap$\footnote{The name is a portmanteau of $\creduce \circ \cmap$.}
-thus expresses all such homomorphisms:
+Every monoid homomorphism can thus be uniquely determined by
+$(\oplus,0_{\oplus})$ and a function $g$.  The combinator
+$\credomap$\footnote{The name is a portmanteau of
+  $\creduce \circ \cmap$.} expresses all such homomorphisms:
 \[ \begin{array}{l}
 \credomap : (\alpha \to \alpha \to \alpha, \alpha) \to (\beta \to \alpha) \to \Pi n. ([n]\beta \to \alpha) \\
 \credomap~(\oplus, 0_{\oplus})~g~[b_1, \ldots, b_n] = 0_{\oplus} \oplus (g~0_{\oplus}~b_1) \oplus \ldots \oplus (g~0_{\oplus}~b_n)
@@ -249,7 +257,7 @@ The $\credomap$ combinator can decompose previously seen SOACs:
 \end{array} \]
 and $\credomap$ can itself be decomposed by the equation
 \[
-  \credomap ~ (\oplus,0_{\oplus}) ~ g ~ = ~ \creduce ~ (\oplus,0_{\oplus}) \circ \cmap ~ g.
+  \credomap ~ (\oplus,0_{\oplus}) ~ g ~ = ~ \creduce ~ (\oplus,0_{\oplus}) \circ \cmap ~ (g~0_{\oplus}).
 \]
 
 \subsection{Streaming combinators.}
@@ -267,7 +275,7 @@ Because a vector can have multiple partitions, $\csFold$ is
 well-defined---it gives the same result for all partitions---if and
 only if $f$ is equivalent to a $\credomap$ with $\oplus$ as combining
 operator.  Futhark assumes such properties to hold; they are not
-checked at run-time, but a programmer responsibility.
+checked at run-time, but the responsibility of the programmer.
 
 The streaming combinators permit Futhark to choose freely \emph{any}
 suitable partition of the input vector.  In the source language, Futhark uses specialized

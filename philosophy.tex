@@ -4,13 +4,13 @@
 In physics, the speed of light, denoted $c$, is the ultimate speed
 limit of the universe.  Likewise in programming, ``as fast as C'' is
 often used as an indication that some programming language is as fast
-as it can possibly be.  In theory it makes no sense to say that a
-given programming language is ``slow'' or ``fast'', as these are
-merely properties of a particular implementation of the programming
-language running on a specific computer.  But in practise, it is clear
-that the design of a programming language has an overwhelming
-influence on the ease with which a performant implementation can be
-constructed.
+as it can possibly be.  Of course, in theory it makes no sense to say
+that a given programming language is ``slow'' or ``fast'', as these
+are merely properties of a particular implementation of the
+programming language running on a specific computer.  But in practise,
+it is clear that the design of a programming language has an
+overwhelming influence on the ease of constructing a performant
+implementation.
 
 For decades, the design of languages such as C has permitted the
 implementation of compilers that generate efficient code.  One
@@ -36,14 +36,13 @@ the performance of C on the sequential random-accesss register
 machine.
 
 Of course, a cursory study of modern hardware designs show that the
-sequential random-access register machine is an illusion.  The abstract
-model of C may match a 70s minicomputer reasonably well, but it is
-increasingly diverging from how modern computers are constructed.
-This is not despite lack of effort on behalf of the hardware
-designers: due to the massive popularity (and therefore economic
-significance) of C-like languages, manufacturers have attempted to
-prolong the illusion of the sequential random-access machine for as long as
-possible.
+sequential random-access register machine is an illusion.  The
+abstract model of C may match a 70s minicomputer reasonably well, but
+it is increasingly diverging from how modern computers are
+constructed.  This is despite the efforts of hardware designers: due
+to the massive popularity (and therefore economic significance) of
+C-like languages, manufacturers have attempted to prolong the illusion
+of the sequential random-access machine for as long as possible.
 
 Unfortunately, while C may be exceeded (as we hope to show in this
 thesis), $c$ is a tougher nut to crack.  The machine on which this
@@ -54,18 +53,17 @@ $13cm$ in the the time the CPU takes to perform a clock cycle, thus
 physically limiting the distance a single piece of information can
 travel in a single cycle.
 
-Another, even greater, physical limitation is power dissipation:
-roughly, the power usage of the transistors in a processor is roughly
-proportional to the square of its clock
-frequency~\cite{Dubois:2012:PCO:2462779}.  This prevents an increase
-in clock frequency unless we can compensate with an increase in the
-efficiency of the transistors.  For a sequential machine that executes
-instructions in exactly the order they are given, the only way to
-speed up execution of a program is to increase the rate at which
-instructions are executed.  If we can double the rate at which
-instructions are processed, we in effect halve the time it takes to
-execute some program (assuming no memory bottlenecks, which we will
-discuss later).
+Another, even greater, physical limitation is power dissipation: the
+power usage of the transistors in a processor is roughly proportional
+to the square of its clock frequency~\cite{Dubois:2012:PCO:2462779}.
+This prevents an increase in clock frequency unless we can compensate
+with an increase in the efficiency of the transistors.  For a
+sequential machine that executes instructions in exactly the order
+they are given, the only way to speed up execution of a program is to
+increase the rate at which instructions are executed.  If we can
+double the rate at which instructions are processed, we in effect
+halve the time it takes to execute some program (assuming no memory
+bottlenecks, which we will discuss later).
 
 In the popular vernacular, \textit{Moore's Law} is typically rendered
 as ``computers double in speed every two years''.  But actually, the
@@ -92,12 +90,13 @@ clear that Moore's Law will eventually stop, or else transistors would
 eventually be smaller than a single atom, this is not the issue that
 has hindered the illusion of the sequential machine.
 
-The problem is that Dennard scaling began to break down around 2006.
-Physical properties of the circuit material leads to increased current
-leakage at small sizes, causing the chip to heat up.  Simply pushing
-up the clock frequency is no longer viable.  Instead, chip
-manufacturers use the transistor budget on increasing the amount of
-work that can be done in a clock cycle through various means:
+The problem we now face is that Dennard scaling began to break down
+around 2006.  Physical properties of the circuit material lead to
+increased current leakage at small sizes, causing the chip to heat up.
+Simply pushing up the clock frequency became no longer viable.
+Instead, chip manufacturers are now using their transistor budget on
+increasing the amount of work that can be done in a clock cycle
+through various means:
 
 \begin{description}
 \item[Increasing the size of caches.] One significant problem with
@@ -106,11 +105,12 @@ work that can be done in a clock cycle through various means:
   accessing main memory incurs a latency of $100ns$ - likely hundreds
   of clock cycles on a current CPU.  This so-called \textit{memory
     wall} can be circumvented by the addition of caches that store
-  small subsets of the larger memory.  Heuristics, usually based on
-  temporal locality, are useed to determine which parts of the larger
-  memory are stored in the caches.  High-performance CPUs can use
-  several layers caches, each layer being larger and slower than the
-  former.
+  small subsets of the larger
+  memory~\cite{Wulf:1995:HMW:216585.216588}.  Heuristics, usually
+  based on temporal locality, are useed to determine which parts of
+  the larger memory are stored in the caches.  High-performance CPUs
+  can use several layers of caches, each layer being larger and slower
+  than the former.
 \item[Inferring instruction-level parallelism.]  While the semantics
   of a sequential CPU is that instructions are executed one after
   another, it is often the case that two instructions to not have
@@ -179,8 +179,8 @@ functional languages hinder efficient parallel execution.
 \Cref{sec:interoperability} shows how Futhark, a restricted
 data-parallel language, can be used in practise, by demonstrating
 interoperability with mainstream and not-so-mainstream technologies.
-Finally, \cref{sec:related-automatic-par} shows in practise the
-difficulties involved in parallelising legacy sequential code, and
+Finally, \cref{sec:related-automatic-par} shows the difficulties
+involved in parallelising legacy sequential code, and
 \cref{sec:related-data-par} discusses other approaches to
 data-parallel functional programming.
 
@@ -190,10 +190,10 @@ data-parallel functional programming.
 To a large extent, mainstream CPUs favour programming convenience,
 familiarity, and backwards compatibility over raw performance.  We
 must look elsewhere for examples of the kind of hardware that could be
-built if we were willing to sacrifice traditional sequential notions
-of sequential programming.
+built if we were willing to sacrifice our traditional notions of
+sequential programming.
 
-For as long as there has been computers, there have been parallel
+For as long as there have been computers, there have been parallel
 computers.  Indeed, if we think back to the very earliest computers,
 the human ones made of flesh and blood, parallelism was the
 \textit{only} way to speed up a computation.  You were unlikely to
@@ -230,38 +230,40 @@ for accelerating graphical operations that would be too slow if
 executed on the CPU.  Initially, GPUs were special-purpose
 non-programmable processors that could only perform fixed graphical
 operations.  Over time, the need for more flexibility in graphical
-effects lead to the development of programmable \textit{pixel
-  shaders}, first seen in the NVIDIA GeForce 3 in 2000.  Roughly,
-pixel shaders allowed an effect to be applied to every pixel of an
-image - for example, looking at every pixel and add a reflection
-effect to those that represent water.  Graphical operations such as
-these tend to be inherently parallel, and as a result, GPU hardware
-evolved to support efficient execution of programs with very simple
-control flow, but a massive amount of fine-grained parallelism.
-Eventually, GPU manufacturers started providing APIs that allowed
-programmers to exploit the parallel computational power of the
-now-mainstream GPUs even for non-graphics workloads, so-called
-\textit{general-purpose GPU programming} (GPGPU).  The most popular
-such APIs are CUDA~\cite{cuda} from NVIDIA, and
-OpenCL~\cite{Stone:2010:OPP:622179.1803953}.
+effects led to the development of programmable \textit{pixel shaders},
+first seen in the NVIDIA GeForce 3 in 2000.  Roughly, pixel shaders
+allowed an effect to be applied to every pixel of an image - for
+example, looking at every pixel and adding a reflection effect to
+those that represent water.  Graphical operations such as these tend
+to be inherently parallel, and as a result, GPU hardware evolved to
+support efficient execution of programs with very simple control flow,
+but a massive amount of fine-grained parallelism.  Eventually, GPU
+manufacturers started providing APIs that allowed programmers to
+exploit the parallel computational power of the now-mainstream GPUs
+even for non-graphics workloads, so-called \textit{general-purpose GPU
+  programming} (GPGPU).  The most popular such APIs are
+CUDA~\cite{cuda} from NVIDIA, and
+OpenCL~\cite{Stone:2010:OPP:622179.1803953}, which is an open standard
+maintained by the Khronos Group.
 
 GPUs are not the only massively parallel machines in use.  However,
 their great success, their availability, the difficulty in programming
 them, and their potential compute power makes them excellent objects
 of study for researchers of parallel programming models.  In this
-work, I focus on the details of GPUs over other parallel machines.
-However, a central thesis of the work is that modern hardware is too
-complicated and too diverse for low-level programming by hand to be
-viable.  I will introduce a high-level hardware-agnostic programming
-model, and describe its efficient mapping to GPUs.  The implication is
-that if the model can be mapped efficiently to a platform as
+work, we will focus on the details of GPUs over other parallel
+machines.  However, a central thesis of the work is that modern
+hardware is too complicated and too diverse for low-level programming
+by hand to be viable.  We will introduce a high-level
+hardware-agnostic programming model, in the form of the Futhark
+programming language, and describe its efficient mapping to GPUs.  The
+hope is that if the model can be mapped efficiently to a platform as
 restricted as GPUs, it can probably also be mapped to other parallel
 platforms, such as multicore CPUs, clusters, or maybe even FPGAs.
 
 \subsection{Basic Properties of GPUs}
 
 The performance characterictics and programming model of modern GPUs
-is covered in greater detail on~\ref{chap:hardware}, but a basic
+is covered in greater detail in~\cref{chap:hardware}, but a basic
 introduction is given here, in order to give an idea of the
 difficulties involved in retrofitting sequential languages for GPU
 execution.
@@ -295,8 +297,8 @@ for memory operations to finish.  As a result of this design, memory
 can also be optimised for very high bandwidth at the expense of
 latency, and it is not unusual for GPU memory buses to support
 bandwidth in excess of $300GiB/s$ (although as we shall discuss in
-Chapter~\ref{chap:hardware}, specific access patterns must be followed
-to reach this performance).
+\cref{chap:hardware}, specific access patterns must be followed to
+reach this performance).
 
 GPUs have many limitations that hinder traditional programming
 techniques and languages:
@@ -402,16 +404,16 @@ venerable APL, which was first described in 1962~\cite{iversonbook}.
 Futhark is not even the first parallel language in a
 $\lambda$-calculus style, as it is predated by
 NESL~\cite{BlellochCACM96NESL} by some twenty years.  Indeed, as we
-shall see, Futhark is not even the most expressive such language.
-Futhark has more similarities than differences from other parallel
-functional languages.  The main contributions of this thesis are the
-\textit{implementation techniques} that have been developed for
-Futhark---its efficient mapping to GPU hardware---as well as those
+shall see, Futhark is not even the most expressive such language.  In
+fact, Futhark has more similarities than differences from other
+parallel functional languages.  The main contributions of this thesis
+are the \textit{implementation techniques} that have been developed
+for Futhark---its efficient mapping to GPU hardware---as well as those
 bits of its language design that enable said implementation.  It seems
 likely that the implementation techniques could be applied to other
 functional languages of roughly the same design.  For more on why I
 chose to construct a new programming language rather than use an
-existing design, see Section~\ref{sec:new-language}.
+existing design, see \cref{sec:new-language}.
 
 Let us return to the \lstinline{map} expression:
 
@@ -428,9 +430,9 @@ different pieces of data.  In contrast, thread-based programming is
 based on \textit{task parallelism}, where different threads perform
 different operations on different pieces of data (or a shared piece of
 data, if one enjoys debugging race conditions).  Task parallelism does
-necessarily imply low-level and racy code with manual synchronisation
-and message passing, but can be given safe structure through for
-examples futures or fork/join patterns.
+not necessarily imply low-level and racy code with manual
+synchronisation and message passing, but can be given safe structure
+through, for example, futures or fork/join patterns.
 
 One important property of functional data parallelism is that the
 semantics are sequential.  The program can be understood entirely as a
@@ -440,10 +442,10 @@ decoupling of semantics and operations is typical of functional
 languages, and is key to enabling aggressive automatic transformation
 by a compiler.  It is also easier for programmers to reason
 sequentially than in parallel.  It is still important to the
-programmer that an operation such as \lstinline{map} is, however,
-operationally parallel can be described through parallel cost models.
-One such cost model was described and subsequently proven
-implementable for the data parallel language
+programmer, however, that an operation such as \lstinline{map} is
+operationally parallel, which can be described through parallel cost
+models.  One such cost model was described and subsequently proven
+practically feasible for the data parallel language
 NESL~\cite{Blelloch:1996:PTS:232627.232650}.  While a formal cost
 model for Futhark is outside the scope of this thesis, the similarity
 of Futhark to NESL suggests that a similar approach would be viable.
@@ -451,7 +453,7 @@ Instead, we use the intuitive notion that certain constructs (such as
 \lstinline{map}) may be executed in parallel.  However, it is not
 always efficient to translate all \textit{potential} parallelism into
 \textit{realised parallelism} on a concrete machine (see
-Section~\ref{sec:efficient-sequentialisation}).
+\cref{sec:efficient-sequentialisation}).
 
 \subsection{Choice of Parallel Combinators}
 \label{sec:choice-of-parallel-combinators}
@@ -480,30 +482,31 @@ These functions both take a single parameter, \lstinline{xs} of type
 \lstinline{[]i32}.  We write the type of arrays containing elements of
 type \lstinline{t} as \lstinline{[]t}.  The \lstinline{loop} construct
 is specialised syntax for expressing sequential loops.  Here,
-\lstinline{ys} is the \textit{variant parameter}, which initialised
+\lstinline{ys} is the \textit{variant parameter}, which is initialised
 with the value \lstinline{xs}, and receives a new value after every
 iteration of the loop body.  The array slicing syntax
 \lstinline{ys[n:2*n]} takes elements starting at index \lstinline{n}
 and up to (but exclusive) \lstinline{2*n}.
 
-The summation proceeds by repeatedly cutting the array in twain,
-adding each half to the other until only a single element is left.  We
-can characterise the performance of \lstinline{sum} with with a
-work/depth parallel cost model~\cite{Blelloch:1995:PSF:224164.224210}.
-If we suppose that \lstinline{map} runs in work $O(n)$ and depth
-$O(1)$, the function \lstinline{sum} runs in work $O(n)$ and depth
-$O(\log n)$.  This is asymptotically optimal for physically reasonable
-machine models.  However, if executed straightforwardly on a GPU, this
-function will be far from reaching peak potential performance.  One
-reason is that it is very expensive to create the intermediate
-\lstinline{ys} arrays, compared to the time taken to add the numbers.
-While a ``sufficiently smart'' compiler may be able to rewrite the
-program to avoid some of this overhead (and perhaps even take
-advantage of hardware-specific features for performing summations),
-this is contrary to the philosophy behind Futhark.  Although we do not
-mind aggressive optimisation, the transformations we perform should
-arise naturally out of the constructs used by the programmer, and not
-depend on subtle and fragile analyses.
+The summation proceeds by repeatedly splitting the array in the
+middle, adding each half to the other until only a single element is
+left.  We can characterise the performance of \lstinline{sum} with
+with a work/depth parallel cost
+model~\cite{Blelloch:1995:PSF:224164.224210}.  If we suppose that
+\lstinline{map} runs in work $O(n)$ and depth $O(1)$, the function
+\lstinline{sum} runs in work $O(n)$ and depth $O(\log n)$.  This is
+asymptotically optimal for physically reasonable machine models.
+However, if executed straightforwardly on a GPU, this function will be
+far from reaching peak potential performance.  One reason is that it
+is very expensive to create the intermediate \lstinline{ys} arrays,
+compared to the time taken to add the numbers.  While a ``sufficiently
+smart'' compiler may be able to rewrite the program to avoid some of
+this overhead (and perhaps even take advantage of hardware-specific
+features for performing summations), this is contrary to the
+philosophy behind Futhark.  Specifically, although we do not mind
+aggressive optimisation, the transformations we perform should arise
+naturally from the constructs used by the programmer, and not depend
+on subtle and fragile analyses.
 
 As a consequence, we provide several parallel constructs in Futhark
 that, while expressible in an asymptotically optimal form using
@@ -511,7 +514,7 @@ that, while expressible in an asymptotically optimal form using
 far superior low-level code.  We still wish to keep the number of
 constructs small, because each requires significant effort to
 implement and integrate in the compiler, particularly with respect to
-optimisations such as fusion (Chapter~\ref{chap:fusion}).  The main
+optimisations such as fusion (\cref{chap:fusion}).  The main
 constructs we have chosen to include are the following, which closely
 resemble higher-order functions found in most functional languages:
 
@@ -551,7 +554,7 @@ Together, constructs such as these are called \textit{second-order
   array combinators} (or \textit{SOAC}s).  Futhark does not presently
 permit the programmer to write their own higher-order functions, so
 new ones cannot be defined (this can be worked around via higher-order
-modules; see Section~\ref{sec:new-language}).  Futhark also contains
+modules; see \cref{sec:new-language}).  Futhark also contains
 two more exotic SOACs, \lstinline{stream_red} and
 \lstinline{stream_map}, which will be discussed in
 \cref{sec:streaming-soacs}.
@@ -568,13 +571,13 @@ function is commutative.  There is no such variant for
 \lstinline{scan}, because scans do not benefit from commutative
 operators.
 
-In all cases, it is the programmers responsibility to ensure that the
+In all cases, it is the programmer's responsibility to ensure that the
 functions have the required properties - the compiler will not check.
 Indeed, checking such semantic (as opposed to syntactic) properties in
 general is undecidable, as shown by Rice's
 Theorem~\cite{10.2307/1990888}.  If an invalid function is provided
-(such as subtraction, which is not associative), the program may produce
-nondeterministic results.
+(such as subtraction, which is not associative), the program may
+produce nondeterministic results.
 
 In some parallel languages or libraries, reductions and scans are
 restricted to a small collection of standard operators, such as
@@ -582,8 +585,9 @@ addition or maximum.  This makes the language safer, but we have found
 many examples of problems that can be solved efficiently with
 nonstandard reductions.  For example, consider the problem of finding
 the index of the largest element in an array of floating-point
-numbers.  In many parallel libraries, this is a primitive operation.
-In Futhark, we can express this as:
+numbers.  Because of its frequent use, this is a primitive operation
+in many parallel libraries and languages.  In Futhark, we can express
+it as:
 
 \begin{lstlisting}
 let index_of_max [n] (xs: [n]f32): i32 =
@@ -608,16 +612,16 @@ size \lstinline{n}.  This parameter is in scope as a variable of type
 We use this to indicate that the array parameter \lstinline{xs} has
 \lstinline{n} elements, and to construct an array of the integers from
 0 to \lstinline{n-1} in the expression \lstinline{[0...n-1]}.  We will
-return to size parameters in Section~\ref{sec:new-language}.
+return to size parameters in \cref{sec:new-language}.
 
-The \lstinline{index_of_max} function functions by pairing each
-element in \lstinline{xs} with its index, then performing a reduction
-over the resulting array of pairs.  As a result, the two taken
-parameters by the reduction function themselves consist of two values.
-We consider the neutral element to be any pair where the index is
-negative.  To make the operator commutative, we use the indices as a
-tie-breaker in cases where multiple elements of \lstinline{xs} have
-the same value (the element with the greater index is chosen).  We use
+The \lstinline{index_of_max} function pairs each element in
+\lstinline{xs} with its index, then performing a reduction over the
+resulting array of pairs.  As a result, the two operands accepted by
+the reduction function themselves consist of two values.  We consider
+the neutral element to be any pair where the index is negative.  To
+make the operator commutative, we use the indices as a tie-breaker in
+cases where multiple elements of \lstinline{xs} have the same value,
+and pick the element with the greater index.  We use
 \lstinline{reduce_comm} instead of plain \lstinline{reduce} to inform
 the compiler that the operator is indeed commutative.
 
@@ -657,7 +661,7 @@ reduce (\x y -> x + y) 0 xs
 We require that the functional argument is an associative function,
 and that the second element is a neutral element for that function.
 The conventional way to illustrate a parallel reduction is via a tree,
-as on \Cref{fig:tree-summation}.  To reduce an $n$-element array
+as on \cref{fig:tree-summation}.  To reduce an $n$-element array
 $[x_{1},\ldots,x_{n}]$ using operator $\oplus$, we launch $n/2$
 threads, with thread $i$ computing $x_{2i}\oplus{}x_{2i+1}$.  The
 initial $n$ elements are thus reduced to $n/2$ elements.  The process
@@ -717,14 +721,14 @@ elements, producing one intermediate result per thread.  We then
 launch a second reduction over all these intermediate results.  This
 second reduction can also be done in parallel, or can be sequential if
 $k$ is sufficiently small.  This approach is shown on
-\Cref{fig:chunked-summation}.  A rough performance comparison between
+\cref{fig:chunked-summation}.  A rough performance comparison between
 sample implementations of the two approaches to reduction is shown on
-\Cref{fig:tree-vs-chunked}.  On a sequential machine, we can simply
+\cref{fig:tree-vs-chunked}.  On a sequential machine, we can simply
 set $k=1$, and not exploit any parallelism at all.  Efficient
 sequentialisation is particularly important (and also more difficult)
 when it comes to handling nested parallelism, as it enables
 locality-of-reference optimisations as we shall see in
-Section~\ref{sec:nested-parallelism}.
+\cref{sec:nested-parallelism}.
 
 Efficient sequentialisation is not a single implementation technique,
 but a general implementation philosophy, which gives rise to various
@@ -758,19 +762,19 @@ writing of small, reusable components, it is important that there is
 little run-time overhead to the use of functions.  Function inlining
 is a well established technique to remove the overhead of function
 calls, although at the cost of an increase in code size.  Another
-useful property of inlining is that it enables further optimisation.,
-When an opaque function call is replaced with the function body,
-further simplification may be possible.  While wide-spread techniques
-such as copy propagation, constant folding, and dead code removal
-remain useful in a data-parallel such as Futhark, other, more
+useful property of inlining is that it enables further optimisation.
+When an opaque function call is replaced by the function body, further
+simplification may be possible.  While wide-spread techniques such as
+copy propagation, constant folding, and dead code removal remain
+useful in a data-parallel language, such as Futhark, other, more
 sophisticated, transformations are also important.  One such
-transformation is \textit{loop fusion}, which removes intermediate
-results by combining several loops into one.  \Cref{chap:fusion}
-discusses in more detail the technique by which fusion is implemented
-in the Futhark compiler. The remainder of this section discusses the
-intuition and motivation behind loop fusion, as well as showing how
-fusion is significantly easier in the functional setting than for
-imperative languages.
+transformation is \textit{loop fusion}, which combines several loops
+into one.  \Cref{chap:fusion} discusses in more detail the technique
+by which fusion is implemented in the Futhark compiler. The remainder
+of this section discusses the intuition and motivation behind
+producer-consumer loop fusion\footnote{Often called \textit{vertical
+    fusion}.}, as well as showing how fusion is significantly easier
+in the functional setting than for imperative languages.
 
 Let us consider two Futhark functions on arrays:
 
@@ -782,7 +786,7 @@ let arr_incr (xs: []i32) = map (+1) xs
 
 The function \lstinline{arr_abs} applies the function
 \lstinline{i32.abs} (absolute value of a 32-bit integer) to every
-element of the input array.  The function \lstinline{arr_scale}
+element of the input array.  The function \lstinline{arr_incr}
 increases every element of the input by \lstinline{1}.  We use a
 shorthand for the functional argument: \lstinline{(+1)} is equivalent
 to \lstinline{\x -> x + 1}, similarly to the \textit{operator
@@ -806,17 +810,18 @@ If we suppose a straightforward execution, the first \lstinline{map}
 will read each element of \lstinline{xs} from memory, compute its
 absolute value, then write the results back to memory as the array
 \lstinline{ys}.  The second \lstinline{map} will then read back the
-elements \lstinline{ys} array, perform the \lstinline{(+1)} operation,
-and place the result somewhere else in memory.  If \lstinline{xs} has
-$n$ elements, the result is a total of $4n$ memory operations.  Given
-that memory access is often the bottleneck in current computer
-systems, this is wasteful.  Instead, we should read each element of
-the array \lstinline{xs}, apply the combined function \lstinline{(\x -> i32.abs x + 1)}, then write the final result, for a total of $2n$
-memory operations.  We could write such a \lstinline{map} manually,
-but we would lose modularity, as the program is no longer structured
-as a composition of re-usable functions.  For such simple functions as
-are used in this example, the loss is not great, but the issue remains
-for more complicated functions.
+elements of the \lstinline{ys} array, perform the \lstinline{(+1)}
+operation, and place the result somewhere else in memory.  If
+\lstinline{xs} has $n$ elements, the result is a total of $4n$ memory
+operations.  Given that memory access is often the bottleneck in
+current computer systems, this is wasteful.  Instead, we should read
+each element of the array \lstinline{xs}, apply the combined function
+\lstinline{(\x -> i32.abs x + 1)}, then write the final result, for a
+total of $2n$ memory operations.  We could write such a
+\lstinline{map} manually, but we would lose modularity, as the program
+is no longer structured as a composition of re-usable functions.  For
+such simple functions as are used in this example, the loss is not
+great, but the issue remains for more complicated functions.
 
 The compiler employs producer-consumer \textit{loop fusion} to combine
 the two \lstinline{map} operations into one.  The validity of fusion
@@ -857,12 +862,12 @@ combinators that are used to perform aggressive fusion.
 \subsection{How Combinators Aid Fusion}
 
 While loop fusion is not an unknown technique in compilers for
-imperative languages, it is significantly more complicated to
-implement.  One major problem is that imperative languages do not have
-\lstinline{map} as a fundamental construct.  Hence, index analysis is
-first needed to determine that some loop in fact encodes a
-\lstinline{map} operation, as the following imperative pseudocode
-demonstrates:
+imperative languages~\cite{kennedy1993maximizing}, it is significantly
+more complicated to implement.  One major problem is that imperative
+languages do not have \lstinline{map} as a fundamental construct.
+Hence, index analysis is first needed to determine that some loop in
+fact encodes a \lstinline{map} operation, as the following imperative
+pseudocode demonstrates:
 
 \begin{lstlisting}
 for i < n:
@@ -873,24 +878,24 @@ for i < n:
 
 While index analysis can easily become undecidable, it is feasible for
 simple cases, such as this one.  A bigger problem is that there is no
-guarantee that the loops can be executed parallel.  For example, the
-functions \lstinline{f} and \lstinline{g} may have arbitrary side
+guarantee that the loops can be executed in parallel.  For example,
+the functions \lstinline{f} and \lstinline{g} may have arbitrary side
 effects, which means that they must be executed in order.  Many
 functions written in an imperative language, even those that are
 externally pure, use side-effects internally, for example for storage
-management or accumulator variables in loops.  It can be difficult for
-a compiler to automatically determine that a function is indeed pure.
-A solution is to have the programmer manually add a purity annotation
-to the function, which is then trusted by the compiler.  There are two
-problems with this technique: first, the programmer may be wrong,
-which may result in unpredictably wrong code, depending on how the
-optimiser exploits the information.  Second, optimising compilers are
-notoriously bad at providing feedback about when insufficient
-information inhibits an information, and how the programmer can
-rectify the problem.  A performance-conscious programmer may end up
-liberally sprinkling purity annotations on most of their functions in
-the hope of helping the optimiser, thus exacerbating the first
-problem.
+management or to maintain accumulator variables in loops.  It can be
+difficult for a compiler to automatically determine that a function is
+indeed pure.  A solution is to have the programmer manually add a
+purity annotation to the function, which is then trusted by the
+compiler.  There are two problems with this technique: first, the
+programmer may be wrong, which may result in unpredictably wrong code,
+depending on how the optimiser exploits the information.  Second,
+optimising compilers are notoriously bad at providing feedback about
+when insufficient information inhibits an optimisation, and how the
+programmer can rectify the problem.  A performance-conscious
+programmer may end up liberally sprinkling purity annotations on most
+of their functions in the hope of helping the optimiser, thus
+exacerbating the first problem.
 
 Even if we can somehow determine \lstinline{f} and \lstinline{g} to be
 pure, the in-place assignment to \lstinline{y} may have an effect if
@@ -930,7 +935,7 @@ its full generality.  The reason is that it is hard to map arbitrary
 nested parallelism to current parallel hardware, which supports only a
 fixed level of parallelism efficiently (and typically with harsh
 restrictions on the size of each level beyond the first; see
-Chapter~\ref{chap:hardware}).  This is an example of an impedance
+\cref{chap:hardware}).  This is an example of an impedance
 mismatch between free-form nested parallel program and the real
 hardware we have available to us.  Fortunately, there are ways to
 bridge the divide that follow straightforwardly from the construction
@@ -1003,23 +1008,24 @@ any array, only to their values.  While the Futhark language does
 support irregular nested parallelism, as demonstrated above, the
 current implementation is not able to exploit it.  Should it prove
 necessary, the Futhark compiler could be modified to incorporate the
-flattening algorithm as well, but for this thesis, I have focused on
-developing implementation techniques that are more limited in scope,
-but produce faster code.
+flattening algorithm as well, but for this thesis, we have focused on
+developing implementation techniques that are less general, but
+produce faster code.
 
 The limitation to regular nested parallelism is not as onerous as it
 may seem.  First, many interesting problems are naturally regular (see
-Chapter~\ref{chap:empirical-validation} for examples).  Second, we can
+\cref{chap:empirical-validation} for examples).  Second, we can
 always \textit{manually} apply the flattening algorithm to our program
-to the degree necessary to remove irregular nested parallelism.  This
-may require manual inlining and thus breaking modularity.  Third, many
-irregular programs can be modified in an ad-hoc fashion to become
-regular.  For example, the irregular program shown above can be
+to the degree necessary to remove irregular nested parallelism.  Of
+course, this may require manual inlining, thus breaking modularity.
+Third, many irregular programs can be modified in an ad-hoc fashion to
+become regular.  For example, the irregular program shown above can be
 rewritten to
 
 \begin{lstlisting}
 map (\i -> reduce (+) 0
-           (map (\x -> if x > n then 0 else x) [1...n]))
+           (map (\x -> if x > n then 0 else x)
+                [1...n]))
     [1...n]
 \end{lstlisting}
 
@@ -1054,18 +1060,18 @@ about the regularity of parallelism in a modular fashion.
 The restriction to regular parallelism is an artifact of the current
 Futhark implementation, not Futhark as a programming language.
 Therefore, if necessary, an implementation could be constructed that
-avoids this issie by using full flattening.  However, the performance
-advantage of regular nested parallelism still motivates a language
+avoids this issue by using full flattening.  However, the performance
+advantages of regular nested parallelism still motivates a language
 mechanism for modular reasoning.
 
 \section{Why a New Language?}
 \label{sec:new-language}
 
 Most of the preceding discussion involves concepts and constructs that
-are common to many functional languages.  Indeed, it is frequently
+are common to many functional languages.  Indeed, it has often been
 claimed that pure functional programming makes parallel execution
-trivial.  Why, then, do I propose an entirely new language, rather
-than applying my techniques to existing and reasonably popular
+straightforward.  Why, then, do we propose an entirely new language,
+rather than applying our techniques to existing and reasonably popular
 languages such as Haskell, OCaml, or F\#?  What does Futhark have that
 these languages lack?
 
@@ -1079,25 +1085,25 @@ parallel machines, such as GPUs.  This is not a task that needs
 further complication.  The following discusses common problematic
 traits, and how Futhark circumvents them.  We do not claim that these
 problems cannot be solved, merely that they provide significant
-challenges that would have distracted from the core goal our work,
+challenges that would have distracted from the core goal of our work,
 which is developing compilation techniques for programs written as
 compositions of bulk parallel operators.
 
 \begin{description}
-\item[Emphasis on recursion:] Recursion is an inherently sequential
-  process, which is accordingly of less general usefulness in a
-  parallel language.  However, even for those cases where we do desire
-  sequential loops, free-form recursive functions prove challenging to
-  implement efficiently on a GPU.
+\item[Emphasis on recursion:] Most forms of recursion are an
+  inherently sequential process, which is accordingly of less general
+  usefulness in a parallel language.  However, even for those cases
+  where we do desire sequential loops, free-form recursive functions
+  prove challenging to implement efficiently on a GPU.
 
   On the GPU, threads do not possess a stack in the conventional
   sense.  While stacks can be emulated (slowly), hardware limitations
-  force a small, static size.  For example, a GPU may need $100,000$
-  parallel threads to be saturated.  On a GPU with 8GiB of memory (not
-  insignificant for the current generation), each thread could at most
-  have a stack size of 83KiB---and that's if we use all available
-  memory just for stacks.  Recursion inside code running on a GPU is
-  thus a bad idea.
+  force a small, static size.  Consider, for example, a GPU that
+  requires $100,000$ parallel threads to be saturated.  Should this
+  GPU possess 8GiB of memory (a large size for the current
+  generation), each thread could at most have a stack size of
+  83KiB---and only if we use all available memory just for stacks.
+  Recursion inside code running on a GPU is therefore a bad idea.
 
   A language could conceivably be defined where the only form of
   recursion permitted is tail-recursion, which does not suffer from
@@ -1109,8 +1115,9 @@ compositions of bulk parallel operators.
 
   Another approach, which is in practice what is done by the
   flattening transformation, is to interchange the recursion outside
-  of the parallel sections.  This comes at a significant cost in both
-  memory usage and expensive control flow.
+  of the parallel sections.  However, this comes at a significant cost
+  in both memory usage and expensive control
+  flow~\cite{Keller:2012:VA:2364506.2364512}.
 
 \item[Sum types and recursive types:] Sum types by themselves are only
   problematic in that they necessarily imply control flow to handle
@@ -1123,15 +1130,15 @@ compositions of bulk parallel operators.
   Recursive types (such as linked lists) usually imply pointer-chasing
   at runtime, which fits poorly with the very regular access patterns
   require to obtain peak GPU performance (see
-  Section~\ref{sec:gpu-coalesced}).  Constructing complex data types
-  usually requires allocation, which is also generally not possible on
-  a GPU.  While it has been shown that these problems can be solved in
-  some cases, for example by region inference in the Harland
-  programming language~\cite{holk2014region}, it is not clear that the
-  performance of the resulting code is good.  As Futhark is a language
-  primarily focused on obtaining good performance, we have left out
-  features that---while \textit{possible} to map to GPU---should
-  probably not be used in a program we wish to be fast.
+  \cref{sec:gpu-coalesced}).  Constructing complex data types usually
+  requires allocation, which is also generally not possible on a GPU.
+  While it has been shown that these problems can be solved in some
+  cases, for example by region inference in the Harland programming
+  language~\cite{holk2014region}, it is not clear that the performance
+  of the resulting code is good.  As Futhark is a language primarily
+  focused on obtaining good performance, we have left out features
+  that---while \textit{possible} to map to GPU---should probably not
+  be used in a program we wish to be fast.
 
 \item[Lazy evaluation:] Lazy evaluation is essentially shared state
   plus runtime effects---two of the most difficult things to map to
@@ -1166,7 +1173,7 @@ compositions of bulk parallel operators.
   algorithms in a pure functional language, Futhark supports
   \textit{uniqueness types}, which are used to permit in-place updates
   of arrays under some circumstances.  These are discussed in
-  Section~\ref{sec:uniqueness-types}.
+  \cref{sec:uniqueness-types}.
 
 \item[First class functions:] GPUs do not support function pointers
   (related to the absence of a stack), which immediately renders most
@@ -1176,11 +1183,11 @@ compositions of bulk parallel operators.
   every function term in the program is identified with a unique
   integer, and a large branch statement is used to select the
   corresponding function a runtime.  This is the approach taken by
-  Harland, but the heavy use of branching renders it inefficient on
-  GPUs.  In particular, this approach has the unfortunate consequence
-  that whenever the programmer adds a function, all other function
-  calls will become slower (except those that can be statically
-  resolved).
+  Harland~\cite{holk2014region}, but the heavy use of branching
+  renders it inefficient on GPUs.  In particular, this approach has
+  the unfortunate consequence that whenever the programmer adds a
+  function, all other function calls will become slower (except those
+  that can be statically resolved).
 
   While fully first class functions are not viable, limited support
   for higher-order functions is possible.  Whenever we can statically
@@ -1190,9 +1197,9 @@ compositions of bulk parallel operators.
   implemented in Futhark, and so user-defined higher-order functions
   are not supported.  It is, however, possible to use the higher-order
   module system to imitate higher-order functions, albeit at some cost
-  in boilerplate.  An example is shown on \Cref{fig:faking-hof}.
-  As the module system is outside the scope of this thesis, we shall
-  not delve further on the merits and demerits of this approach.
+  in boilerplate.  An example is shown on \cref{fig:faking-hof}.  As
+  the module system is outside the scope of this thesis, we shall not
+  delve further into the merits and demerits of this approach.
 \end{description}
 
 \begin{figure}
@@ -1216,7 +1223,7 @@ module increment_twice = map2 {
 module scale_twice = map2 {
   type c_t = f64
   type x_t = i32
-  let f (c: f64) (x: i32) = i32 (f64 x * c)
+  let f (c: f64) (x: i32) = t64 (r64 x * c)
 }
 
 let foo = increment_twice.g 2 [1...5]
@@ -1244,9 +1251,9 @@ arrays, allows us to add specialised constructs and notation to aid in
 array programming.  We have already seen an example in the form of
 size parameters, which allows the programmer to express size
 constraints on functions parameters.  For example, the dot product
-function on \Cref{fig:futhark-dotprod} requires that the two input
-arrays have the same length, while the matrix multiplication on
-\Cref{fig:futhark-matmult} specifies the usual size constraints on
+function in \cref{fig:futhark-dotprod} requires that the two input
+arrays have the same length, while the matrix multiplication in
+\cref{fig:futhark-matmult} specifies the usual size constraints on
 matrix multiplication.
 
 \begin{figure}
@@ -1298,9 +1305,9 @@ safe parallel programming.
 Before further discussion, we must justify why in-place updates are
 needed.  Our motivation is twofold.  First, it is not uncommon for a
 parallel program to consist of a number of parallel loops surrounding
-an inner sequential code.  The simplest expression of this pattern is
-applying a function \lstinline{f}, that internally performs side
-effects but is externally pure, on every element of an array.  It is
+an inner sequential code.  The simplest instance of this pattern is
+mapping a function \lstinline{f}, that internally performs side
+effects but is externally pure, over every element of an array.  It is
 just as important that the inner sequential code is efficient, as it
 is that we execute the outer loop in parallel.  Both influence the
 final program performance.
@@ -1310,7 +1317,7 @@ sequentialisation.  In \cref{sec:streaming-soacs} we shall see
 language constructs that permit the programmer to describe a
 computation comprising both an efficient sequential part, as well as a
 description of how to combine sequentially produced results in
-parallel.  The utility of such language constructs hinge entirely on
+parallel.  The utility of such language constructs hinges entirely on
 the ability to actually express said efficient sequential code.
 In-place updates are key to this ability.
 
@@ -1323,17 +1330,18 @@ The main language construct that permits array update is quite simple:
 This expression semantically produces an array that is identical to
 \lstinline{a}, except with the element at position \lstinline{i}
 replaced by \lstinline{v}.  The compiler then verifies that no alias
-of \lstinline{a} (including \lstinline{a}) is used on any execution
-path following the in-place update.  If the compiler had to perform a
-full copy of \lstinline{a}, the asymptotic cost would be $O(n)$ (where
-$n$ is the size of \lstinline{a}).  Using an in-place update, the cost
-is $O(1)$ (assuming that \lstinline{v} has constant size).
+of \lstinline{a} (including \lstinline{a} itself) is used on any
+execution path following the in-place update.  If the compiler had to
+perform a full copy of \lstinline{a}, the asymptotic cost would be
+$O(n)$ (where $n$ is the size of \lstinline{a}).  Using an in-place
+update, the cost is $O(1)$ (assuming that \lstinline{v} has constant
+size).
 
 \subsubsection{Uniqueness Types}
 
 The safety of in-place updates is supported in Futhark through a
 type-system feature called \textit{uniqueness types}.  This system is
-similar to, but simpler, than the system found in
+similar to, but simpler than, the system found in
 Clean~\cite{clean-uniqueness-types,barendsen1996uniqueness}, where the
 primary motivation is modeling IO.  Our use is reminiscent of the
 ownership types of Rust~\cite{rust}.  Alongside a relatively simple
@@ -1348,21 +1356,19 @@ precise formalisation on the Futhark core language can be found in
 uniqueness type system is \textit{aliasing}.  Each array-typed
 variable is associated with a set of other variables in scope, which
 it may alias.  Operationally, aliasing models the possibility that two
-arrays are backed by the same memory location.  A freshly created
-array (as by \kw{map} or an array literal) has no aliases.  Some
-language constructs, like array slicing, may produce arrays that are
-aliased with the source array.  The result of \kw{if} aliases the
+arrays overlap are stored at overlapping memory locations.  A freshly
+created array (as by \kw{map} or an array literal) has no aliases.
+Some language constructs, like array slicing, may produce arrays that
+are aliased with the source array.  The result of \kw{if} aliases the
 union of the aliases of both branches.
 
 When an array is modified in-place, all of its aliases are marked as
-unusable, and a compile-time error occurs if they are used afterwards.
-This prevents the in-place modification from being observable, except
-due to its performance effects.  The larger problem is how to ensure
-safety in the interprocedural case, which is where uniqueness types
-enter the picture.
-
-We now introduce uniqueness types through the example below, which
-shows a function definition:
+\textit{consumed}, and a compile-time error occurs if they are used
+afterwards.  This prevents the in-place modification from being
+observable, except for its performance effects.  The larger problem is
+how to ensure safety in the interprocedural case, which is where
+uniqueness types enter the picture.  We introduce uniqueness types
+through an example, which shows a function definition:
 
 \begin{lstlisting}
 let modify [n] (a: *[n]int) (i: int)
@@ -1383,7 +1389,7 @@ Further, the result of \lstinline{modify} is also unique---the
 \lstinline{*} in the return type declares that the function result
 will not be aliased with any of the non-unique parameters (it might
 alias \lstinline{a} but not with \lstinline{x}). Finally, the call
-\lstinline!modify n a i x! is valid if neither \lstinline{a} nor any
+\lstinline!modify a i x! is valid if neither \lstinline{a} nor any
 variable that aliases \lstinline{a} is used on any execution path
 following the call to \lstinline{modify}.
 
@@ -1398,14 +1404,14 @@ the caller, as described in the following sections.
 
 \subsubsection{Parallel Scatter}
 
-The in-place update construct thus seen is satisfactory for sequential
-programming.  However, the system of uniqueness types also lets us
-define an efficient construct for \textit{parallel scatter}.  A
+The in-place update construct shown above is satisfactory for
+sequential programming.  However, the uniqueness type system also lets
+us define an efficient construct for \textit{parallel scatter}.  A
 scatter operation, whose nomenclature is taken from vector processing,
-takes an array \lstinline{a}, a array of indices \lstinline{js},
-and a array of values \lstinline{vs}, and writes each value to the
-position in the array given by the corresponding index.  The operation
-can be explained in imperative pseudocode as follows:
+takes a destination array \lstinline{a}, an array of indices
+\lstinline{js}, and an array of values \lstinline{vs}, and writes each
+value to the position in the array given by the corresponding index.
+The operation can be explained in imperative pseudocode as follows:
 
 \begin{lstlisting}[language=Python]
   for i in 0...n-1:
@@ -1485,7 +1491,7 @@ which is discussed further in \cref{chap:empirical-validation}.
 As a first approximation---and also as further introduction to
 Futhark---we will discuss a (mostly) sequential solution of the
 problem.  This will also be a useful building block in our final
-solution.  The code is shown on \cref{fig:sequential-means}.  On lines
+solution.  The code is shown in \cref{fig:sequential-means}.  On lines
 \ref{line:add_centroids_begin}--\ref{line:add_centroids_end} we define
 a function for adding $d$-dimensional points, which we represent as
 vectors of floating-point values.  Element-wise addition is done by
@@ -1496,16 +1502,16 @@ apparent shortly.
 
 \begin{figure}
 \begin{lstlisting}[numbers=left,escapechar=|,xleftmargin=0pt]
-let add_centroids [d] (x: [d]f32, y: [d]f32)
-                      : *[d]f32 = |\label{line:add_centroids_begin}|
+let add_centroids [d] (x: [d]f32, y: [d]f32) |\label{line:add_centroids_begin}|
+                      : *[d]f32 =
   map (+) (zip x y) |\label{line:add_centroids_end}|
 
 let cluster_sums_seq [k] [n] [d]
                      (counts: [k]i32)
                      (points: [n]([d]f32,i32))
                      : [k][d]f32 =
-  loop (acc = replicate k (replicate d 0.0))
-    for (p,c) in points do |\label{line:clustersumsseqloop_begin}|
+  loop acc = replicate k (replicate d 0.0) |\label{line:clustersumsseqloop_begin}|
+    for (p,c) in points do
       let p' = map (/f32(counts[c])) p
       in acc with [c] <- add_centroids acc[c] p' |\label{line:clustersumsseqloop_end}|
 \end{lstlisting}
@@ -1595,7 +1601,7 @@ let cluster_sums_par [k] [n] [d]
 \end{figure}
 
 This implementation exploits all degrees of parallelism in the
-problem.  Unfortunately, it is not work efficient.  Constructing the
+problem.  Unfortunately, it is not work efficient: constructing the
 increment matrix involves
 $O(n\cdot{}k\cdot{}d)$ work, as does its eventual reduction, while the
 sequential version requires only
@@ -1653,9 +1659,9 @@ reduction function is associative, and that the result of
 among chunks.
 
 The \StreamRed{} formulation can be automatically transformed into the
-fully parallel implementation from Figure~\ref{fig:parallel-means} by
+fully parallel implementation from \cref{fig:parallel-means} by
 setting the chunk size to 1, or into the sequential implementation
-from Figure~\ref{fig:sequential-means} by setting the chunk size to
+from \cref{fig:sequential-means} by setting the chunk size to
 the full size of the input (followed by simplification).  It thus
 allows the compiler or runtime system to generate code that best fits
 the problem and target machine.  The compiler is free to exploit the
@@ -1719,7 +1725,7 @@ let sobol_ind [n] (dir_v: [n]i32) (x: i32): i32 =
                        dir_v [1..<n]
   in reduce (^) 0 reldv_vals
 
-let sobol_ind [n] _r(dir_v: [n]i32) (x: i32): f32 =
+let sobol_ind_r [n] (dir_v: [n]i32) (x: i32): f32 =
   f32 (sobol_ind dir_v x) / (2.0 ** f32 n)
 
 let sobol_par [n] (k: i32) (dir_v: [n]i32): f32 =
@@ -1769,7 +1775,7 @@ let sobol_chunk [n]
                                     else rec_m dir_v (i+x))
                      [0..<chunk]
   let vct_ints = scan (^) 0 contrbs
-  in map (\y -> f32 y / (2.0 ** f32 n)) vct_ints
+  in map (\y -> r32 y / (2.0 ** r32 n)) vct_ints
 
 let sobol_stream [n] (k: i32) (dir_v: [n]i32): f32 =
   let sobol_nums = stream_map
@@ -1803,16 +1809,15 @@ the compiler will sequentialise them during code generation, and
 instead use the chunk size to control how much parallelism to exploit.
 
 Note that the two formulae are algorithmically very different.  There
-is little chance that a compiler can efficiently derive one from the
-other.  The performance of the StreamMap{} version compared to
-explicitly parallel and sequential code is shown in
-\cref{tab:streaming-perf}.  The significant speedup of the chunked
-over the fully parallel implementation is due to the inner parallelism
-being efficiently sequentialised through the ``\StreamSeq{} fusion''
-technique discussed in \cref{sec:streamseq-fusion}.  This changes the
-per-chunk memory footprint from $O(\textrm{chunksize})$ to $O(1)$;
-effectively transforming the problem from memory-bound to
-compute-bound.
+is little chance that a compiler can derive one from the other.  The
+performance of the \StreamMap{} version compared to explicitly
+parallel and sequential code is shown in \cref{tab:streaming-perf}.
+The significant speedup of the chunked over the fully parallel
+implementation is due to the inner parallelism being efficiently
+sequentialised through the ``\StreamSeq{} fusion'' technique discussed
+in \cref{sec:streamseq-fusion}.  This changes the per-chunk memory
+footprint from $O(\textrm{chunksize})$ to $O(1)$; effectively
+transforming the problem from memory-bound to compute-bound.
 
 \section{Interoperability}
 \label{sec:interoperability}
@@ -1839,14 +1844,14 @@ compute-bound.
 Futhark is not a general-purpose programming language.  As a purely
 functional language, interacting with the outside world is impossible.
 As an array-oriented language, complicated data structures are awkward
-or impossible.  Futhark is at its core designed on trading flexibility
-for the ability to automatically obtain good runtime performance.  As
-a result, writing full applications in Futhark is impossible.  While
-the Futhark compiler can compile a Futhark program into an executable,
-the resulting program simply executes the Futhark \texttt{main}
-function, while reading input data from standard input and writing the
-result on standard output.  This is useful for testing, but not
-particularly useful for an application programmer.
+or impossible.  Futhark is at its core designed around trading
+flexibility for the ability to automatically obtain good runtime
+performance.  As a result, writing full applications in Futhark is
+impossible.  While the Futhark compiler can compile a Futhark program
+into an executable, the resulting program simply executes the Futhark
+\texttt{main} function, while reading input data from standard input
+and writing the result on standard output.  This is useful for
+testing, but not particularly useful for an application programmer.
 
 Futhark is intended to be used only for the computationally intensive
 parts of a larger application, with the main part of the application
@@ -1888,12 +1893,12 @@ scenes, data and code is submitted to the GPU.  This allows us to use
 Futhark for the heavy lifting, while making use of Python's wealth of
 libraries for such things as user interaction and data format
 serialisation.  As an example, several of the benchmark programs we
-discuss in \ref{chap:empirical-validation} have been furnished with
+discuss in \cref{chap:empirical-validation} have been furnished with
 interactive visualisations via the Pygame library.  The Python program
 reads input events from the user, and the Futhark programs creates
 screen images (in the form of two-dimensional arrays of integers),
 which are then blitted to the screen via Pygame.  Examples of the
-resulting visualisations can be seen on \cref{fig:visualisations}
+resulting visualisations can be seen in \cref{fig:visualisations}
 
 While Python is a worthwhile target language due to its popularity for
 scientific computing, it is not realistic to construct code generators
@@ -1962,20 +1967,20 @@ commercial compilers, and it would not be necessary if application
 parallelism was expressed explicitly by means of bulk-parallel
 operators, as in a data-parallel language.
 
-The first example, presented in Section~\ref{subsec:eg1}, semantically
+The first example, presented in \cref{subsec:eg1}, semantically
 corresponds to a map applied to an irregular two-dimensional array,
 but the low level implementation---which uses indirect arrays,
 unspecified preconditions, and array reshaping at call
 sites----complicates analysis.
 
-The second example, presented in Section~\ref{subsec:eg2}, shows an
-example in which the same loop may encode two semantically different
-parallel operators: a map and a generalized reduction.  Further
-difficulties refer to the compiler having to reverse engineer users
-optimizations, such as mapping two semantically different arrays to
-the same memory block.
+The second example, presented in \cref{subsec:eg2}, demonstrates how
+the same loop may encode two semantically different parallel
+operators: a map and a generalized reduction.  Further difficulties
+refer to the compiler having to reverse engineer users optimizations,
+such as mapping two semantically different arrays to the same memory
+block.
 
-The third example, presented in Section~\ref{subsec:eg3}, shows a loop
+The third example, presented in \cref{subsec:eg3}, shows a loop
 that semantically corresponds to the sequential composition of a
 filter and a map.  In this case the analysis has to be extended to (i)
 accommodate ``conditional-induction variables'' (CIV), and to (ii)
@@ -2116,10 +2121,10 @@ safely directly on the shared array \texttt{A}.  In Futhark terms, in
 the latter case the loop is actually a composition of the parallel
 operators \kw{map} and \kw{scatter}.
 
-Identifying the case when a generalized reduction is a map can
-requires summarization of the iteration-wise read-write set of the
-target array \texttt{A}, denoted \texttt{RW$_i$} and checking that
-they do not overlap.  This can be stated as the following equality:
+Identifying the case when a generalized reduction is a map can require
+summarization of the iteration-wise read-write set of the target array
+\texttt{A}, denoted \texttt{RW$_i$} and checking that they do not
+overlap.  This can be stated as the following equality:
 \[
   \cup_{i=1}^{N}(\texttt{RW}_i\cap\cup_{k=1}^{i-1}(\texttt{RW}_k))=\emptyset
 \]
@@ -2316,8 +2321,9 @@ Torch~\cite{Torch7}.
 Purely functional languages include
 Accelerate~\cite{mcdonell2013optimising},
 Obsidian~\cite{claessen2012expressive}, and
-NOVA~\cite{collins2014nova}.  These languages support neither
-arbitrary nested regular parallelism, nor explicit indexing and
+NOVA~\cite{collins2014nova}.  While these languages differ
+significantly, one common limitation is a lack of support for
+arbitrary nested regular parallelism, as well as explicit indexing and
 efficient sequential code inside their parallel constructs.
 
 A number of dataflow languages aim at efficient GPU compilation.

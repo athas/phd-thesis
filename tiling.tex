@@ -297,9 +297,9 @@ in kernel (m) (\i _ ->
     in acc + x)
 \end{lstlisting}
 
-Note that the \texttt{p} index in \texttt{ps[p]} is invariant to the
+Note that the \texttt{p} index in \texttt{js[p]} is invariant to the
 kernel, and as such leads to effective caching (each thread in a warp
-accesses the same \texttt{is[p]} in the same SIMD instruction).
+accesses the same \texttt{js[p]} in the same SIMD instruction).
 
 \section{Automatic Loop Tiling}
 \label{sec:automatic-tiling}
@@ -325,11 +325,11 @@ constraints on the group size of the GPU kernel, and it is not clear
 whether multiple instances of tiling would lead to conflicting
 constraints.
 
-In the following, we say that an array is variant to a parallel
+In the following, we say that an array is invariant to a parallel
 dimension if there is no data dependency between the array and the
 thread index corresponding to that dimension.  To simplify the
-exposition, we are ignoring a significant amount of tedious complexity
-with computing GPU group sizes and handling cases where the tiled
+explanation, we are ignoring a significant amount of tedious complexity
+related to computing GPU group sizes and handling cases where the tiled
 arrays have sizes that are not divisible with the optimal tile size.
 
 \subsection{One-Dimensional Tiling}

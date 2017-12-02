@@ -220,7 +220,7 @@ Our speedup on $k$-means is due to Rodinia not parallelising
 computation of the new cluster centres, which is semantically a
 histogram, which can be implemented as a segmented reduction.
 
-The default dataset for Myocyte dataset was expanded because its
+The default dataset for the Myocyte benchmark was expanded because its
 degree of parallelism was one ($\texttt{workload}=1$).  We used
 Rodinia's CUDA implementation rather than its OpenCL implementation,
 as the latter is not fully parallelised.  We attribute our speedup to
@@ -569,9 +569,9 @@ let step [n][e] (cost: [n]i32)
 Finally, we remark that the presented Futhark code is work-inefficient
 due to the ``padding'' of the edge-degree of a node, but the
 \lstinline{scatter} construct also enables a work-efficient
-implementation (not shown), which would correspond to applying
-flattening by hand. In our tests, this is slower than the padded one
-due to the overhead of multiple scans.
+implementation (not shown), which corresponds to full flattening. In
+our tests, this is slower than the padded one due to the overhead of
+multiple scans.
 %
 
 \begin{table*}

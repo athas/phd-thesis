@@ -8,13 +8,13 @@ of statically-exploitable parallelism by reorganizing imperfectly
 nested parallelism into perfect SOAC nests.  The outer levels of the
 resulting nestings correspond to \kw{map} operators, which are trivial
 to map to GPUs, and the innermost one is an arbitrary SOAC or
-sequential code.  In essence, the transformation seeks rewrite the
+sequential code.  In essence, the transformation seeks to rewrite the
 program to express patterns of parallelism that have a known efficient
 implementation to GPUs.  The simplest such pattern is a perfect nest
 of \kw{map}s, where the innermost function contains arbitrary
 sequential code.  This pattern maps directly to a single GPU kernel,
-but there are other interesting patterns that correspond to for
-example segmented scans and reductions.
+but there are other interesting patterns that correspond to, for
+example, segmented scans and reductions.
 
 In a purely functional setting, Blelloch's
 transformation~\cite{blelloch1990vector} flattens all available
@@ -185,7 +185,7 @@ variant to the second \lstinline{map}.
 \begin{align*}
 \inference{
   \Sigma = \Mv{x_p}{y_p},\ldots,\Mv{x_1}{y_1} \\
-  \Sigma' = \M~(\seq{x_p},\seq{a_{p-1}})~(\seq{y_p}, \seq{a_{p}}), \ldots, \M~(\seq{x_1},\seq{a_{0}})~(\seq{y_1},\seq{a_{1}}^{q_1}) \\
+  \Sigma' = \M~(\seq{x_p},\seq{a_{p-1}})~(\seq{y_p}, \seq{a_{p}}), \ldots, \M~(\seq{x_1},\seq{a_{0}})~(\seq{y_1},\seq{a_{1}}) \\
   \seq{a_{p}}, \dots, \seq{a_{1}} ~\mbox{fresh~names} \\
   \mbox{size~of~each~array~in~}\seq{a_{0}}\mbox{~invariant~to~}\Sigma \\
   \Sigma \vd e_1 \Rightarrow e_1' ~~~~ \Sigma' \vd e_2 \Rightarrow e_2'
@@ -372,7 +372,7 @@ fully utilize hardware.  This idea is discussed further below.
 \section{Multi-Versioned Code}
 \label{sec:multi-versioned-code}
 
-The flattening rules of the preceding section contain are able to
+The flattening rules of the preceding section are able to
 directly decompose \kw{map}-nestings via loop distribution.  However,
 they are not in general able to exploit parallelism nested within the
 functional argument to a non-\kw{map} SOAC.  Some rules, for example
@@ -564,7 +564,6 @@ does not optimise stencils, nor uses autotuning techniques, but could
 benefit from both.  In comparison, Futhark supports arbitrary nested
 parallelism and flattening transformation, together with streaming
 SOACs that generically encode strength-reduction invariants.
-sequentialization strategy).
 
 Delite uses rewrite rules to optimize locality in NUMA
 settings~\cite{DeliteNUMA} and proposes

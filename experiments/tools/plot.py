@@ -146,6 +146,8 @@ def plot_suite(outputfile, programs, no_aux=False):
    plt.savefig(outputfile, bbox_inches='tight')
 
 plot_suite('rodinia.pdf', rodinia_programs)
+plot_suite('rodinia1.pdf', rodinia_programs[:len(rodinia_programs)/2])
+plot_suite('rodinia2.pdf', rodinia_programs[len(rodinia_programs)/2:])
 plot_suite('accelerate.pdf', accelerate_programs, True)
 plot_suite('finpar.pdf', finpar_programs)
 plot_suite('parboil.pdf', parboil_programs)

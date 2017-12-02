@@ -25,7 +25,7 @@ new contributions:
 
 However, before we can move on to the new contributions, we must
 establish the basic fusion algorithm.  The algorithm identifies pairs
-of SOACs that can be fuesed.  The rules by which we combine SOACs
+of SOACs that can be fused.  The rules by which we combine SOACs
 through fusion is called the \textit{fusion algebra}.  The fusion
 algebra used by the Futhark compiler has as its central goals to never
 duplicate computation, and never reduce available parallelism.  This
@@ -57,8 +57,8 @@ in map (+) c d
 \begin{lstlisting}[xleftmargin=0pt]
 map (\x ->
       let b = x + 1
-      let c = x + 2
-      let d = x + 3
+      let c = b + 2
+      let d = c + 3
       in c + d)
     a
 \end{lstlisting}
@@ -107,12 +107,16 @@ refer to the types while reading the descriptions.
 \item[{\kw{scatter}}] now takes a functional argument, which maps $n$
   input arrays to $m$ pairs of indexes and values, which are written
   to the $m$ destination arrays, if the indexes are in bounds.
-  What we previously wrote as\\
-  \centerline{\lstinline{scatter dest is vs}}\\
-  we would now write as\\
-  \centerline{\lstinline{scatter (\i v -> (i,v)) (dest) is vs}} The
-  \lstinline{dest} is in parentheses to distinguish the destination
-  arrays from the input arrays.
+  What we previously wrote as
+\begin{lstlisting}
+scatter dest is vs
+\end{lstlisting}
+we will now write as
+\begin{lstlisting}
+scatter (\i v -> (i,v)) (dest) is vs
+\end{lstlisting}
+  The \lstinline{dest} is in parentheses to distinguish the
+  destination arrays from the input arrays.
 \item[\kw{redomap}] is a composition of \kw{map} and \kw{reduce} that
   permits a particularly efficient implementation.  It corresponds to
   a variation of the $\credomap$ operator from
@@ -141,7 +145,7 @@ let (zs: [n]i32) = map (\x -> x + 1) xs
 let (sum: i32)   = reduce (+) (0) xs
 in (ys, zs, sum)
 \end{lstlisting}
-  This can be fused into a single \kw{redomap}
+  This can be fused into a single \kw{redomap}, as follows:
 \begin{lstlisting}
 let (sum: i32) (ys: [n]i32) (zs: [n]i32) =
   redomap (+)
@@ -446,7 +450,7 @@ in map (\x -> g x) a'
 This ensures that the result of fusion never consumes more than the
 original expression(s).  For this example, it also makes fusion
 ineffective, as the \kw{copy} is just as slow as an identity \kw{map}.
-However, this is the worst-case situation: at most we one \kw{copy}
+However, this is the worst-case situation: at most we add one \kw{copy}
 per SOAC input fused, which will never be worse than not fusing in the
 first place, but also might not be an improvement.
 
@@ -564,7 +568,7 @@ and returns zero values (which would otherwise be written
 \]
 the following SOAC is equivalent:
 \[
-  \kw{let}~\seq{y}~\seq{ys}~=~\StreamPar~\oplus~f~(\seq{vs})~\seq{xs}
+  \kw{let}~\seq{y}~\seq{ys}~=~\StreamPar~\oplus~h~(\seq{vs})~\seq{xs}
 \]
 where \begin{align*}
         h =~& \fn c~\seq{xs'} \rightarrow \\
@@ -946,7 +950,7 @@ in (y,z)
 
 Loop fusion is an old technique, dating back at least to the
 seventies~\cite{cheatham1977programming}, with loop fusion in a
-parallel setting being covered in~\cite{midki1990issues}. In
+parallel setting being covered in~\cite{midki1990issues}. In work on
 imperative languages, the term ``fusion'' typically refers to
 horizontal, not vertical fusion.  Most functional languages primarily
 make use of vertical fusion, because the rewrite rules are more local.
