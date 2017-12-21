@@ -9,7 +9,7 @@ layers of automatic caching to help mitigate the effect of the memory
 wall, GPUs typically have only a single very small level-1 cache.
 This chapter presents how two well-known locality-of-reference
 optimisations can be applied to kernels produced by moderate
-flattening.  The optimisations improves the memory access patterns of
+flattening.  The optimisations improve the memory access patterns of
 Futhark programs by optimising both spatial and temporal locality of
 reference.
 
@@ -51,15 +51,16 @@ yet again, with a few more operations.  Their types are shown on
 \item[\kw{kernel} ($\nseq{d}{n}$)
   $(\Fn{\nseq{\tau}{m}}{\nseq{v}{2n}}{e})$] models an $n$-dimensional
   GPU kernel, loosely corresponding to a flattened form of $n$
-  \kw{map}-nets, where nest number $i$ (counted from outside-in) has
+  \kw{map}-nests, where nest number $i$ (counted from outside-in) has
   size $d_{i}$.  Semantically, the kernel function is executed for
   every thread, and passed $n$ \textit{global thread indices}, one for
   every dimension, and $n$ \textit{local thread indices}, again one
-  for every dimension (see \cref{sec:kernel-thread-space}).  In many
-  cases we will not be making use of the local thread indices, in
-  which case we will simply put an underscore for the parameter names.
-  The group size is not explicitly stated, but may be implicitly
-  bounded through the use of \kw{local} (see below).
+  for every dimension (see \cref{sec:kernel-thread-space})---this is
+  why the lambda accepts $2n$ parameters.  In many cases we will not
+  be making use of the local thread indices, in which case we will
+  simply put an underscore for the parameter names.  The group size is
+  not explicitly stated, but may be implicitly bounded through the use
+  of \kw{local} (see below).
 
   If the kernel function returns $m$ values, then the \kw{kernel}
   construct as a whole returns $m$ arrays, each of of shape
@@ -71,7 +72,7 @@ yet again, with a few more operations.  Their types are shown on
   $\nseq{c}{n}$ corresponds to the group size of the kernel (and any
   kernel containing a \kw{local} is thus implicitly forced to have
   that group size), and the resulting array is located in local
-  memory.  The subtleties of this construct is detailed further in
+  memory.  The subtleties of this construct are detailed further in
   \cref{sec:automatic-tiling}.
 \end{description}
 
@@ -116,9 +117,13 @@ this thesis, we only discuss the first case, of arrays that are
 sequentially iterated inside a kernel, as the others are not a
 question of transforming an AST, but simply a question of how we
 allocate arrays in the first place.  Our approach is guaranteed to
-resolve coalescing if the sequential-dimension indices are invariant
-to the parallel array dimensions. For example, consider the following
-expression:
+resolve coalescing if the sequential-dimension array indices are
+invariant to the parallel array dimensions.  An array index is
+invariant to a dimension if each thread along that dimension will have
+the same value for that index.  Or put another way, an array index is
+invariant to a dimension if the value of the index does not depend on
+the global or local thread index alongside that dimension.  For
+example, consider the following expression:
 \begin{lstlisting}[numbers=none]
 kernel (n) (\i _ -> stream_seq f (0) xss[i])
 \end{lstlisting}
@@ -236,19 +241,20 @@ permutation.  This would require the algorithm to take a more
 
 \subsection{Viability of the Optimisation}
 
-This optimisation requires additional runtime work and extra memory
-space to perform transpositions before the kernel is invoked.  The
-Futhark compiler presently always applies the optimisation whenever it
-detects an array indexing of the appropriate form.  A relevant
-question to ask is whether there are cases where this is not an
-optimisation, but rather a \textit{pessimisation}.  The short answer:
-in some cases, yes, but usually not.
+This optimisation requires both additional work at runtime, as well as
+extra memory space to perform transpositions before the kernel is
+invoked.  The Futhark compiler presently always applies the
+optimisation whenever it detects an array indexing of the appropriate
+form.  A relevant question to ask is whether there are cases where
+this is not an optimisation, but rather a \textit{pessimisation}.  The
+short answer: in some cases, yes, but judging by our benchmarks
+(\cref{chap:empirical-validation}), these occur rarely in practice.
 
 First we remark that transpositions are quite fast on GPUs; running at
 close to the speed of a memory copy.  Therefore, even in pathological
-cases where where one of the dimensions is unit, or the inner
-sequential loop is so short that the uncoalesced accesses have no
-great impact, the cost of the transpositions is not catastrophic.
+cases where one of the dimensions is unit, or the inner sequential
+loop is so short that the uncoalesced accesses have no great impact,
+the cost of the transpositions is not catastrophic.
 
 A greater concern is having to allocate extra memory to store the
 transposed copies.  In the worst case, this may require temporarily
@@ -265,7 +271,7 @@ representation in the first place.
 The coalescing transformation applies even in cases where indirect
 accesses are involved, as it depends only on variance information.
 For example, consider this variation on the earlier example, where an
-array \texttt{is} of indices is used to index \texttt{xss}.
+array \texttt{js} of indices is used to index \texttt{xss}.
 
 \begin{lstlisting}[numbers=none]
 let (js: [n]i32) = ...
@@ -273,7 +279,7 @@ let (xss: [m][k]i32) = ...
 in kernel (m) (\i _ ->
   loop acc = 0 for p < n do
     let j = js[p]
-    let x = xss[i][j]
+    let x = xss[i,j]
     in acc + x)
 \end{lstlisting}
 
@@ -309,7 +315,7 @@ where several threads are traversing the same array.  The tiling
 algorithm transforms traversal to be over \textit{chunks} of the
 input, where each chunk is collectively copied to local memory before
 it is traversed.  The result is that the number of accesses to global
-memory are reduced.
+memory is reduced.
 
 The algorithm is driven by recognizing arrays that are inputs to
 \lstinline{stream_seq} constructs \textit{and} are invariant to one or
@@ -378,8 +384,8 @@ the group size used for this kernel, such that the array
 \lstinline{ps''} will fit in local memory.  For simplicity, we assume
 that the size of array \texttt{ps} is divisible by some reasonable
 group size.  The trick is that every thread within a workgroup reads a
-distinct element from \texttt{ps'}, by using the local thread index.
-The array \texttt{ps''} is visible by all threads within the
+distinct element from \lstinline{ps'}, by using the local thread index.
+The array \lstinline{ps''} is visible by all threads within the
 workgroup, so \kw{local} in effect constitutes intra-group
 communication.
 
@@ -457,8 +463,8 @@ Operationally, the \lstinline{local} expressions creates a
 two-dimensional array in local memory, which is then immediately
 indexed with the local thread index along dimension $1$ (or $2$),
 resulting in a one-dimensional array.  The core IR used in this thesis
-does not support fixing any but the first dimension; instead we
-transpose before indexing.
+does not support indexing along any but the first dimension; instead
+we transpose before indexing.
 
 \subsection{A Complicated Instance of Tiling}
 \label{sec:lavamd-tiling}
@@ -543,9 +549,10 @@ tilling~\cite{HexaTiling} and achieving memory coalescing by
 semantically transposing arrays on the fly (via tiling).
 %
 However, non-affine array indexes may restrict applicability: for
-example indirect-array accesses would prevent them from optimising
-memory coalescing for the OptionPricing benchmark (\cref{sec:finpar}),
-where Futhark's simpler, transposition-based approach succeeds.
+example, indirect-array accesses would prevent traditional analyses
+from optimising memory coalescing for the OptionPricing benchmark
+(\cref{sec:finpar}), where Futhark's simpler, transposition-based
+approach succeeds.
 
 %%% Local Variables:
 %%% mode: latex

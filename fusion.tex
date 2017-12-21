@@ -9,16 +9,16 @@ two otherwise independent SOACs take the same array as input.  As all
 other optimisations in the Futhark compiler, the approach is based on
 a syntactic rewriting of abstract syntax trees.
 
-The core of the technique has been previously described in my master's
-thesis~\cite{henriksen2014exploiting}.  The current thesis makes three
-new contributions:
+The core of the technique has been previously described in the
+author's master's thesis~\cite{henriksen2014exploiting}.  The current
+thesis makes three new contributions:
 
 \begin{enumerate}
 \item A simple technique for integrating horizontal fusion in the
   existing framework.  The previously published work did not support
   horizontal fusion at all.
-\item Vertical fusion of \lstinline{map} into \lstinline{scan} and
-  \lstinline{map} into \lstinline{scatter}.
+\item Vertical fusion of \lstinline{map} with \lstinline{scan} and
+  \lstinline{map} with \lstinline{scatter}.
 \item Fusion rules for the streaming SOACs \lstinline{stream_red} and
   \lstinline{stream_map}.
 \end{enumerate}
@@ -40,7 +40,7 @@ by the Futhark compiler is capable of fusing such cases if this is
 possible without duplicating computation, as demonstrated on
 \cref{fig:fusion-multiple-consumers}.  The linchpin of this capability
 is our choice of internal representation, in which arrays of tuples
-(and therefore \lstinline{zip}/\lstinline{unzip}) does not occur.
+(and therefore \kw{zip}/\kw{unzip}) do not occur.
 
 \begin{figure}
 \begin{subfigure}[b]{0.4\textwidth}
@@ -70,7 +70,7 @@ map (\x ->
 
 This chapter covers two main themes: \Cref{sec:fusion-algorithm}
 describes our aggressive fusion algorithm, which in particular
-supports fusion for producers whose result are used by multiple
+supports fusion for producers whose results are used by multiple
 consumers, without duplicating computation.  \Cref{sec:fusionalgebra}
 describes the rewrite rules used to fuse two SOACs.  However, first we
 define an extended set of SOACs with better fusion properties than the
@@ -85,11 +85,11 @@ as rich as we desire.  Using the previously shown SOACs, there is not
 even a way to fuse a composition of \lstinline{map} and
 \lstinline{reduce}.  This section will introduce a new set of SOACs
 that, while perhaps not as aesthetically pleasing and orthogonal as
-those in the source languages, have two important qualities:
+those in the source language, have two important qualities:
 
 \begin{enumerate}
 \item Their fusion properties are much more powerful, permitting for
-  example both vertical and horizontal of \lstinline{map} into
+  example both vertical and horizontal fusion of \lstinline{map} with
   \lstinline{reduce} or \lstinline{scan}.
 \item They permit an efficient mapping to parallel code.  This
   requirement prevents us from defining overly complicated SOACS that
@@ -97,7 +97,7 @@ those in the source languages, have two important qualities:
   issue is examined in more depth in \cref{chap:kernel-extraction}.
 \end{enumerate}
 
-The types of the new SOACs are shown on \Cref{fig:newSoacType}.  An
+The types of the new SOACs are shown in \cref{fig:newSoacType}.  An
 individual description now follows, which also shows how instances of
 the previous SOACs are mapped to the new ones.  It may prove useful to
 refer to the types while reading the descriptions.
@@ -125,12 +125,10 @@ scatter (\i v -> (i,v)) (dest) is vs
   The fold function takes as parameters a current
   \textit{accumulator}, and an element of the input.  The \kw{redomap}
   fold function returns $m+l$ values.  The first $m$ are called the
-  \textit{reduced results}, and are reduced with the reduction
+  \textit{reduced results}, and are passed on to the reduction
   operator, while the remaining $l$ \textit{mapped results} are simply
   returned as an array in the final result.  We shall soon see how
-  this enables horizontal fusion.  The relationship between
-  source-language \kw{reduce} and \kw{redomap} is by the
-  following equivalence:\\
+  this enables horizontal fusion.  A source-language \kw{reduce} is merely a special case of \kw{redomap}:\\
   \centerline{\lstinline{reduce f x a} = \lstinline{redomap f f x a}}
   The way we construct the fold function in \kw{redomap} ensures that
   the mapped results do not depend on the accumulator.  It trivially
@@ -226,7 +224,7 @@ The entire algorithm consists of two distinct stages:
 
 \begin{enumerate}
 \item Traverse the program, collecting SOAC-expressions and fusing
-  producers into consumers where possible.  The end result is a
+  producers with consumers where possible.  The end result is a
   mapping from SOACs in the original program, to replacement SOAC
   expressions (the result of fusion operations).  This is called the
   \textit{gathering} phase.
@@ -234,16 +232,16 @@ The entire algorithm consists of two distinct stages:
 \item Traverse the program again, using the result of the gathering
   phase to replace SOAC expressions with their fully fused forms.
   This may lead to dead code, as the output variables of producers
-  that have been fused into their consumers are no longer used.  These
+  that have been fused with their consumers are no longer used.  These
   can be removed using standard dead code removal.
 \end{enumerate}
 
 Futhark, as a block-structured language, is suited to region-based
 analysis, and the fusion algorithm is indeed designed as a reduction
 of a dataflow graph.  Our structural analysis is inspired by the
-T$_{1}$-T$_{2}$-reduction~\cite{red_dragon}.  We say that a flow graph
-is reducible if it can be reduced to a single node by the following
-two transformations:
+T$_{1}$-T$_{2}$-reduction~\cite{red_dragon}, which says that a flow
+graph is reducible if it can be reduced to a single node by the
+following two transformations:
 
 \begin{figure}
 \begin{center}
@@ -261,11 +259,11 @@ two transformations:
     graph.
 \end{description}
 
-On \cref{fig:t1t2-1} is shown a small flow graph and highlights
-instances where the two reductions could apply.  The overall idea is
-to construct a flow graph of the Futhark program, reduce it to a
-single point, and at each reduction step combine the information
-stored at the nodes being combined.
+\Cref{fig:t1t2-1} shows a small flow graph and highlights instances
+where the two reductions could apply.  The overall idea is to
+construct a flow graph of the Futhark program, reduce it to a single
+point, and at each reduction step combine the information stored at
+the nodes being combined.
 
 By construction, Futhark always produces a reducible graph.  Each node
 corresponds to an expression, with the successors of the node being
@@ -320,7 +318,7 @@ is possible, because the SOAC computing \texttt{x1} has two incoming
 edges.  This example demonstrates a key benefit of removing
 \kw{zip}/\kw{unzip} and using our tupleless SOACs representation:
 there are no intermediate nodes in the data-dependency graph between
-fusable producer and consumer.
+fusible producer and consumer.
 
 \subsection{Optimality of Fusion}
 
@@ -358,17 +356,17 @@ There are three mutually incompatible ways to fuse in this expression.
   \end{subfigure}
   \begin{subfigure}[t]{0.32\textwidth}
     \input{img/fusion-vertical.tex}
-    \caption{Horizontal fusion of \kw{map} and \kw{reduce} into \kw{redomap}.}
+    \caption{Vertical fusion of the two \kw{map} operations.}
       \label{fig:three-fusion-map-map}
   \end{subfigure}
   \begin{subfigure}[t]{0.32\textwidth}
     \input{img/fusion-horizontal.tex}
-    \caption{Vertical fusion of the two \kw{map} operations.}
+    \caption{Horizontal fusion of \kw{map} and \kw{reduce} into \kw{redomap}.}
       \label{fig:three-fusion-map-reduce}
   \end{subfigure}
 
 
-  \caption{Three fusion possibilities for the example program. Figure
+  \caption{Three fusion alternatives for the example program. Figure
     taken from \cite{dybdal2017array} with permission.}
   \label{fig:three-fusion-opportunities}
 \end{figure}
@@ -378,26 +376,27 @@ there is a data dependency between the \kw{reduce} and the final
 \kw{map}, it is not of a form that permits fusion.
 
 Looking at the expression in isolation, we might be able to use
-hardware heuristics to determine whether it is better to fuse one way
-or the other.  However, for larger expressions the choice made might
-affect fusibility of other SOACs that are in a producer- or
-consumer-relationship with those fused.  Determining optimal fusion is
-equivalent to graph clustering, an NP-hard problem.  However,
-practical solutions based on integer linear
+heuristics based on hardware propertiers to determine whether it is
+better to fuse one way or the other.  However, for larger expressions
+the choice made might affect fusibility of other SOACs that are in a
+producer- or consumer-relationship with those fused.  Determining
+optimal fusion is equivalent to graph clustering, an NP-hard problem.
+However, practical solutions based on integer linear
 programming~\cite{Megiddo:1997:OWL:258492.258520} or graph
 partitioning~\cite{Kristensen:2016:FPA:2967938.2967945} have been
 developed.  The Futhark compiler presently uses a \textit{greedy}
 approach: the first succesful candidate for fusion is used (where the
 iteration order is essentially just the bottom-up traversal of the
-AST).  We have not yet in practise observed cases where the greedy
+AST).  We have not yet in practice observed cases where the greedy
 approach leads to suboptimal code, but if such cases were to become
 prevalent, the techniques mentioned above could readily be adopted.
 
 \subsection{Invalid fusion}
 \label{sec:invalidfusion}
 
-We must be careful not to violate the uniqueness rules when performing
-fusion.  For example, consider the following program.
+We must be careful not to violate the rules on in-place updates
+(\cref{sec:update-checking}) when performing fusion.  For example,
+consider the following program.
 \begin{lstlisting}
 let b = map f a
 let c = a with [i] <- x
@@ -409,15 +408,15 @@ modification, we could fuse to the following program.
 let c = a with [i] <- x
 in map (g $\circ$ f) a
 \end{lstlisting}
-However, this results in a violation of Uniqueness Rule 1, because now
-\texttt{a} is used after it has been consumed, and the resulting
+However, this results in a violation of Uniqueness Rule 1, because
+\texttt{a} is now used after it has been consumed, and the resulting
 program is thus invalid.  In general, we must track the possible
 execution paths from the producer-SOAC to the consumer-SOAC, and only
 fuse if none of the inputs of the producer have been consumed (in the
-uniqueness type sense of the word) by a \lstinline{let-with} or
-function call on any possible execution paths.  This is easier than it
-may appear at first glance, as the fusion algorithm will only fuse
-when the consumer is within the lexical scope of the producer anyway.
+uniqueness type sense of the word) by an in-place update or function
+call on any possible execution paths.  This is easier than it may
+appear at first glance, as the fusion algorithm will anyway only fuse
+when the consumer is within the lexical scope of the producer.
 
 Another, subtler, issue is that a fused SOAC may consume more of its
 input than the original constituent SOAC.  Consider the following
@@ -428,7 +427,7 @@ in map g b
 \end{lstlisting}
 Suppose that the function \texttt{g} consumes its input.  This means
 that in the expression as a whole, the array \texttt{b} is being
-consumed, but \texttt{a} is not (by the fusion rules, the array
+consumed, but \texttt{a} is not (by the aliasing rules, the array
 produced by a \kw{map} has no aliases).  After \kw{map}-\kw{map}
 fusion (and copy propagation), we obtain
 \begin{lstlisting}
@@ -458,11 +457,10 @@ first place, but also might not be an improvement.
 \label{sec:whentofuse}
 
 Even when fusion is possible, it may not be beneficial, and may be
-harmful to overall performance in the following cases.
+harmful to overall performance.  Two such cases are discussed below.
 
 \begin{description}
-\item[Computation may be duplicated.]
-
+\item[Fusion may duplicate computation.]\hfill\\
 In the program
 \begin{lstlisting}
 let xs = map f as
@@ -470,23 +468,23 @@ let ys = map g xs
 let zs = map h xs
 in (ys,zs)
 \end{lstlisting}
-\noindent fusing the \texttt{x}-producer into the two consumers will
-double the number of calls to the function \texttt{f}, which might be
-expensive.  The implementation in the Futhark compiler will currently
-only fuse if absolutely no computation is duplicated, although this is
-likely too conservative.  Duplicating cheap work, for example
-functions that use only primitive operations on scalars, is probably
-not harmful to overall performance, although we have not investigated
-this fully.
+\noindent vertically fusing the \texttt{x}-producer with the two
+consumers will double the number of calls to the function \texttt{f},
+which might be expensive.  The implementation in the Futhark compiler
+will currently only fuse if absolutely no computation is duplicated,
+although this is likely too conservative.  Duplicating cheap work, for
+example functions that use only primitive operations on scalars, is
+probably not harmful to overall performance, although we have not
+investigated this fully.
 
-In general, in the context of GPU, the tradeoff between duplicating
-computation and increasing communication is not an easy problem to
-solve.  Accessing global memory can be more than a hundred times
-slower than accessing local (register) memory, hence duplicating
-computation may in some cases be preferable.
+In general, the tradeoff between duplicating computation and
+increasing communication is not an easy problem to solve.  On a GPU,
+Accessing global memory can be more than a hundred times slower than
+accessing local (register) memory, and hence duplicating computation
+may in some cases be preferable.
 
 The fusion algorithm used by the Futhark compiler is careful never to
-duplicate computation.  However, some simpification rules may perform
+duplicate computation.  However, some simplification rules may
 duplicate small amounts of scalar computation.
 
 Note that the expression above is only a problem when considering just
@@ -494,7 +492,7 @@ vertical fusion; using horizontal fusion we can fuse this into a
 single \kw{map} (see \cref{sec:horizontal-fusion} where we use just
 this example).
 
-\item[Can reduce memory locality.]
+\item[Fusion may reduce memory locality.]\hfill\\
   Consider a simple case of fusing
   \[
     \map~f~\circ~\map~g
@@ -514,7 +512,7 @@ this example).
   The fusion algorithm used by the Futhark compiler is not concerned
   with these issues.  The risk of cache eviction is not very relevant
   on GPUs, and determining the proper size of GPU kernels is a job
-  better left for kernel extraction \cref{chap:kernel-extraction}.
+  better left for kernel extraction (\cref{chap:kernel-extraction}).
 \end{description}
 
 \section{Fusion Rules}
@@ -533,7 +531,7 @@ names will be dead after fusion, but they will be removed by
 subsequent simplification, not by the fusion algorithm itself.
 
 For simplicity, when fusing $A$ into $B$, we will assume that the
-inputs to $B$ have been arranged such that those arrays that are
+inputs to $B$ have been arranged so that those arrays that are
 produced by $A$ come first.  This causes no loss of generality, as
 this rearranging is always possible.  We commit some abuse of notation
 when describing the composition of the lambda functions, as we invoke
@@ -607,8 +605,8 @@ will discuss in \cref{sec:streamseq-fusion}.
 
 Not all pairs of SOACs are covered by the following fusion rules, even
 when permitting transformation into \StreamPar{}.  These cases are
-handled by transforming the SOACs involved into \StreamSeq{}, as
-discussed in \cref{sec:streamseq-fusion}.
+handled by transforming the remaining SOACs involved into
+\StreamSeq{}, as discussed in \cref{sec:streamseq-fusion}.
 
 \subsection{List of Fusion Rules}
 
@@ -651,7 +649,7 @@ discussed in \cref{sec:streamseq-fusion}.
   The outputs of SOAC $A$ are divided into three parts: $y_{r}$ are
   the reduction results.  These are not used by SOAC $B$ at all, or
   the fusion algorithm would not have attempted fusion in the first
-  place (where would be an incontractable edge in the graph).  The map
+  place (there would be an incontractable edge in the graph).  The map
   results are divided into $ys_{m}$, which are input to SOAC $B$, and
   $ys_{s}$, which are not.  SOAC $C$ must still produce both of these,
   even though it is likely that $ys_{m}$ will not be used afterwards.
@@ -661,19 +659,19 @@ discussed in \cref{sec:streamseq-fusion}.
   cleverness; as we simply apply $\oplus$ and $\otimes$ to those
   parameters that correspond to the original values from SOAC $A$ and
   $B$.  This operation carries a risk, as it conceptually increases
-  the size of the values involved in the the reduction.  The
+  the size of the values involved in the reduction.  The
   implementation of reductions shown in
   \cref{sec:calculus-implementation} uses GPU local memory to
   communicate between threads during the reduction, and for
-  sufficiently large values we may eventually run of local memory.  In
-  such cases we either have to communicate between threads in (slow)
-  global memory, or split apart the reduction into multiple
-  independent passes.  The Futhark compiler currently does not handle
+  sufficiently large values we may eventually run out of local memory.
+  In such cases we either have to communicate between threads in
+  (slow) global memory, or split apart the reduction into multiple
+  independent passes.  The Futhark compiler currently does not address
   this problem.  Since fusion is performed statically (as opposed to
   dynamically; see \cref{sec:related-work-fusion} for alternatives),
   this risk is not dataset-dependent, but only proportional to the
   number of independent reductions present in the program being
-  compiled.  We have not yet observed this problem in practise.
+  compiled.  We have not yet observed this problem in practice.
 
 \item[\kw{scanomap}-\kw{scanomap}]\hfill\\
 
@@ -785,7 +783,7 @@ available.  Furthermore, since the carry will be set to the neutral
 element, frequently a constant, basic simplification may be able to
 remove the \kw{map}s entirely.
 
-As an example, consider the following expression fragment, whew we
+As an example, consider the following expression fragment, where we
 suppose the size of \lstinline{xs} is given by \lstinline{n}:
 
 \begin{lstlisting}
@@ -961,7 +959,7 @@ horizontal fusion.
 Data-Parallel Haskell (DPH)~\cite{Chak06DPH} makes use of aggressive
 inlining and rewrite rules to perform fusion, including expressing
 array operations in terms of streams~\cite{coutts2007rewriting}, which
-have previously been shown to be easily fusable.  While DPH obtains
+have previously been shown to be easily fusible.  While DPH obtains
 good results, this form of rewrite rules are quite limited---they are
 an inherently local view of the computation, and would be unable to
 cope with limitations in the presence of in-place array updates, or

@@ -7,7 +7,7 @@ supports just a few core concepts, yet is more expressive than prior
 parallel languages of similar performance, in particular by supporting
 nested parallelism.  While more flexible parallel languages exist
 (notably NESL), these have not yet been shown to obtain good GPU
-performance in practise.
+performance in practice.
 
 We have demonstrated a combination of imperative and functional
 concepts by supporting in-place updates with safety guaranteed by
@@ -20,7 +20,7 @@ safe parallel execution.
 We have also shown how size-dependent array types can be inferred from
 a size-agnostic source program, via a combination of type-driven rules
 and function slicing.  Our slicing technique results in neglible
-overhead in practise.
+overhead in practice.
 
 By introducing novel parallel streaming constructs, we provide better
 support for efficient sequential execution of excess parallelism than
@@ -105,9 +105,93 @@ in map (\(i,o) ->
 This is not a language issue---our sequential compiler pipeline is
 able to compile any valid Futhark program to sequential code---but a
 limitation in our compilation strategy for parallel code.  Our
-strategy was to focus on development a technique for exploiting
+strategy is to focus on development a technique for exploiting
 ``common case'' parallelism efficiently, and only later extend it to
-support more exotic cases.
+support more exotic cases.  This work will take the form of a
+\textit{gradual flattening} algorithm that employes multi-versioned
+code as discussed in \cref{sec:multi-versioned-code}.
+
+Various other opportunities for improvements have been noted
+throughout the thesis.  These are summarised below.
+
+\begin{description}
+\item[Provide a language mechanism for reasoning about irregularity:]
+  As discussed above, irregularity is one of the main weak points of
+  Futhark's approach.  Even when we add support for irregular
+  parallelism, it is likely that irregular programs will run slower
+  than corresponding regular programs.  It would be useful to come up
+  with a language-based model for reasoning about regularity of
+  parallelism, in the same way that size annotations already let us
+  reason about the regularity of arrays.
+
+\item[Support tail-recursion directly:] Futhark does not directly
+  support tail-recursion, which is mostly due to concerns about
+  implementation simplicity.  Instead, the programmer is required to
+  manually express the tail-recursive functions using the \kw{loop}
+  syntax.  It would be useful if the Futhark compiler could
+  automatically perform this conversion, and report an error on
+  non-tail recursive functions.  Ideally, this would also support
+  mutually tail-recursive functions.
+
+\item[Support higher-order functions:] While higher-order functions
+  can be imitated using the module system, as shown on
+  \cref{fig:faking-hof}, this is rather verbose.  It would be useful
+  if higher-order functions could be used directly, with type rules
+  guaranteeing that they can be efficiently compiled away early in the
+  compilation process, using a defunctionalisation transformation.  We
+  believe that it can be guaranteed that the result of such a
+  transformation is efficient (contains no branches or indirect
+  accesses) if a function is never used as a \kw{loop} parameter,
+  returned from a branch, or put into an array.  However, it is not
+  yet clear how higher-order functions would interact with size
+  annotations, or with the uniqueness type system.
+
+\item[Iteration analysis when transforming data for coalesced access:]
+  \Cref{sec:automatic-coalescing} describes a transformation that
+  changes the in-memory representation of arrays in order to ensure
+  that they will be accessed efficiently by the GPU.  However, it
+  relies on the simplifying assumption that if an individual GPU
+  thread takes a slice of an array, then that slice will be traversed
+  sequentially.  This is not necessarily true.  The compiler could
+  instead perform an actual analysis to determine how the thread
+  accesses memory, and represent the array in exactly the form that
+  leads to coalesced memory access patterns.  Since the sequential
+  looping operations performed by the thread are (potentially) still
+  represented using SOACs, the compiler has enough high-level
+  information available to perform the analysis without getting bogged
+  down in the complicated index analysis discussed in
+  \cref{sec:related-automatic-par}.
+
+\item[Improving memory management for stencils:] As discussed in
+  \cref{sec:rodinia}, the memory management strategy used by the
+  Futhark compiler exhibits pathological behaviour for stencil
+  programs (or more generally, any program with an outer sequential
+  convergence loop), in which an extra copy of the result is
+  performed.  This is an artifact of the \textit{double buffering}
+  transformation that the Futhark compiler performs in order to move a
+  memory allocation out of the loop.  This transformation should be
+  improved to perform pointer swapping in the conventional way, rather
+  than copying the result.
+
+\item[Parallel operators for certain irregular problems:]
+  \Cref{sec:bfs-benchmarking} shows an irregular problem
+  (breadth-first search) in which the parallel operators provided by
+  Futhark are insufficient for permitting the compiler to generate
+  code similar to what a human would write by hand.  It is not clear
+  whether a new source-language feature is required, or whether we
+  could simply augment the core language with a new ``streaming
+  \kw{scatter}'' construct that is produced by fusion.
+\end{description}
+
+As the Futhark compiler is publicly available free software developed
+in the open, we naturally encourage all interested readers to
+contribute in solving the above (and other) problems:
+
+\begin{center}
+  \url{https://github.com/diku-dk/futhark}
+\end{center}
+
+Happy hacking!
 
 %%% Local Variables:
 %%% mode: latex

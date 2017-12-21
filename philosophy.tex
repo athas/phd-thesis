@@ -7,7 +7,7 @@ often used as an indication that some programming language is as fast
 as it can possibly be.  Of course, in theory it makes no sense to say
 that a given programming language is ``slow'' or ``fast'', as these
 are merely properties of a particular implementation of the
-programming language running on a specific computer.  But in practise,
+programming language running on a specific computer.  But in practice,
 it is clear that the design of a programming language has an
 overwhelming influence on the ease of constructing a performant
 implementation.
@@ -102,7 +102,7 @@ through various means:
 \item[Increasing the size of caches.] One significant problem with
   modern computer designs is that processors are significantly faster
   than the memory from which they get their data.  As a rule of thumb,
-  accessing main memory incurs a latency of $100ns$ - likely hundreds
+  accessing main memory incurs a latency of $100ns$---likely hundreds
   of clock cycles on a current CPU.  This so-called \textit{memory
     wall} can be circumvented by the addition of caches that store
   small subsets of the larger
@@ -177,7 +177,7 @@ decision to introduce yet another programming language, rather than
 re-use an existing one, by arguing that certain features of existing
 functional languages hinder efficient parallel execution.
 \Cref{sec:interoperability} shows how Futhark, a restricted
-data-parallel language, can be used in practise, by demonstrating
+data-parallel language, can be used in practice, by demonstrating
 interoperability with mainstream and not-so-mainstream technologies.
 Finally, \cref{sec:related-automatic-par} shows the difficulties
 involved in parallelising legacy sequential code, and
@@ -224,7 +224,7 @@ simple 1-bit microprocessors.  The CM-1 proved difficult to program
 and was not a success in the market, but was an early example of a
 \textit{massively parallel machine}~\cite{hillis1989connection}.
 
-In the 90s, consumer demand for increasing visual fidelity in video
+In the 1990s, consumer demand for increasing visual fidelity in video
 games led to the rise of the \textit{graphics processing unit} (GPU),
 for accelerating graphical operations that would be too slow if
 executed on the CPU.  Initially, GPUs were special-purpose
@@ -232,7 +232,7 @@ non-programmable processors that could only perform fixed graphical
 operations.  Over time, the need for more flexibility in graphical
 effects led to the development of programmable \textit{pixel shaders},
 first seen in the NVIDIA GeForce 3 in 2000.  Roughly, pixel shaders
-allowed an effect to be applied to every pixel of an image - for
+allowed an effect to be applied to every pixel of an image---for
 example, looking at every pixel and adding a reflection effect to
 those that represent water.  Graphical operations such as these tend
 to be inherently parallel, and as a result, GPU hardware evolved to
@@ -256,7 +256,7 @@ hardware is too complicated and too diverse for low-level programming
 by hand to be viable.  We will introduce a high-level
 hardware-agnostic programming model, in the form of the Futhark
 programming language, and describe its efficient mapping to GPUs.  The
-hope is that if the model can be mapped efficiently to a platform as
+motivation is that if the model can be mapped efficiently to a platform as
 restricted as GPUs, it can probably also be mapped to other parallel
 platforms, such as multicore CPUs, clusters, or maybe even FPGAs.
 
@@ -289,7 +289,7 @@ for a memory operation to complete is de-scheduled and another thread
 run in its place.  This scheduling is done entirely in hardware, and
 thus does not carry the usual overhead of context switches.  This
 scheduling is not done on each thread in isolation, but on entire
-32-thread warps.  Thus, while a GPU may be only have enough
+32-thread warps.  Thus, while a GPU may only have enough
 computational units (such as ALUs) to execute a few thousand parallel
 instructions per clock cycle, tens of thousands of threads may be
 necessary to avoid the computational units being idle while waiting
@@ -307,7 +307,7 @@ techniques and languages:
 \item GPUs function as \textit{co-processors}, where code is
   explicitly uploaded and invoked.  A GPU program is typically called
   a \textit{GPU kernel}, or just \textit{kernel}.
-\item The amount of threads necessary implies that each thread can use
+\item The number of threads necessary implies that each thread can use
   only relatively few registers and little memory (including stack
   space).
 \item The lockstep execution of warps, as well as the very small
@@ -332,7 +332,7 @@ to orchestrate their execution.  This involves organising
 communication between the tens of thousands of threads that are needed
 to saturate the hardware, with both correctness and performance easily
 suffering under even small mistakes---a tall order, and the compiler
-offers little help.  In practise, this renders GPU programming the
+offers little help.  In practice, this renders GPU programming the
 domain of experts, and off-limits to most programmers, except through
 the use of restricted libraries offering pre-defined primitives.
 
@@ -345,14 +345,13 @@ hardware.  This does not mean we need a low-level language, or a
 specialised GPU language.  Rather, we should \textit{increase} the
 level of abstraction, and stop overspecifying details like iteration
 order and sequencing, unless we really \textit{need} something to
-execute in some specific order.  In a C program, everything is
-required to execute in exactly the order written by the programmer,
-and the C compiler must perform significant work to determine which
-of the sequencing restrictions are essential, and which are
-accidental.  In a (pure) functional language, only data dependencies
-affect ordering.  Furthermore, the language should be safe for
-parallel execution by construction, without the risk of race
-conditions or deadlocks.
+execute in some specific order.  When writing a C program, the
+programmer writes the program statements in some order, and the C
+compiler must then perform significant work to determine which of the
+sequencing restrictions are essential, and which are accidental.  In a
+(pure) functional language, only data dependencies affect ordering.
+Furthermore, the language should be safe for parallel execution by
+construction, without the risk of race conditions or deadlocks.
 
 In the following, I will introduce the \textit{Futhark programming
   language}, a purely functional ML-like array language that has been
@@ -460,12 +459,12 @@ always efficient to translate all \textit{potential} parallelism into
 
 A persistent question when designing a programming language is which
 constructs to build in, and which to derive from more primitive forms.
-In functional languages, we usually prefer to include just a few
-powerful foundational constructs, on which the rest of the language
-can be built.  In principle, \lstinline{map} can be used to express
-(almost) all other data-parallel constructs.  For example, we can
-write a summation as follows, where we assume for simplicity that the
-size of the input array is a power of two:
+Functional languages usually prefer just a few powerful foundational
+constructs, on which the rest of the language can be built.  In
+principle, \lstinline{map} can be used to express (almost) all other
+data-parallel constructs.  For example, we can write a summation as
+follows, where we assume for simplicity that the size of the input
+array is a power of two:
 
 \begin{lstlisting}
 let sum (xs: []i32): i32 =
@@ -500,13 +499,11 @@ However, if executed straightforwardly on a GPU, this function will be
 far from reaching peak potential performance.  One reason is that it
 is very expensive to create the intermediate \lstinline{ys} arrays,
 compared to the time taken to add the numbers.  While a ``sufficiently
-smart'' compiler may be able to rewrite the program to avoid some of
-this overhead (and perhaps even take advantage of hardware-specific
-features for performing summations), this is contrary to the
-philosophy behind Futhark.  Specifically, although we do not mind
-aggressive optimisation, the transformations we perform should arise
-naturally from the constructs used by the programmer, and not depend
-on subtle and fragile analyses.
+smart'' compiler may be able to rewrite the program to avoid the
+overhead, this is contrary to the philosophy behind Futhark: although
+we do not mind aggressive optimisation, the transformations performed
+should arise naturally from the constructs used by the programmer, and
+not depend on fragile analyses.
 
 As a consequence, we provide several parallel constructs in Futhark
 that, while expressible in an asymptotically optimal form using
@@ -530,8 +527,7 @@ resemble higher-order functions found in most functional languages:
   \lstinline{v} as the neutral element.  If \lstinline{xs} is empty,
   \lstinline{v} is produced.  This is similar to the \lstinline{fold}
   function found in functional languages, but the extra requirements
-  permit a parallel execution, which is not guaranteed for an
-  arbitrary \lstinline{fold}.
+  permit parallel execution.
 \item \lstinline{scan} : $(\alpha\rightarrow\alpha\rightarrow\alpha)\rightarrow\alpha\rightarrow\texttt{[]}\alpha\rightarrow\texttt{[]}\alpha$\hfill\\
   \begin{tabular}{@{}l@{}l}
     {\lstinline!scan f v xs!} $\equiv$ & {\lstinline![reduce f v xs[0:1],!} \\
@@ -559,8 +555,8 @@ two more exotic SOACs, \lstinline{stream_red} and
 \lstinline{stream_map}, which will be discussed in
 \cref{sec:streaming-soacs}.
 
-Requiring associativity and neutral elements for the functional
-arguments in \lstinline{reduce} and \lstinline{scan} is what enables a
+Requiring associativity and a neutral element for the functional
+arguments to \lstinline{reduce} and \lstinline{scan} is what enables a
 parallel implementation.  For reductions, performance can be improved
 further if the operator is also commutative (see
 \cref{sec:calculus-implementation}).  For simple functions, the
@@ -764,7 +760,7 @@ is a well established technique to remove the overhead of function
 calls, although at the cost of an increase in code size.  Another
 useful property of inlining is that it enables further optimisation.
 When an opaque function call is replaced by the function body, further
-simplification may be possible.  While wide-spread techniques such as
+simplification may be possible.  While widespread techniques such as
 copy propagation, constant folding, and dead code removal remain
 useful in a data-parallel language, such as Futhark, other, more
 sophisticated, transformations are also important.  One such
@@ -921,7 +917,7 @@ focus on \textit{exploiting} parallel properties, rather than
 In a parallel expression \lstinline{map f xs}, the function
 \lstinline{f} can in principle be anything.  In particular,
 \lstinline{f} can contain more parallelism.  When one parallel
-construct can be nested inside of another, we call it \textit{nested
+construct is nested inside of another, we call it \textit{nested
   parallelism}.
 
 The need for nested parallelism arises naturally out of our desire to
@@ -964,7 +960,7 @@ for its universal applicability, it has three main problems:
   sequential loop that contains a \lstinline{map}, thus forcing an
   array of intermediate results to be written after every
   \lstinline{map}.  In contrast, the original loop may have been able
-  to run using just registers.
+  to run using just registers for storage.
 \item The structure of the original program is heavily modified,
   destroying much information and rendering optimisations based on
   access pattern information (such as loop tiling) infeasible.
@@ -1887,8 +1883,8 @@ language, and interacts with OpenCL through the PyOpenCL
 library~\cite{kloeckner_pycuda_2012}.  The result of compiling a
 Futhark program is a Python module that defines a class, the methods
 of which correspond to Futhark functions.  These methods accept and
-return Python values (which may wrap on-GPU data), and feel to the
-programmer like calling any other Python library.  But behind the
+return Python values (which may be handles to GPU data), and feel to
+the programmer like calling any other Python library.  But behind the
 scenes, data and code is submitted to the GPU.  This allows us to use
 Futhark for the heavy lifting, while making use of Python's wealth of
 libraries for such things as user interaction and data format
@@ -1962,10 +1958,10 @@ runtime (sufficient) conditions for safe parallelization, and (iii)
 special treatment of a class of induction variables (CIV) that cannot
 be expressed as a closed-form formula in terms of loop indices.
 %
-Such analysis are beyond the capability of the common programmers and
-commercial compilers, and it would not be necessary if application
-parallelism was expressed explicitly by means of bulk-parallel
-operators, as in a data-parallel language.
+Such analyses are beyond the capabilities (or patience) of most
+programmers and commercial compilers, and it would not be necessary if
+application parallelism was expressed explicitly by means of
+bulk-parallel operators, as in a data-parallel language.
 
 The first example, presented in \cref{subsec:eg1}, semantically
 corresponds to a map applied to an irregular two-dimensional array,
@@ -1976,7 +1972,7 @@ sites----complicates analysis.
 The second example, presented in \cref{subsec:eg2}, demonstrates how
 the same loop may encode two semantically different parallel
 operators: a map and a generalized reduction.  Further difficulties
-refer to the compiler having to reverse engineer users optimizations,
+refer to the compiler having to reverse engineer user's optimisations,
 such as mapping two semantically different arrays to the same memory
 block.
 
@@ -2104,7 +2100,7 @@ all its uses inside the target loop are of the form \texttt{A[x] =
 $\oplus$ is a (known) binary associative operator.
 
 The code below is an example of a generalized reduction, and can be
-parallelized by by computing the changes to \texttt{A} locally on each
+parallelized by computing the changes to \texttt{A} locally on each
 processor and by merging (adding) them in parallel at the end of the
 loop.
 

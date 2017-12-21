@@ -61,7 +61,7 @@ output.  Some passes perform rewrites of a program in some
 representation, while other passes lower the program to a more
 specialised or lower-level representation.
 
-The compiler contains two different compiler pipelines; one for
+The compiler contains two different compiler pipelines: one for
 generating a sequential program, and one for generating a program with
 parallel code.  Parallelism in the generated code is expressed as
 OpenCL~\cite{Stone:2010:OPP:622179.1803953} kernels.  While OpenCL is
@@ -85,7 +85,7 @@ type-checking carries a significant compilation overhead
 (approximately $20\%$), so we expect to disable it for production
 releases of the compiler.
 
-The pipeline proceeds with the following passes in order as follows:
+The pipeline proceeds with the following passes in order:
 
 \begin{description}
 \item[Internalisation and Desugaring:] The source Futhark language is
@@ -97,14 +97,15 @@ The pipeline proceeds with the following passes in order as follows:
   This is also the pass where where size inference is performed
   (\cref{chap:size-analysis}).
 
-\item[Inlining and Dead Function Removal:] All functions are
-inlined.  As the Futhark language presently does not support recursive
-functions, this is always possible.  This may result in significant
-growth in code size, and so future work should investigate more
-conservative approaches.  Inlining is critical to making subsequent
-optimisations possible, however.  On GPUs, our main target platform,
-all functions inside kernels are automatically inlined in any case, so
-we do not lose much by inlining at the Futhark-level as well.
+\item[Inlining and Dead Function Removal:] All user-defined functions
+  are inlined.  As the Futhark language presently does not support
+  recursive functions, this is always possible.  This may result in
+  significant growth in code size, and so future work should
+  investigate more conservative approaches.  Inlining is critical to
+  making subsequent optimisations possible, however.  On GPUs, our
+  main target platform, all functions inside kernels are automatically
+  inlined in any case, so we do not lose much by inlining at the
+  Futhark-level as well.
 
 \item[SOAC Fusion:] SOACs in a producer-consumer relationship, or
 simply adjacent and looping over arrays of identical size, are fused
@@ -136,10 +137,10 @@ the recurrence or branch where the array itself is constructed.  To
 handle cases where pre-allocation is not possible (such as a loop
 where the array size changes for every iteration), the
 existential-types mechanism also employed for size inference
-(\cref{chap:size-analysis}) is used.  The ability for the compiler to
+(\cref{chap:size-analysis}) is used.  The ability of the compiler to
 manipulate memory allocations as program constructs is important.  We
 use this to arrange the program such that all memory is pre-allocated
-before entering GPU kernels, inside which allocation is not supported.
+before entering GPU kernels, as allocation is not possible inside of these.
 
 \item[Double Buffering:] We perform double buffering to enable
 the hosting of memory allocations out of loops (in particular loops
@@ -258,7 +259,9 @@ removeDeadMapping _ _ = cannotSimplify
 \label{sec:futhark-core-ast}
 
 This section describes the abstract syntax of a simplified form of the
-Futhark intermediate representation (IR).
+Futhark intermediate representation (IR).  We omit some book-keeping
+information that is convenient when implementing the compiler, but
+would merely clutter the exposition here.
 
 \subsection{Notation for sequences}
 
@@ -267,8 +270,8 @@ over sequences of objects of this kind. When we want to be explicit
 about the size of a sequence $\seq{z} = z_0,\cdots,z_{(n-1)}$, we
 often write it on the form $\nseq{z}{n}$ and we write $z,\seq{z}$ to
 denote the sequence $z,z_0,\cdots,z_{(n-1)}$.  Depending on context,
-the elements of the sequence or may not have separators, or be merely
-juxtaposed.  For example, we may use the same notation to shorten a
+the elements of the sequence or may have separators, or be merely
+juxtaposed.  For example, we may the same notation to shorten a
 function application
 \[
   f~\nseq{v}{n} \equiv f~v_{1}~\cdots~v_{n}
@@ -369,12 +372,12 @@ strict A-normal form when showing examples.  Tuple-typed variables do
 not exist in the IR, except as a syntactical construct for some
 operators.  A let-bound pattern ($p$) consists of one or more
 variables and associated types that bind the result of an expression
-($e$); intuitively equivalent to a tuple pattern in the source
-language.  Types are syntactically differentiated into two sorts:
-$\tau$, without uniqueness attributes, and $\utau$, which permit an
-optional uniqueness attribute (an asterisk).  Uniqueness attributes
-are only used when specifying the parameter and return types of
-top-level functions and \lstinline{for}-loops---patterns in
+($e$).  This is intuitively equivalent to a tuple pattern in the
+source language.  Types are syntactically differentiated into two
+sorts: $\tau$, without uniqueness attributes, and $\utau$, which
+permit an optional uniqueness attribute (an asterisk).  Uniqueness
+attributes are only used when specifying the parameter and return
+types of top-level functions and \lstinline{for}-loops---patterns in
 \lstinline{let} bindings and anonymous functions possess no uniqueness
 attributes.
 
@@ -496,7 +499,7 @@ $\opty$ & $::=$ & $\forall\seq{\alpha}.\etau$
 \noindent Extended types ($\ubar{\tau}$) and extended type schemes
 ($\ubar{\sigma}$) are used only for the treatment of operators and we
 shall be implicit about converting types and type schemes to and from
-their extended counter parts.  We treat the single-element tuple
+their extended counterparts.  We treat the single-element tuple
 $(\tau)$ as equivalent to $\tau$.  A \emph{substitution} ($S$) is a
 mapping from type variables (and, later, term variables) to extended
 types.  We write substitutions $\langle x\mapsto y\rangle$.  Applying
@@ -548,7 +551,7 @@ $\ft$.''
 \item[$\Gamma \vd e : \rho$,] read ``under the assumptions $\Gamma$,
   the expression $e$ has tuple type $\rho$.''
 \item[$\Gamma \vdP P : \rho$,] read ``under the assumptions
-$\Gamma$, the program $P$ has tuple type $\rho$.''
+$\Gamma$, the program $P$ is well-typed.''
 \end{description}
 
 \begin{figure}[bt]
@@ -984,7 +987,7 @@ as the \kw{map} expression as a whole consuming the corresponding
 input array.  This restriction also preserves the parallel semantics
 of \lstinline{map}, because different rows of a matrix can be safely
 updated in parallel.  An example can be seen on
-\Cref{fig:map-in-place-update}, which shows an in-place update nested
+\cref{fig:map-in-place-update}, which shows an in-place update nested
 inside a \kw{map}.  To express this restriction, we define an
 auxiliary judgment:
 \[
@@ -1237,9 +1240,9 @@ Clean~\cite{clean-uniqueness-types,barendsen1996uniqueness}, where the
 primary motivation is modeling IO.  Our use is more reminiscent of the
 ownership types of Rust~\cite{rust}.  The fact that Futhark is
 restricted in its support for user-defined data types, in particular
-not supporting pointer structures and instead emphasises the use of
+not supporting pointer structures and instead emphasising the use of
 arrays, makes alias analysis tractable, and even possible to expose as
-a user-languate feature.
+a user-language feature.
 
 While more powerful uniqueness type
 systems~\cite{clean-uniqueness-types}, and affine and linear
@@ -1262,11 +1265,12 @@ presence of bulk parallel operators. For example,
 composing bulk updates in Haskell.  In contrast, our uniqueness types
 are (i) intended for sequential parts of the code, and (ii) able to
 guarantee the absense of any copying whatsoever.  For example in the
-cited work \texttt{xs//vs1/vs2}, which first updates \texttt{xs} with
-\texttt{vs1}, then updates the result with \texttt{vs2}, is fused to
-perform just a single copy of \texttt{xs} instead of two, but the copy
-of \texttt{xs} cannot be avoided, because there is no way in Haskell
-to enforce that some array variable may no longer be used.
+above cited work, the operation \texttt{xs//vs1/vs2}, which first
+updates \texttt{xs} with \texttt{vs1} and then updates the result with
+\texttt{vs2}, is fused to perform just a single copy of \texttt{xs}
+instead of two, but the copy of \texttt{xs} cannot be avoided, because
+there is no way in Haskell to enforce that some array variable may no
+longer be used.
 
 %%% Local Variables:
 %%% mode: latex

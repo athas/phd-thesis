@@ -167,7 +167,7 @@ GPU model:
   on kernel-launch parameters.
 
 \item[Local memory,] which is fast but size-constrained on-chip
-  memory, which is shared by all threads in a group.  When a kernel is
+  memory, and is shared by all threads in a group.  When a kernel is
   launched, some quantity of local memory can be requested per group
   (same amount for each).  The contents of a local memory buffer
   becomes invalidated once its associated group terminates, and hence
@@ -230,7 +230,7 @@ GPUs, the addresses accessed by the threads in a warp must be
 ascending by one word per thread, but on newer GPUs, it can be any
 permutation we wish, as long as every address falls within the same
 512-bit memory block.  On an NVIDIA GPU, in the best case, a 32-thread
-warp can store 32 32-bit words using two memory transactions.
+warp can store 32 distinct 32-bit words using two memory transactions.
 
 The optimal access pattern is thus a bit counter-intuitive compared to
 what we are used to from CPU programming.  On the GPU, a single thread
@@ -296,7 +296,7 @@ global memory via coalesced memory operations.
 
 As an example of how coalescing can be resolved in a nontrivial case,
 this section will present how two-dimensional matrix transposition can
-be implemented in the GPU model.  The basic idea is to launch a kernel
+be implemented in our GPU model.  The basic idea is to launch a kernel
 that contains one thread for every element in the input matrix.  For
 simplicity, we assume that the total number of input elements is
 divisible by our desired workgroup size.
@@ -375,8 +375,8 @@ by hand, we obtain the threads and indexes shown on
 The solution is to perform a \textit{tiled transposition}.  Every
 workgroup will read a chunk of the input array into a local memory
 array, and then write back that chunk in transposed form.  The trick
-is that the element that a given thread reads is not the same as the
-element that it writes.  We could say that we perform the
+is that the element that a given thread reads may not be the same as
+the element that it writes.  We could say that we perform the
 transposition in local memory, rather than global memory.  The
 approach is shown on \cref{fig:coalesced-gpu-transposition}.  We
 assume some constant \texttt{TILE\_SIZE}, and that the workgroup size
@@ -419,7 +419,7 @@ thread(in, out, n, m):
 We use a memory barrier between reading the input and writing the
 output.  This is necessary to ensure that the element we read from
 \texttt{block} has been written by the responsible thread, as GPUs do
-not guarentee execution order outside of warps.
+not guarentee execution order between warps.
 
 The coalesced kernel is very efficient on current GPU hardware, and is
 in fact not much slower than an ordinary memory copy.  Thus we can
@@ -444,7 +444,7 @@ remarks on transposition:
   which is a condition where several threads in the same memory clock
   cycle attempt to access different addresses within the same memory
   bank.  We do not address bank conflicts further here, except to note
-  that they are solvable by padding the \texttt{local} array such that
+  that they are solvable by padding the \texttt{local} array so that
   it has size \texttt{TILE\_SIZE*(TILE\_SIZE+1)}.
 \end{enumerate}
 
@@ -455,7 +455,7 @@ The model presented in this chapter is intended as a tool for
 justifying the transformations performed by the Futhark compiler.  But
 as our eventual goal is efficient execution on real silicon, the model
 is useless if it does not permit an efficient mapping to reality.  In
-this section, I will explain how the GPU model maps to the popular
+this section, I will explain how our GPU model maps to the popular
 CUDA~\cite{cuda} model supplied by NVIDIA.  One issue is that of
 terminology.  This thesis uses terms from the OpenCL standard, which
 overlaps in incompatible way with terms defined by CUDA.
@@ -475,7 +475,7 @@ when talking about CUDA.
   \label{tab:cuda-terms}
 \end{table}
 
-The most significant difference between the GPU model and CUDA is the
+The most significant difference between our GPU model and CUDA is the
 dimensionality.  In CUDA, groups and threads are organised into a
 three-dimensional \textit{grid} ($x,y,z$), while our model contains
 only a single dimension.  This is primarily a programming convenience
@@ -547,21 +547,21 @@ second (single-group) kernel, which by itself is not all that
 expensive.
 
 Atomic operations are most useful when used to implement communication
-between workgroups.  An implementation of prefix sum (scan) in CUDA
-has been developed which performs just one full pass over the
+between workgroups.  An implementation of prefix sum (\kw{scan}) in
+CUDA has been developed which performs just one full pass over the
 input~\cite{Maleki:2016:HTM:2908080.2908089}.  In contrast, the best
-version available to us requires two.  However, the single-stage scan
-implementation depends on intimate knowledge about the target
-hardware---in particular, launching no more groups than will fit
-concurrently.  This is not just a question of knowing the hardware,
-but also its users.  If some other program is also using the GPU, we
-will have room for fewer concurrent groups than expected, potentially
-resulting in deadlock.  We have judged the fragility of such code
-unacceptable for the output of a compiler, especially since the
-compiler is intended to shield its users from having to possess deep
-hardware knowledge.  In contrast to languages that employ full
+version available to us requires two.  However, the single-stage
+\kw{scan} implementation depends on intimate knowledge about the
+target hardware---in particular, launching no more groups than will
+fit concurrently.  This is not just a question of knowing the
+hardware, but also its users.  If some other program is also using the
+GPU, we will have room for fewer concurrent groups than expected,
+potentially resulting in deadlock.  We have judged the fragility of
+such code unacceptable for the output of a compiler, especially since
+the compiler is intended to shield its users from having to possess
+deep hardware knowledge.  In contrast to languages that employ full
 flattening (such as NESL~\cite{BlellochCACM96NESL}), Futhark
-performance is also less dependent on scan performance.
+performance is also less dependent on \kw{scan} performance.
 
 \subsubsection{More Memory Spaces}
 
@@ -754,7 +754,7 @@ within a workgroup collaboratively reducing together, yielding one
 result per workgroup (which here is written by thread 0 of the group).
 These per-workgroup results can then be reduced using a simple
 single-workgroup reduction to a single, final result.  The result is
-that reduction of an arbitrarily-sized input array can be done using
+that reduction of an arbitrary-sized input array can be done using
 two GPU kernel invocations.
 
 Assume that we are launching $k$ workgroups each of size $w$, for a
@@ -833,7 +833,7 @@ which the ``wrong'' iteration order will actually restore the original
 order.  As shown in \cref{sec:gpu-transposition}, transpositions can
 be implemented efficiently on GPUs, so this extra memory traffic is a
 small price to pay, if the alternative is non-coalesced access.  In
-practise, most operators we wish to use in reductions are commutative,
+practice, most operators we wish to use in reductions are commutative,
 in which case the pre-transposition is not necessary.  A
 generalisation of this technique is used by the Futhark compiler, as
 discussed in \cref{sec:automatic-coalescing}.
@@ -857,7 +857,7 @@ thread(in, out, k, w, n):
 \end{lstlisting}
 
   \caption{A rewriting of the per-chunk folding of
-    \cref{fig:redomap-on-gpu} such that memory accesses are coalesced.
+    \cref{fig:redomap-on-gpu} so that memory accesses are coalesced.
     This only works if the reduction is commutative.}
   \label{fig:redomap-on-gpu-commutative}
 \end{figure}

@@ -25,7 +25,8 @@ that, due to dataset-sensitivity, is not as easy to benchmark
   implementation} to refer to programs that were not written by us,
 and \textit{Futhark implementation} to refer to our translated Futhark
 programs.  Any Futhark code examples will use the source language, not
-the IR we used to discuss the design of the compiler.
+the IR from \cref{sec:futhark-core-ast} that was used to discuss the
+design of the compiler.
 
 \section{Empirical Validation in Bulk}
 \label{sec:bulk-benchmarking}
@@ -101,7 +102,7 @@ While some of the benchmarks are small, others are decidedly
 nontrivial.  For example, Stencil from Parboil is implemented as $13$
 non-blank non-comment lines of Futhark, while Myocyte from Rodinia
 requires $883$.  The total number of non-blank non-comment lines in
-the Futhark implementations is $2984$, with a median of of $98$.
+the Futhark implementations is $2984$, with a median of $98$.
 
 We have evaluated the performance of the generated code on two
 different test systems:
@@ -139,8 +140,8 @@ on both test systems.
 
 We invoke the Futhark compiler with no benchmark-specific flags---no
 tuning is done, and the exact same code is executed on both of our
-test systems.  It is likely that approximately 10\% speedup could be
-obtained by tweaking GPU group sizes.
+test systems.  Informal investigation suggests that approximately 10\%
+speedup could be obtained by tweaking GPU group sizes.
 
 The compiler inserts instrumentation that records total runtime minus
 the time taken for (i) loading program input onto the GPU, (ii)
@@ -246,7 +247,7 @@ uses block decomposition, and the block size (not to be confused with
 the CUDA term ``thread block size'', which is something else) is a
 programmer-given constant.  Both the reference and Futhark
 implementation simply hard-code a constant that appears to give good
-performance in practise: $32$ for Futhark, and $16$ for the reference
+performance in practice: $32$ for Futhark, and $16$ for the reference
 implementation.
 
 \subsection{Four Benchmarks from Parboil}
@@ -334,13 +335,14 @@ runtime numbers on \cref{tab:benchmarks}, where the runtime for the
 dataset, despite the latter actually requiring more work.  Two
 distinct LocVolCalib implementations are provided by FinPar: one that
 exploits only outer-level parallelism, and one that exploits
-\textit{all} available parallelism.  The former is the right choice for
-the \textit{large} dataset, and the one we compare against here, as it
-is also roughly how the current Futhark compiler parallelises
+\textit{all} available parallelism.  The former is the right choice
+for the \textit{large} dataset, and the one we compare against here,
+as it is also roughly how the current Futhark compiler parallelises
 LocVolCalib.  However, the FinPar implementation that fully exploits
-all parallelism outperforms Futhark on the small and medium datasets.
-Handling cases such as this transparently is the main motivation for
-multi-versioned code (\cref{sec:multi-versioned-code}).
+all parallelism outperforms Futhark on the small and medium datasets
+(not shown here).  Handling cases such as this transparently is the
+main motivation for multi-versioned code
+(\cref{sec:multi-versioned-code}).
 
 \subsection{Five Benchmarks from Accelerate}
 \label{sec:accelerate}
@@ -408,14 +410,14 @@ Impact was measured by turning individual optimisations off and
 re-running benchmarks on the NVIDIA GPU.  We report only where
 the impact is non-negligible.
 
-Fusion (\cref{chap:fusion}) has a significant impact on K-means
+Fusion (\cref{chap:fusion}) has a significant impact on $k$-means
 ($\times1.42$), LavaMD ($\times4.55$), Myocyte ($\times1.66$), SRAD
 ($\times1.21$), Crystal ($\times10.1$), and LocVolCalib ($\times9.4$).
 Without fusion, OptionPricing, N-body, MRI-Q, and SGEMM fail due to
 increased storage requirements.
 
-In the absence of in-place updates, we would have to implement K-means
-as on Figure~\ref{fig:parallel-means}---the resulting program is
+In the absence of in-place updates, we would have to implement
+$k$-means as on \cref{fig:parallel-means}---the resulting program is
 slower by $\times8.3$.  Likewise, LocVolCalib would have to implement
 its central \lstinline{tridag} procedure via a less efficient
 \lstinline{scan}-\lstinline{map} composition, causing a $\times1.7$
@@ -431,19 +433,19 @@ Loop tiling (\cref{sec:automatic-tiling}) has an impact on LavaMD
 ($\times 1.35$), MRI-Q ($\times1.33$), SGEMM ($\times2.3$), $N$-body
 ($\times 2.29$), and LUD ($\times 1.10$).
 
-\section{Benchmarking an implementation of Breadth-First-Search}
+\section{Benchmarking an Implementation of Breadth-First-Search}
 \label{sec:bfs-benchmarking}
 
-The Rodinia benchmark suite contains a benchmark, BFS, that
-implements Breadth-First-Search.  This problem is highly irregular,
-and its performance is very dataset-sensitive.  As a result, we have
-excluded it from the presentation of the general benchmark results,
-and instead dedicated this section to discuss the issues.  The
-following serves as an example of benchmarks where measuring
-performance is not quite straightforward, and incidentally as an
-example of how to implement irregular problems in Futhark.
+The Rodinia benchmark suite contains a benchmark, BFS, that implements
+breadth-first search.  This problem is highly irregular, and its
+performance is very dataset-sensitive.  As a result, we have excluded
+it from the presentation of the general benchmark results, and instead
+dedicated this section to discuss the issues.  The following serves as
+an example of benchmarks where measuring performance is not quite
+straightforward, and incidentally as an example of how to implement
+irregular problems in Futhark.
 
-Figure~\ref{fig:bfs-imperative} shows an excerpt of Rodinia's
+\Cref{fig:bfs-imperative} shows an excerpt of Rodinia's
 imperative-but-parallel implementation of the breadth-first search
 algorithm, which traverses the graph and records in the
 \lstinline{cost} array the breadth level of each graph node.
@@ -462,7 +464,7 @@ still safe is the property that the output dependences are idempotent
 (i.e., the updated value is the same across different outermost
 iterations).
 
-Figure~\ref{fig:bfs-fun-pad} shows a simple, albeit work-inefficient,
+\Cref{fig:bfs-fun-pad} shows a simple, albeit work-inefficient,
 translation to Futhark of the discussed imperative code, which uses
 padding to satisfy array regularity. First, the indices of the active
 nodes (i.e., the ones on the current breadth level) are identified by
@@ -493,9 +495,9 @@ on smaller graphs with large edge degree.  Interestingly, this is not
 simply a question of how much to parallelise, but a fundamental
 algorithmic design decision.  The unsolved challenge is a
 representation and technique that can fuse the Futhark code in
-\cref{fig:bfs-fun-pad} into something resulting the one-level-parallel
-C code in \cref{fig:bfs-imperative}, and furthermore generate both
-versions of the code.
+\cref{fig:bfs-fun-pad} into something resembling the
+one-level-parallel C code in \cref{fig:bfs-imperative}, and
+furthermore generate both versions of the code.
 
 \begin{figure}[ht]
 \begin{lstlisting}[xleftmargin=0pt,language=C,numbers=left,escapechar=|]

@@ -23,19 +23,19 @@ original nested-parallel program.  In our setting, this corresponds to
 interchanging all sequential loops outwards, and forming
 \kw{map}-nests that contain only simple scalar code.  While
 asymptotically efficient, the approach is arguably inefficient in
-practise~\cite{bergstrom2012nested}, for example because it does not
+practice~\cite{bergstrom2012nested}, for example because it does not
 account for locality of reference, and pays a potentially large cost
 in memory usage to extract parallelism that may not be necessary.  For
 example, a fully flattened implementation of matrix multiplication
-requries $O(n^{3})$ storage, where the usual implementation uses only
-$O(n^{2})$.
+requires $O(n^{3})$ storage, where the usual implementation uses only
+$O(n^{2})$~\cite{Spoonhower:2008:SPP:1411204.1411240}.
 
 Our algorithm, presented below, builds on \kw{map}-\kw{loop}
 interchange and \kw{map} distribution, exploiting the property that it
-is always safe to interchange inwards or to distribute a parallel
-loop~\cite{Allen-Kennedy2002}.  Our algorithm attempts to exploit some
-of the efficient \textit{top-level parallelism}.  Two important
-limitations are:
+is always safe to interchange a parallel loop inwards, or to
+distribute a parallel loop~\cite{Allen-Kennedy2002}.  Our algorithm
+attempts to exploit some of the efficient \textit{top-level
+  parallelism}.  Two important limitations are:
 
 \begin{enumerate}
 \item We do not exploit parallelism inside \kw{if} branches, as this
@@ -45,13 +45,21 @@ limitations are:
   spatial- and temporal-locality optimizations.
 \end{enumerate}
 
-Our algorithm is less general than flattening, but generates more
+Our algorithm is less general than full flattening, but generates more
 analysable code in the common case, for programs that do not require
-the generality of flattening.  This enables the optimisations covered
+the generality of flattening.  Also, our presented algorithm is not
+\textit{cost-preserving}, in the notion of
+Blelloch~\cite{Blelloch:1996:PTS:232627.232650}.  Should we assign a
+NESL-style cost model to Futhark, the result of our moderate
+flattening algorithm would often have a different asymptotic cost
+(less parallelism) than the original program.
+
+On the upside, moderate flattening enables the optimisations covered
 in \cref{chap:tiling}.  Multi-versioned code, discussed in
 \cref{sec:multi-versioned-code}, could be used to apply full
 flattening as a fallback for those cases where moderate flattening is
-incapable of extracting sufficient parallelism.
+incapable of extracting sufficient parallelism.  However, this
+technique is not yet implemented.
 
 \section{Example of Moderate Flattening}
 \label{sec:kernel-extraction}
@@ -123,7 +131,7 @@ let bss =
 \label{fig:after-result}
 \end{subfigure}
 \caption{Extracting kernels from a complicated nesting.  We assume
-  $pss : [m][m]\texttt{i32}$.  Exploitable (outermost or perfectly
+  $\texttt{pss} : [m][m]\texttt{i32}$.  Exploitable (outermost or perfectly
   nested) levels of parallelism are highlighted in blue.}
 \end{figure}
 
@@ -274,20 +282,20 @@ nest context.
 %ensures regularity of intermediate arrays.
 
 Rule~\G{4} allows for map fission
-($\map~(f\circ g) \Rightarrow \map~f\circ \map~g$),
-in the sense that the map nest context can be
-materialized first over $e_1$ and then over $e_2$ with appropriate
-additional context to allow for access to the now array-materialized
-values that were previously referenced through the let-bound variables
-$\overline{a_0}$. The rule can be applied only if the intermediate
-arrays formed by the transformation are ensured to be regular, which is
-enforced by a side condition in the rule. To avoid unnecessary
-excessive flattening on scalar computations, the \lstinline{let}-expressions
-are rearranged using a combination of \lstinline{let}-floating
+($\map~(f\circ g) \Rightarrow \map~f\circ \map~g$), in the sense that
+the map nest context can be materialized first over $e_1$ and then
+over $e_2$ with appropriate additional context to allow for access to
+the now array-materialized values that were previously referenced
+through the let-bound variables $\overline{a_0}$. The rule can be
+applied only if the intermediate arrays formed by the transformation
+are ensured to be regular, which is enforced by a side condition in
+the rule. To avoid unnecessary and excessive flattening on scalar
+computations, the \lstinline{let}-expressions are rearranged using a
+combination of \lstinline{let}-floating
 \cite{PeytonJones:1996:LMB:232627.232630} and tupling for grouping
-together scalar code in a single \lstinline{let}-construct.
-In essence, inner SOACs are natural splitting points for fission.
-For example,
+together scalar code in a single \lstinline{let}-construct.  In
+essence, inner SOACs are natural splitting points for fission.  For
+example,
 \begin{lstlisting}[aboveskip=-0.6\baselineskip]
 let b = x+1
 let a = b+2
@@ -317,13 +325,13 @@ statically-given permutation \kw{p}. For instance, the expression
 \mbox{\lstinline{rearrange (2,1,0) a}} reverses the dimensions of the
 three-dimensional array \lstinline{a}.
 %
-For convenience, we use \mbox{\lstinline{transpose a}} is syntactic
+For convenience, we use \mbox{\lstinline{transpose a}} as syntactic
 sugar for \mbox{\lstinline{rearrange (1,0,...) a}}, which swaps the two
   outermost dimensions.
 %
-Similar rules can be added to handle other expressions
-that have a particularly efficient formulation when distributed on
-their own, such as concatenation (not covered in this paper).
+Similar rules can be added to handle other expressions that have a
+particularly efficient formulation when distributed on their own,
+such as concatenation, but we elide these for brevity.
 
 Finally, rule~\G{7} implements a \lstinline{map}-\lstinline{loop}
 interchange.  The
@@ -372,9 +380,9 @@ fully utilize hardware.  This idea is discussed further below.
 \section{Multi-Versioned Code}
 \label{sec:multi-versioned-code}
 
-The flattening rules of the preceding section are able to
-directly decompose \kw{map}-nestings via loop distribution.  However,
-they are not in general able to exploit parallelism nested within the
+The flattening rules of the preceding section are able to directly
+decompose \kw{map}-nestings via loop distribution.  However, they are
+not in general able to exploit parallelism nested within the
 functional argument to a non-\kw{map} SOAC.  Some rules, for example
 G5 that performs \kw{reduce}-\kw{map} interchange, expose \kw{map}s
 which can then be further handled by the moderate flattening
@@ -384,8 +392,9 @@ for \textit{multi-versioned code}, by which a single SOAC may be
 flattened in two different ways, with either of the two alternatives
 picked at runtime via a branch.  While the Futhark compiler contains a
 prototype implementation of multi-versioned code, it is not yet used
-by default.  Hence, the ideas in this section are not as empirically
-proven as the rest of the thesis.
+by default.  Hence, the effectiveness of the ideas in this section are
+not shown empirically on benchmarks.
+
 
 
 \begin{figure}
@@ -458,18 +467,22 @@ proven as the rest of the thesis.
 \end{figure}
 
 Multi-versioned code does not change the overall framework of moderate
-flattening.  \Cref{fig:more-flattening-rules} simply provides
+flattening.  Rather, \cref{fig:more-flattening-rules} simply provides
 additional rules that are more aggressive in decomposing SOACs into
 constituent parts.  The most crucial rule is E1, which states that if
 some expression $e$ can be flattened in two distinct ways $e'_{1}$ and
 $e'_{2}$, then $e$ can be flattened to an \kw{if} expression that uses
 some runtime \textit{predicate} to determine which of $e'_{1}$ or
 $e'_{2}$ to apply.  We do not specify the form of the predicate in
-detail here.  One common case is that it is some comparison of the
-amount of parallelism exploited by $e'_{1}$ versus some runtime-given
-constant that characterises the hardware the program is executing on.
-Determining the right form of the predicates, and the constants they
-may employ, is in practise a form of \textit{auto-tuning}.
+detail here.  One typical form is to somehow quantify the amount of
+parallelism exploited by $e'_{1}$ versus $e_{2}'$, and picking the
+version that exploits the \textit{least} amount of parallelism that
+still exceeds some runtime-given constant that characterises the
+hardware the program is executing on.  The intuition is that we want
+to fully saturate the hardware, but parallelism in excess of that is a
+waste.  Determining the right form of the predicates, and the
+constants they may employ, is in practice a form of
+\textit{auto-tuning}.
 
 Rule E2 describes how a \kw{redomap} can be taken apart into a
 \kw{map} and a \kw{reduce}, which is then (potentially) further
@@ -481,7 +494,7 @@ to only pass the former to the \kw{reduce}.  An almost identical rule
 can be defined for \kw{scanomap}.
 
 Rule E3 is similar to E2, but applies to \StreamPar{}, and recovers
-available all parallelism by splitting into a \kw{map} and a
+all available parallelism by splitting into a \kw{map} and a
 \kw{reduce}.  The main difference compared to E2 is that computing the
 function for \kw{map} is somewhat more complicated, as shown on
 \cref{fig:unchunking}.
@@ -510,9 +523,9 @@ Conceptually, when rule G1 first fires, it will sequentialise the
 expression $e$, and then manifest the \textit{entire} map context
 $\Sigma$ at once, in the form of a flat parallel kernel.
 
-Not all kernels are extracted from the simple form of a \kw{map} nest
-containing a sequential function.  Other patterns that give rise to a
-GPU kernel are:
+Not all kernels are in the form of a \kw{map} nest containing a
+sequential function.  Other patterns that may give rise to a GPU
+kernel are:
 
 \begin{itemize}
 \item \kw{redomap} or \kw{scanomap} can be transformed into two GPU
@@ -532,16 +545,16 @@ GPU kernel are:
   kernel similar to \kw{map}.
 \end{itemize}
 
-The bodies of the kernels produced by kernel extraction remains
-Futhark code, and kernel extraction maintains the original structure
-of the sequential code.  Importantly, even though nested SOACs may not
-have had their potential for parallelism exploited, they remain
-high-level descriptions of loops, which can be used for further
-optimisation.  We shall see examples in \cref{chap:tiling}.
+The bodies of the kernels produced by kernel extraction remain Futhark
+code, and kernel extraction maintains the original structure of any
+sequential code.  Importantly, even though nested SOACs may not have
+had their potential for parallelism exploited, they remain high-level
+descriptions of loops, which can be used for further optimisation.  We
+shall see examples in \cref{chap:tiling}.
 
 Later in the compiler, the high-level kernel representation is
 transformed into a low-level imperative IR, and from there to actual
-OpenCL code.  However, these topics are outside the scope of the
+OpenCL code.  However, these topics are outside the scope of this
 thesis.
 
 \section{Related Work}
@@ -549,7 +562,7 @@ thesis.
 Futhark builds on previous work in type systems and parallel
 compilation techniques. Recent
 work~\cite{Steuwer:2015:GPP:2858949.2784754} shows that stochastic
-combinations of rewrite rules opens the door to autotuning.  Work has
+combinations of rewrite rules open the door to autotuning.  Work has
 been done on designing purely functional representations for OpenCL
 kernels~\cite{Steuwer:2017:LFD:3049832.3049841}, which could in
 principle be targeted by our moderate flattening algorithm.  The
@@ -589,10 +602,10 @@ analysis ranging from pattern-matching
 heuristics~\cite{InformalTiling,Lime} to general modeling
 of affine transformations by polyhedral analysis~\cite{PolyPluto2,PolyhedralOpt}.
 %
-Since such analyses often fight the language, solutions rely on user
-annotations to improve accuracy. For example, OpenMP annotations can
-be used to enable transformations of otherwise unanalyzable
-patterns~\cite{chatarasi2015polyhedral}, while
+Since such analyses are often hindered by the expressivity of the
+language, solutions rely on user annotations to improve accuracy. For
+example, OpenMP annotations can be used to enable transformations of
+otherwise unanalyzable patterns~\cite{chatarasi2015polyhedral}, while
 PENCIL~\cite{PencilPACT} provides a restricted C99-like low-level
 language that allows the (expert) user to express the parallelism of
 loops and provide additional information about memory access patterns
@@ -604,7 +617,7 @@ interchange and distribution, but we use rules that directly exploit
 properties of the language. For example, imperative approaches would
 implement a reduction with a vectorized operator via a histogram-like
 computation~\cite{RedPencil}, which is efficient only when the
-histogram size is small.  In comparison, rule G5 on
+histogram size is small.  In comparison, rule G5 in
 \cref{fig:basic-flattening-rules} transforms a reduction with a
 vectorized operator to a (regular) segmented reduction, which always
 has an efficient implementation.

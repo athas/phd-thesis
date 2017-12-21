@@ -128,7 +128,7 @@ quantifiers for the sizes of the result arrays ($\exists s_2$).
 Function types now also contain \textit{named} parameters, supporting
 a simple variant of dependent types.  For function parameters where
 the name is irrelevant, we shall elide the name and use the same
-notation as previously.
+notation as before.
 %
 \Cref{fig:soacSizeType} also shows that this extension allows to
 encode most of the afore-mentioned invariants into size-dependent
@@ -143,7 +143,7 @@ it is expected that the functional argument declares the result type
 (including sizes) in advance.  Operationally, we can see this as being
 able to ``pre-allocate'' space for the result.  However, the return
 size cannot in general be known in advance without evaluating the
-function.
+function.  We shall return to this issue in \cref{sec:SOACSizeRules}.
 
 The main difference between the size-dependent typing of the core
 language, and the size annotations of the source language, is that the
@@ -375,7 +375,7 @@ which are used by the present Futhark compiler:
   size of an empty array is zero or nonzero.
 \end{enumerate}
 
-In practise, the first solution is preferable in the vast majority of
+In practice, the first solution is preferable in the vast majority of
 cases, as it also serves as useful documentation of programmer intent
 in the source program.
 
@@ -393,8 +393,8 @@ sizes is a more powerful enabler of other optimisations.
 One may observe that in the resulting code, the shape and regularity
 of \texttt{rss} are computed and verified before the definition of
 \texttt{rss}, respectively, and, most importantly, that the size
-computation and assumed-invariant verification introduce negligible
-overhead, i.e., $O(1)$ number of operations.
+computation and assumed-invariant verification in this case introduces
+negligible overhead, i.e., $O(1)$ number of operations.
 
 \begin{figure}
 \begin{lstlisting}[xleftmargin=0pt]
@@ -425,7 +425,7 @@ let main (n: i32) (m: i32) (k: i32)
 \label{fig:SimplifyFShapeCert}
 \end{figure}
 
-Note that the code shown on \Cref{fig:RunEgTgt} is the only
+Note that the code shown on \cref{fig:RunEgTgt} is the only
 \textit{required} step we have to perform.  Subsequent optimisation to
 eliminate existential quantification could be done in any way that is
 found desirable, perhaps via interprocedural analysis or slicing.
@@ -439,16 +439,16 @@ example.  The \lstinline{concat} function has been split into
 \lstinline{concat_shape} and \lstinline{concat_value}. The call to
 \lstinline{concat} has been likewise split.
 
-In practise, sophisticated dead code removal may be necessary to
+In practice, sophisticated dead code removal may be necessary to
 obtain efficient shape functions --- for example, we will need to
-remove shape-invariant loops --- and thus our approach generally
-requires the compiler to possess an effective simplification engine.
+remove shape-invariant loops --- and our approach thus requires the
+compiler to possess an effective simplification engine.
 
 The Futhark compiler currently does not use this approach of splitting
-functions.  Partly because of the risk for asymptotic slowdown in the
-presence of recursion (which was supported at the time), and partly
-because merely inlining plus simplification is easier to implement,
-and performed equally well for our purposes.
+functions.  This is partly because of the risk of asymptotic slowdown
+in the presence of recursion (which was supported at the time), and
+partly because merely inlining plus simplification is easier to
+implement, and performed equally well for our purposes.
 
 \begin{figure}
 
@@ -583,7 +583,7 @@ would usually also rename $x$ to avoid confusion).  The need for
 weakening arises in particular due to the typing rules for \kw{let}
 and \kw{if}, as we shall see.
 
-We extend the type judgment for expressions such that it now returns a
+We extend the type judgment for expressions so that it now returns a
 type with an existentially quantified part (which may be empty).  The
 most interesting rules are shown on \cref{fig:sizeTypeRules} and
 discussed below.  We ignore uniqueness attributes here, as they have
@@ -595,7 +595,7 @@ arguments supplying the concrete value.  This is used in for example
 the size-dependent typing of \kw{iota}.
 
 The first rule states that if we can derive expression $e$ to have
-some existential type $\exists\seq{d}.\rho$, then $w$ also has any
+some existential type $\exists\seq{d}.\rho$, then $e$ also has any
 existential type that is a supertype of what we derived.  This rule is
 what allows us to weaken the typing for an expression, which is
 necessary in some cases cases, as we shall see below.
@@ -660,7 +660,7 @@ obtain the following expression:
 
 The type of \lstinline{replicate x 0} is \lstinline{[x]i32}, but since
 copy-propagation is not concerned with modifying patterns in
-\kw{let}-patterns, we still existentially quantify the size of the
+\kw{let}-bindings, we still existentially quantify the size of the
 result.  A subsequent simplification can then be applied to remove
 unnecessary existential parts of patterns, by noting that \texttt{d}
 will always be \texttt{x}, yielding:
@@ -703,7 +703,7 @@ For example, consider the following expression:
 The ``true'' branch has type $[x][y]\texttt{i32}$, while the ``false''
 branch has type $[y][x]\texttt{i32}$.  The least existential type that
 can encompass both of these is $\exists n m.[n][m]\texttt{i32}$, which
-must thus be the type of the \kw{if}-expression.
+is then the type of the \kw{if}-expression.
 
 \section{Size Inference}
 \label{sec:size-inference}
@@ -790,19 +790,15 @@ function parameters.  Likewise, if the source program specifies that
 certain dimensions are identical to each other, we simply generate a
 single size parameter and use that for all the dimensions in question.
 
-\begin{figure}[bt]
+We will use the following function \(\mathcal{T}(\tau~x,s)\) to
+annotate a type \(\tau\) with the shapes in \(s\), which is a sequence
+of variable names whose length is equal to the rank of \(\tau\):
 
 \begin{align*}
   \mathcal{T}(\texttt{[]}_{1}\cdots\texttt{[]}_n\texttt{t},\nseq{s}{n}) = \texttt{[$s_{1}$]$\cdots$[$s_{n}$]\texttt{t}}
 \end{align*}%
-\caption{Annotating types with shapes.}
-\label{fig:annotating bindings}
-\end{figure}
 
-We will use function \(\mathcal{T}(\tau~x,s)\) in
-Figure~\ref{fig:annotating bindings} to annotate a type \(\tau\) with
-the shapes in \(s\), which is a sequence of variable names whose
-length is equal to the rank of \(\tau\).  As an example,
+As an example:
 \[
 \mathcal{T}(\texttt{[][]i32}, \texttt{n}, \texttt{m}) = \texttt{[m][n]i32}
 \]
@@ -810,15 +806,16 @@ length is equal to the rank of \(\tau\).  As an example,
 \subsection{Transformation Functions}
 \label{sec:TransformationFunctions}
 
-The function \(\transformBnd{\Sigma}(b)\) computes the \textit{annotated}
-version of the body \(b\) in the environment \(\Sigma\) and returns
-shapes as well as values (that is, its type will contain
-existentials).  The environment \(\Sigma\) is a mapping from names of
-arrays to lists of variable names, where element \(i\) of the list
-denotes the size of dimension \(i\) of the corresponding array.  We
-will use conventional \(\head\), \(\tail\) and \(\drop\) operations to
-manipulate these lists, as well as bracket notation for arbitrary
-indexing; we write the ``cons'' operation as \(\cons{x}{xs}\).
+The function \(\transformBnd{\Sigma}(b)\) computes the
+\textit{annotated} version of the body \(b\) in the environment
+\(\Sigma\) and returns shapes as well as values (that is, its type
+will contain existentials).  The environment \(\Sigma\) is a mapping
+from array names to lists of variable names, where element \(i\) of
+the list denotes the size of dimension \(i\) of the corresponding
+array.  We will use conventional \(\head\), \(\tail\) and \(\drop\)
+operations to manipulate these lists, as well as bracket notation for
+arbitrary indexing; we write the ``cons'' operation as
+\(\cons{x}{xs}\).
 
 The function \(\transformFun(f)\) computes the existentially-quantified 
 function \(f_{\ext}\), by using  \(\transformBnd{\Sigma}\) to annotate
@@ -826,13 +823,12 @@ the function's body (and result) with shapes information, and by modifying
 the function's type as described in the beginning of
 Section~\ref{sec:FundamentalTransformation}.
 
-We also have a function
-\(\transformLam{\Sigma}(\lambda,\seq{r},\seq{p})\).  This is
-similar to the function transformation, except that (i) we work within
-an environment \(\Sigma\), and (ii) we know in advance the intended shape
-of the result (\(\seq{r}\)) and parameters
-(\(\seq{p}\)), because the result shape of an anonymous function
-is never existentially quantified.
+We also define a function
+\(\transformLam{\Sigma}(\lambda,\seq{r},\seq{p})\).  This is similar
+to \(\transformFun(f)\), except that (i) we work within an environment
+\(\Sigma\), and (ii) we know in advance the intended shape of the
+result (\(\seq{r}\)) and parameters (\(\seq{p}\)), because the result
+shape of an anonymous function is never existentially quantified.
 
 \subsection{Simple Rules}
 \label{sec:SimpleRules}
@@ -890,25 +886,26 @@ There are two issues to be dealt with when size-transforming SOACs.
 The first is that the type rules indicate that the outer dimension of
 all input arrays must be identical.  We deal with this by using
 \kw{reshape} to transform all input arrays to have the same outermost
-size as the first input array.
+size as the first input array, which produces an error at run-time if
+the sizes do not match.
 
 The second, and bigger problem with annotating SOACs is that, in
 Futhark, anonymous functions cannot be existentially quantified.
 Hence, before evaluating the SOAC, we must know the shape of its
-return value.  For this section, we assume that given an anonymous
-function \(\lambda\), it is possible to compute \(\lambda_{\shape}\),
-which returns the shape of the values that would normally be returned
-by \(\lambda\).
+return value.  For this section, we say that given an anonymous
+function \(\lambda\), we can compute the function
+\(\lambda_{\shape}\), which returns the shape of the values that would
+normally be returned by \(\lambda\).
 
 Similarly to function calls, when transforming $\kw{map}~\lambda~a$,
 there are two possible avenues of attack.
 
 \begin{description}
-\item[Pre-assertion] First, calculate $\kw{map}~\lambda_{\shape}~a$, and
-  assert, for each returned array, that all of its elements are
-  identical. That is, check in advance that the \kw{map} expression
-  results in a regular array.  After this check, we know with
-  certainty the shape of the values returned by the original map
+\item[Pre-assertion] First, calculate $\kw{map}~\lambda_{\shape}~a$,
+  and assert, for each returned array, that all of its elements are
+  identical.  Put another way, this check in advance that the \kw{map}
+  expression results in a regular array.  After this check, we know
+  with certainty the shape of the values returned by the original map
   computation (and that it will be regular), which we can then use to
   annotate the \kw{map} computing the values.  This strategy would
   require an extension to support an explicit \kw{assert} expression.
@@ -929,7 +926,7 @@ there are two possible avenues of attack.
   \kw{reshape}s its result to match the prediction.
 
   Then we apply $\lambda_{\text{checking}}$ to the original input,
-  although with every input array reshaped such that the outer
+  although with every input array reshaped so that the outer
   dimension matches the outer dimension of the first input array, and
   the other dimensions unchanged.  This is to respect the type rule
   that all input arrays to \kw{map} (and the other SOACs) must have
@@ -986,10 +983,9 @@ semantics of FISh guarantees that this is possible.  A similar
 approach is used in \~{F}~\cite{shaikhha2017using}, with the specific
 motivation of being able to efficiently pre-allocate memory.
 
-Futhark uses approximately the same strategy, but adds existential
-types to handle constructs such as \kw{filter}, at the cost of no
-longer being able to fully resolve shape information statically in all
-cases.
+Futhark uses a similar strategy, but adds existential types to handle
+constructs such as \kw{filter}, at the cost of no longer being able to
+fully resolve shape information statically in all cases.
 
 Much work has also gone into investigating expressive type systems,
 based on dependent types, which allow for expressing more accurately
@@ -1008,8 +1004,8 @@ applications, but inter-operating across such systems remains a
 significant challenge~\cite{mapal_synasc,alma:ISSAC}.
 
 A somewhat orthogonal approach has been to extend the language
-operators such that size and bounds checking invariants always
-hold~\cite{ElsmanDybdal:Array:2014}, the downfall being that
+operators so that size and bounds checking invariants always
+hold~\cite{ElsmanDybdal:Array:2014}, the downside being that
 non-affine indexing might appear.  The Futhark strategy is instead to
 rely on advanced program analysis and compilation techniques to
 implement a pay-as-you-go scheme for programming massively parallel
