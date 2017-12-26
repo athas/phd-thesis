@@ -20,17 +20,17 @@
 \chapter{An Array Calculus}
 \label{chap:calculus}
 
-The theoretical foundation of Futhark are the list homomorphisms of
-Bird and Meertens~\cite{Bird2}, realised in the form of purely
-functional parallel second-order array combinators (SOACs). Their rich
-equational theory for semantics-preserving transformations are
-employed in Futhark for fusion, streaming, and flattening of
-parallelism.  This chapter discusses a simple array combinator
-calculus that is used to convey the intuition behind certain useful
-transformations on arrays and, more importantly, functions that
-operate on arrays.  In \cref{sec:calculus-implementation} we shall
-also see that the primitives defined here have an efficient
-implementation on the GPU.
+The theoretical inspiration behind Futhark are the list homomorphisms
+described by Bird and Meertens~\cite{Bird2}, realised in the form of
+purely functional parallel second-order array combinators
+(SOACs). Their rich equational theory for semantics-preserving
+transformations are employed in Futhark for fusion, streaming, and
+flattening of parallelism.  This chapter discusses a simple array
+combinator calculus that is used to convey the intuition behind
+certain useful transformations on arrays and, more importantly,
+functions that operate on arrays.  In
+\cref{sec:calculus-implementation} we shall also see that the
+primitives defined here have an efficient implementation on the GPU.
 
 The calculus presented here is simpler than the full Futhark
 programming language, yet also more flexible.  While the names of the

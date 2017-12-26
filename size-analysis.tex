@@ -172,8 +172,8 @@ let concat (xs: []f64) (ys: []f64): []f64 =
   let b = size 0 ys
   let c = a+b
   let (is: []i32) = iota c
-  let (os: []f64) = map (\i -> if i < a then xs[i] else ys[i+b])
-                        is
+  let (os: []f64) =
+    map (\i -> if i < a then xs[i] else ys[i+b]) is
   in os
 
 let f (vss: [][]f64): []f64 =
@@ -212,7 +212,7 @@ let concat @(n: i32) (m: i32)@ (xs: [@n@]f64) (ys: [@m@]f64)
   let c = a+b
   let (is: [@c@]i32) = iota c
   let (os: [@c@]f64) =
-   map (\i -> if i < n then xs[i] else ys[i+a]) is
+    map (\i -> if i < n then xs[i] else ys[i+a]) is
   in os
 
 let f @(m: i32) (k: i32)@ (vss: [@m@][@k@]f64): @d@.[@d@]f64 =
